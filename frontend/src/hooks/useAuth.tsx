@@ -6,7 +6,7 @@ interface AuthContextValue {
   user: User | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => void;
 }
 
@@ -31,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
     localStorage.setItem(TOKEN_KEY, res.token);
     localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+    return res.user;
   };
 
   const logout = () => {

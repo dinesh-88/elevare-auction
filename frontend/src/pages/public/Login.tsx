@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 
 export default function Login() {
-  const { login, user } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,8 +15,8 @@ export default function Login() {
     setSubmitting(true);
     setError(null);
     try {
-      await login(email, password);
-      navigate(user?.role === "ADMIN" ? "/admin" : "/");
+      const currentUser = await login(email, password);
+      navigate(currentUser.role === "ADMIN" ? "/admin" : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

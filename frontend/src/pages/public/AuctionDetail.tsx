@@ -33,9 +33,8 @@ export default function AuctionDetail() {
     load();
   }, [load]);
 
-  useAuctionSocket(
-    id,
-    (event) => {
+  const handleBidEvent = useCallback(
+    (event: { bid_id: string; amount: number; current_price: number; end_time: string; created_at: string }) => {
       setAuction((prev) =>
         prev
           ? {
@@ -47,8 +46,9 @@ export default function AuctionDetail() {
       );
       setBidHistory((prev) => [{ bid_id: event.bid_id, amount: event.amount, created_at: event.created_at }, ...prev]);
     },
-    true,
+    [],
   );
+  useAuctionSocket(id, handleBidEvent, true);
 
   if (error) return <p className="error">{error}</p>;
   if (!auction) return <p>Loading auction...</p>;
