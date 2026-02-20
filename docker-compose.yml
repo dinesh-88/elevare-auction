@@ -23,7 +23,7 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ./migrations:/migrations:ro
+      - ./apps/backend/migrations:/migrations:ro
     command:
       [
         "-path",
@@ -36,7 +36,7 @@ services:
 
   api:
     build:
-      context: .
+      context: ./apps/backend
       dockerfile: Dockerfile
     container_name: elevare-api
     depends_on:
