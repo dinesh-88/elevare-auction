@@ -30,6 +30,7 @@ func main() {
 	tenantRepo := &postgres.TenantRepo{DB: db}
 	userRepo := &postgres.UserRepo{DB: db}
 	auctionRepo := &postgres.AuctionRepo{DB: db}
+	lotRepo := &postgres.LotRepo{DB: db}
 
 	hasher := &security.Argon2Hasher{}
 	jwtSvc := &security.JWTService{Secret: []byte(cfg.JWTSecret), TTL: cfg.JWTTTL}
@@ -37,15 +38,16 @@ func main() {
 
 	authUC := &usecase.AuthUseCase{Users: userRepo, Hasher: hasher, Tokens: jwtSvc}
 	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Broadcaster: hub}
+	lotUC := &usecase.LotUseCase{Lots: lotRepo, Broadcaster: hub}
 	bidderUC := &usecase.BidderUseCase{Users: userRepo}
 	onboardingUC := &usecase.OnboardingUseCase{Tenants: tenantRepo, Hasher: hasher}
 
-	h := &httptransport.Handler{Auth: authUC, Auction: auctionUC, Bidder: bidderUC, Onboarding: onboardingUC}
+	h := &httptransport.Handler{Auth: authUC, Auction: auctionUC, Lot: lotUC, Bidder: bidderUC, Onboarding: onboardingUC}
 	tenantMW := middleware.TenantMiddleware{Tenants: tenantRepo}
 	authMW := middleware.AuthMiddleware{Tokens: jwtSvc}
 
 	router := httptransport.NewRouter(h, tenantMW, authMW, hub, cfg.PlatformAdminToken)
-	httptransport.StartScheduler(ctx, auctionUC, 5*time.Second)
+	httptransport.StartScheduler(ctx, auctionUC, lotUC, 5*time.Second)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

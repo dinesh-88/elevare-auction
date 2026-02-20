@@ -16,6 +16,7 @@ import (
 type Handler struct {
 	Auth       *usecase.AuthUseCase
 	Auction    *usecase.AuctionUseCase
+	Lot        *usecase.LotUseCase
 	Bidder     *usecase.BidderUseCase
 	Onboarding *usecase.OnboardingUseCase
 }
@@ -128,6 +129,36 @@ func (h *Handler) GetAuction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, auction)
 }
 
+func (h *Handler) ListLotsByAuction(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	lots, err := h.Lot.ListByAuction(r.Context(), tenant.ID, auctionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, lots)
+}
+
+func (h *Handler) GetLot(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
+	if err != nil {
+		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		return
+	}
+	lot, err := h.Lot.GetByID(r.Context(), tenant.ID, lotID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, lot)
+}
+
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	var req struct {
@@ -208,6 +239,9 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		AllowManualPause        bool                 `json:"allow_manual_pause"`
 		AllowManualEnd          bool                 `json:"allow_manual_end"`
 		AutoExtendEnabled       bool                 `json:"auto_extend_enabled"`
+		AuctionMode             domain.AuctionMode   `json:"auction_mode"`
+		AutoProgressEnabled     bool                 `json:"auto_progress_enabled"`
+		LotDurationSeconds      int                  `json:"lot_duration_seconds"`
 		SnipingWindowSeconds    int                  `json:"sniping_window_seconds"`
 		SnipingExtensionSeconds int                  `json:"sniping_extension_seconds"`
 		BidVisibility           domain.BidVisibility `json:"bid_visibility"`
@@ -229,6 +263,9 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		AllowManualPause:        req.AllowManualPause,
 		AllowManualEnd:          req.AllowManualEnd,
 		AutoExtendEnabled:       req.AutoExtendEnabled,
+		AuctionMode:             req.AuctionMode,
+		AutoProgressEnabled:     req.AutoProgressEnabled,
+		LotDurationSeconds:      req.LotDurationSeconds,
 		SnipingWindowSeconds:    req.SnipingWindowSeconds,
 		SnipingExtensionSeconds: req.SnipingExtensionSeconds,
 		BidVisibility:           req.BidVisibility,
@@ -238,6 +275,153 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, a)
+}
+
+func (h *Handler) CreateLot(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		LotNumber     string `json:"lot_number"`
+		OrderIndex    int    `json:"order_index"`
+		Title         string `json:"title"`
+		Description   string `json:"description"`
+		StartingPrice int64  `json:"starting_price"`
+		ReservePrice  *int64 `json:"reserve_price"`
+		MinIncrement  int64  `json:"min_increment"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	lot, err := h.Lot.Create(r.Context(), usecase.CreateLotInput{
+		TenantID:      tenant.ID,
+		AuctionID:     auctionID,
+		LotNumber:     req.LotNumber,
+		OrderIndex:    req.OrderIndex,
+		Title:         req.Title,
+		Description:   req.Description,
+		StartingPrice: req.StartingPrice,
+		ReservePrice:  req.ReservePrice,
+		MinIncrement:  req.MinIncrement,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, lot)
+}
+
+func (h *Handler) UpdateLot(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
+	if err != nil {
+		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		LotNumber     string `json:"lot_number"`
+		OrderIndex    int    `json:"order_index"`
+		Title         string `json:"title"`
+		Description   string `json:"description"`
+		StartingPrice int64  `json:"starting_price"`
+		ReservePrice  *int64 `json:"reserve_price"`
+		MinIncrement  int64  `json:"min_increment"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	lot, err := h.Lot.Update(r.Context(), tenant.ID, lotID, usecase.CreateLotInput{
+		TenantID:      tenant.ID,
+		LotNumber:     req.LotNumber,
+		OrderIndex:    req.OrderIndex,
+		Title:         req.Title,
+		Description:   req.Description,
+		StartingPrice: req.StartingPrice,
+		ReservePrice:  req.ReservePrice,
+		MinIncrement:  req.MinIncrement,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, lot)
+}
+
+func (h *Handler) DeleteLot(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
+	if err != nil {
+		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Lot.Delete(r.Context(), tenant.ID, lotID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "DELETED"})
+}
+
+func (h *Handler) ReorderLots(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		LotIDs []string `json:"lot_ids"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	ids := make([]uuid.UUID, 0, len(req.LotIDs))
+	for _, raw := range req.LotIDs {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			http.Error(w, "invalid lot id in list", http.StatusBadRequest)
+			return
+		}
+		ids = append(ids, id)
+	}
+	if err := h.Lot.Reorder(r.Context(), tenant.ID, auctionID, ids); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "REORDERED"})
+}
+
+func (h *Handler) StartLot(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
+	if err != nil {
+		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Lot.Start(r.Context(), tenant.ID, lotID, time.Now().UTC()); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "LIVE"})
+}
+
+func (h *Handler) EndLot(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
+	if err != nil {
+		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Lot.End(r.Context(), tenant.ID, lotID, time.Now().UTC()); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ENDED"})
 }
 
 func (h *Handler) ListAdminAuctions(w http.ResponseWriter, r *http.Request) {
@@ -269,6 +453,9 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		AllowManualPause        bool                 `json:"allow_manual_pause"`
 		AllowManualEnd          bool                 `json:"allow_manual_end"`
 		AutoExtendEnabled       bool                 `json:"auto_extend_enabled"`
+		AuctionMode             domain.AuctionMode   `json:"auction_mode"`
+		AutoProgressEnabled     bool                 `json:"auto_progress_enabled"`
+		LotDurationSeconds      int                  `json:"lot_duration_seconds"`
 		SnipingWindowSeconds    int                  `json:"sniping_window_seconds"`
 		SnipingExtensionSeconds int                  `json:"sniping_extension_seconds"`
 		BidVisibility           domain.BidVisibility `json:"bid_visibility"`
@@ -290,6 +477,9 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		AllowManualPause:        req.AllowManualPause,
 		AllowManualEnd:          req.AllowManualEnd,
 		AutoExtendEnabled:       req.AutoExtendEnabled,
+		AuctionMode:             req.AuctionMode,
+		AutoProgressEnabled:     req.AutoProgressEnabled,
+		LotDurationSeconds:      req.LotDurationSeconds,
 		SnipingWindowSeconds:    req.SnipingWindowSeconds,
 		SnipingExtensionSeconds: req.SnipingExtensionSeconds,
 		BidVisibility:           req.BidVisibility,
@@ -326,6 +516,7 @@ func (h *Handler) StartAuction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	_ = h.Lot.OnAuctionStart(r.Context(), tenant.ID, id, time.Now().UTC())
 	writeJSON(w, http.StatusOK, map[string]string{"status": "LIVE"})
 }
 
@@ -410,6 +601,43 @@ func (h *Handler) PlaceBid(w http.ResponseWriter, r *http.Request) {
 		UserID:    claims.UserID,
 		Amount:    req.Amount,
 		Now:       time.Now().UTC(),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	if claims.Role != domain.RoleBidder && claims.Role != domain.RoleAdmin {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
+	if err != nil {
+		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Amount int64 `json:"amount"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	res, err := h.Lot.PlaceBid(r.Context(), port.PlaceLotBidTxInput{
+		TenantID: tenant.ID,
+		LotID:    lotID,
+		UserID:   claims.UserID,
+		Amount:   req.Amount,
+		Now:      time.Now().UTC(),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

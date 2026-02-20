@@ -27,6 +27,9 @@ type CreateAuctionInput struct {
 	AllowManualPause        bool
 	AllowManualEnd          bool
 	AutoExtendEnabled       bool
+	AuctionMode             domain.AuctionMode
+	AutoProgressEnabled     bool
+	LotDurationSeconds      int
 	SnipingWindowSeconds    int
 	SnipingExtensionSeconds int
 	BidVisibility           domain.BidVisibility
@@ -68,9 +71,15 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 		AllowManualPause:        in.AllowManualPause,
 		AllowManualEnd:          in.AllowManualEnd,
 		AutoExtendEnabled:       in.AutoExtendEnabled,
+		AuctionMode:             in.AuctionMode,
+		AutoProgressEnabled:     in.AutoProgressEnabled,
+		LotDurationSeconds:      in.LotDurationSeconds,
 		SnipingWindowSeconds:    in.SnipingWindowSeconds,
 		SnipingExtensionSeconds: in.SnipingExtensionSeconds,
 		BidVisibility:           in.BidVisibility,
+	}
+	if auction.AuctionMode == "" {
+		auction.AuctionMode = domain.AuctionModeTimed
 	}
 	if err := uc.Auctions.Create(ctx, auction); err != nil {
 		return nil, err
@@ -97,9 +106,15 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 	current.AllowManualPause = in.AllowManualPause
 	current.AllowManualEnd = in.AllowManualEnd
 	current.AutoExtendEnabled = in.AutoExtendEnabled
+	current.AuctionMode = in.AuctionMode
+	current.AutoProgressEnabled = in.AutoProgressEnabled
+	current.LotDurationSeconds = in.LotDurationSeconds
 	current.SnipingWindowSeconds = in.SnipingWindowSeconds
 	current.SnipingExtensionSeconds = in.SnipingExtensionSeconds
 	current.BidVisibility = in.BidVisibility
+	if current.AuctionMode == "" {
+		current.AuctionMode = domain.AuctionModeTimed
+	}
 	if err := uc.Auctions.Update(ctx, current); err != nil {
 		return nil, err
 	}

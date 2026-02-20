@@ -46,6 +46,9 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 		r.Get("/auctions", h.ListAuctions)
 		r.Get("/auctions/{id}", h.GetAuction)
 		r.Get("/auctions/{id}/ws", AuctionWS(hub))
+		r.Get("/auctions/{auctionId}/lots", h.ListLotsByAuction)
+		r.Get("/lots/{lotId}", h.GetLot)
+		r.Get("/lots/{id}/ws", LotWS(hub))
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", h.Register)
@@ -56,6 +59,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.RequireAuth)
 			r.Post("/auctions/{id}/bid", h.PlaceBid)
+			r.Post("/lots/{lotId}/bid", h.PlaceLotBid)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
@@ -63,11 +67,17 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Use(middleware.RequireRole(domain.RoleAdmin))
 			r.Get("/auctions", h.ListAdminAuctions)
 			r.Post("/auctions", h.CreateAuction)
+			r.Post("/auctions/{auctionId}/lots", h.CreateLot)
+			r.Post("/auctions/{auctionId}/reorder-lots", h.ReorderLots)
 			r.Patch("/auctions/{id}", h.UpdateAuction)
 			r.Delete("/auctions/{id}", h.DeleteAuction)
 			r.Patch("/auctions/{id}/start", h.StartAuction)
 			r.Patch("/auctions/{id}/pause", h.PauseAuction)
 			r.Patch("/auctions/{id}/end", h.EndAuction)
+			r.Patch("/lots/{lotId}", h.UpdateLot)
+			r.Delete("/lots/{lotId}", h.DeleteLot)
+			r.Post("/lots/{lotId}/start", h.StartLot)
+			r.Post("/lots/{lotId}/end", h.EndLot)
 			r.Get("/bidders", h.ListBidders)
 			r.Patch("/bidders/{id}/approve", h.ApproveBidder)
 		})

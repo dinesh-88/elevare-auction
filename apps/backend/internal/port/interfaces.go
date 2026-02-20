@@ -35,6 +35,20 @@ type AuctionRepository interface {
 	RunSchedulerTick(ctx context.Context, now time.Time) error
 }
 
+type LotRepository interface {
+	Create(ctx context.Context, tenantID uuid.UUID, lot *domain.Lot) error
+	Update(ctx context.Context, tenantID uuid.UUID, lot *domain.Lot) error
+	Delete(ctx context.Context, tenantID, lotID uuid.UUID) error
+	Reorder(ctx context.Context, tenantID, auctionID uuid.UUID, lotIDs []uuid.UUID) error
+	ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) ([]domain.Lot, error)
+	GetByID(ctx context.Context, tenantID, lotID uuid.UUID) (*domain.Lot, error)
+	Start(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error
+	End(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error
+	OnAuctionStart(ctx context.Context, tenantID, auctionID uuid.UUID, now time.Time) error
+	PlaceBidTx(ctx context.Context, in PlaceLotBidTxInput) (*PlaceLotBidTxResult, error)
+	RunSchedulerTick(ctx context.Context, now time.Time) error
+}
+
 type PlaceBidTxInput struct {
 	TenantID  uuid.UUID
 	AuctionID uuid.UUID
@@ -46,6 +60,19 @@ type PlaceBidTxInput struct {
 type PlaceBidTxResult struct {
 	Auction domain.Auction
 	Bid     domain.Bid
+}
+
+type PlaceLotBidTxInput struct {
+	TenantID uuid.UUID
+	LotID    uuid.UUID
+	UserID   uuid.UUID
+	Amount   int64
+	Now      time.Time
+}
+
+type PlaceLotBidTxResult struct {
+	Lot domain.Lot
+	Bid domain.Bid
 }
 
 type CreatePendingTenantWithAdminInput struct {
@@ -82,4 +109,5 @@ type TokenClaims struct {
 
 type Broadcaster interface {
 	BroadcastBid(ctx context.Context, auctionID uuid.UUID, bid domain.Bid, currentPrice int64, endTime time.Time)
+	BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.Bid, currentPrice int64, endedAt *time.Time)
 }

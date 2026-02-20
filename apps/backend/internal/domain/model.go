@@ -41,6 +41,13 @@ const (
 	AuctionCancelled AuctionStatus = "CANCELLED"
 )
 
+type AuctionMode string
+
+const (
+	AuctionModeTimed      AuctionMode = "TIMED"
+	AuctionModeSequential AuctionMode = "SEQUENTIAL"
+)
+
 type BidVisibility string
 
 const (
@@ -100,15 +107,55 @@ type Auction struct {
 	AllowManualPause        bool
 	AllowManualEnd          bool
 	AutoExtendEnabled       bool
+	AuctionMode             AuctionMode
+	AutoProgressEnabled     bool
+	LotDurationSeconds      int
 	SnipingWindowSeconds    int
 	SnipingExtensionSeconds int
 	BidVisibility           BidVisibility
 	CreatedAt               time.Time
 }
 
+type LotStatus string
+
+const (
+	LotPending   LotStatus = "PENDING"
+	LotLive      LotStatus = "LIVE"
+	LotPaused    LotStatus = "PAUSED"
+	LotEnded     LotStatus = "ENDED"
+	LotCancelled LotStatus = "CANCELLED"
+)
+
+type Lot struct {
+	ID            uuid.UUID
+	AuctionID     uuid.UUID
+	LotNumber     string
+	OrderIndex    int
+	Title         string
+	Description   string
+	StartingPrice int64
+	CurrentPrice  int64
+	ReservePrice  *int64
+	MinIncrement  int64
+	Metadata      json.RawMessage
+	Status        LotStatus
+	StartedAt     *time.Time
+	EndedAt       *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type LotImage struct {
+	ID       uuid.UUID
+	LotID    uuid.UUID
+	URL      string
+	Position int
+}
+
 type Bid struct {
 	ID        uuid.UUID
 	AuctionID uuid.UUID
+	LotID     *uuid.UUID
 	UserID    uuid.UUID
 	Amount    int64
 	CreatedAt time.Time

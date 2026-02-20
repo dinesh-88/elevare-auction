@@ -35,6 +35,25 @@ export interface Auction {
   created_at: string;
 }
 
+export interface Lot {
+  id: string;
+  auction_id: string;
+  lot_number: string;
+  order_index: number;
+  title: string;
+  description: string;
+  starting_price: number;
+  current_price: number;
+  reserve_price?: number | null;
+  min_increment: number;
+  metadata?: { image?: string; images?: string[] };
+  status: "PENDING" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED";
+  started_at?: string | null;
+  ended_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TenantPublicConfig {
   name: string;
   branding: {
@@ -106,6 +125,8 @@ export const api = {
   getPublicConfig: () => request<TenantPublicConfig>("/public/config"),
   listAuctions: () => request<Auction[]>("/auctions"),
   getAuction: (id: string) => request<Auction>(`/auctions/${id}`),
+  listLotsByAuction: (auctionId: string) => request<Lot[]>(`/auctions/${auctionId}/lots`),
+  getLot: (lotId: string) => request<Lot>(`/lots/${lotId}`),
   register: (payload: { email: string; password: string }) =>
     request<JsonRecord>("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   login: (payload: { email: string; password: string }) =>
@@ -114,6 +135,8 @@ export const api = {
     request<JsonRecord>("/auth/verify-email", { method: "POST", body: JSON.stringify({ user_id: userId }) }),
   placeBid: (auctionId: string, amount: number) =>
     request<JsonRecord>(`/auctions/${auctionId}/bid`, { method: "POST", body: JSON.stringify({ amount }) }),
+  placeLotBid: (lotId: string, amount: number) =>
+    request<JsonRecord>(`/lots/${lotId}/bid`, { method: "POST", body: JSON.stringify({ amount }) }),
   createAuction: (payload: JsonRecord) =>
     request<Auction>("/admin/auctions", { method: "POST", body: JSON.stringify(payload) }),
   listAdminAuctions: () => request<Auction[]>("/admin/auctions"),
@@ -125,6 +148,15 @@ export const api = {
   endAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}/end`, { method: "PATCH" }),
   listBidders: () => request<User[]>("/admin/bidders"),
   approveBidder: (id: string) => request<JsonRecord>(`/admin/bidders/${id}/approve`, { method: "PATCH" }),
+  createLot: (auctionId: string, payload: JsonRecord) =>
+    request<Lot>(`/admin/auctions/${auctionId}/lots`, { method: "POST", body: JSON.stringify(payload) }),
+  updateLot: (lotId: string, payload: JsonRecord) =>
+    request<Lot>(`/admin/lots/${lotId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteLot: (lotId: string) => request<JsonRecord>(`/admin/lots/${lotId}`, { method: "DELETE" }),
+  reorderLots: (auctionId: string, lotIds: string[]) =>
+    request<JsonRecord>(`/admin/auctions/${auctionId}/reorder-lots`, { method: "POST", body: JSON.stringify({ lot_ids: lotIds }) }),
+  startLot: (lotId: string) => request<JsonRecord>(`/admin/lots/${lotId}/start`, { method: "POST" }),
+  endLot: (lotId: string) => request<JsonRecord>(`/admin/lots/${lotId}/end`, { method: "POST" }),
   platformListTenants: (platformToken: string, status: TenantStatus = "PENDING") =>
     requestWithToken<Array<Record<string, unknown>>>(`/platform/admin/tenants?status=${status}`, platformToken),
   platformApproveTenant: (platformToken: string, tenantId: string) =>

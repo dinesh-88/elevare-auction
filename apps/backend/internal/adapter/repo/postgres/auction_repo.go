@@ -21,19 +21,19 @@ func (r *AuctionRepo) Create(ctx context.Context, auction *domain.Auction) error
 INSERT INTO auctions (
   id, tenant_id, title, description, metadata, starting_price, current_price, reserve_price, min_increment,
   start_time, end_time, status, allow_manual_start, allow_manual_pause, allow_manual_end,
-  auto_extend_enabled, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
+  auto_extend_enabled, auction_mode, auto_progress_enabled, lot_duration_seconds, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
 ) VALUES (
   $1,$2,$3,$4,$5,$6,$7,$8,$9,
   $10,$11,$12,$13,$14,$15,
-  $16,$17,$18,$19,now()
+  $16,$17,$18,$19,$20,$21,$22,now()
 )`
 	_, err := r.DB.Exec(ctx, q,
 		auction.ID, auction.TenantID, auction.Title, auction.Description, auction.Metadata,
 		auction.StartingPrice, auction.CurrentPrice, auction.ReservePrice, auction.MinIncrement,
 		auction.StartTime, auction.EndTime, auction.Status,
 		auction.AllowManualStart, auction.AllowManualPause, auction.AllowManualEnd,
-		auction.AutoExtendEnabled, auction.SnipingWindowSeconds, auction.SnipingExtensionSeconds,
-		auction.BidVisibility,
+		auction.AutoExtendEnabled, auction.AuctionMode, auction.AutoProgressEnabled, auction.LotDurationSeconds,
+		auction.SnipingWindowSeconds, auction.SnipingExtensionSeconds, auction.BidVisibility,
 	)
 	return err
 }
@@ -45,7 +45,8 @@ func scanAuction(row pgx.Row) (*domain.Auction, error) {
 		&a.StartingPrice, &a.CurrentPrice, &a.ReservePrice, &a.MinIncrement,
 		&a.StartTime, &a.EndTime, &a.Status,
 		&a.AllowManualStart, &a.AllowManualPause, &a.AllowManualEnd,
-		&a.AutoExtendEnabled, &a.SnipingWindowSeconds, &a.SnipingExtensionSeconds, &a.BidVisibility, &a.CreatedAt,
+		&a.AutoExtendEnabled, &a.AuctionMode, &a.AutoProgressEnabled, &a.LotDurationSeconds,
+		&a.SnipingWindowSeconds, &a.SnipingExtensionSeconds, &a.BidVisibility, &a.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -57,7 +58,7 @@ func (r *AuctionRepo) ListPublic(ctx context.Context, tenantID uuid.UUID, now ti
 	const q = `
 SELECT id, tenant_id, title, description, metadata, starting_price, current_price, reserve_price, min_increment,
        start_time, end_time, status, allow_manual_start, allow_manual_pause, allow_manual_end,
-       auto_extend_enabled, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
+       auto_extend_enabled, auction_mode, auto_progress_enabled, lot_duration_seconds, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
 FROM auctions
 WHERE tenant_id = $1 AND status IN ('LIVE','SCHEDULED') AND end_time > $2
 ORDER BY start_time ASC`
@@ -81,7 +82,7 @@ func (r *AuctionRepo) ListAdmin(ctx context.Context, tenantID uuid.UUID) ([]doma
 	const q = `
 SELECT id, tenant_id, title, description, metadata, starting_price, current_price, reserve_price, min_increment,
        start_time, end_time, status, allow_manual_start, allow_manual_pause, allow_manual_end,
-       auto_extend_enabled, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
+       auto_extend_enabled, auction_mode, auto_progress_enabled, lot_duration_seconds, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
 FROM auctions
 WHERE tenant_id = $1
 ORDER BY created_at DESC`
@@ -105,7 +106,7 @@ func (r *AuctionRepo) GetByID(ctx context.Context, tenantID, auctionID uuid.UUID
 	const q = `
 SELECT id, tenant_id, title, description, metadata, starting_price, current_price, reserve_price, min_increment,
        start_time, end_time, status, allow_manual_start, allow_manual_pause, allow_manual_end,
-       auto_extend_enabled, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
+       auto_extend_enabled, auction_mode, auto_progress_enabled, lot_duration_seconds, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
 FROM auctions
 WHERE tenant_id = $1 AND id = $2`
 	a, err := scanAuction(r.DB.QueryRow(ctx, q, tenantID, auctionID))
@@ -129,16 +130,20 @@ SET title = $3,
     allow_manual_pause = $11,
     allow_manual_end = $12,
     auto_extend_enabled = $13,
-    sniping_window_seconds = $14,
-    sniping_extension_seconds = $15,
-    bid_visibility = $16
+    auction_mode = $14,
+    auto_progress_enabled = $15,
+    lot_duration_seconds = $16,
+    sniping_window_seconds = $17,
+    sniping_extension_seconds = $18,
+    bid_visibility = $19
 WHERE tenant_id = $1 AND id = $2`
 	ct, err := r.DB.Exec(ctx, q,
 		auction.TenantID, auction.ID,
 		auction.Title, auction.Description, auction.StartingPrice, auction.ReservePrice, auction.MinIncrement,
 		auction.StartTime, auction.EndTime,
 		auction.AllowManualStart, auction.AllowManualPause, auction.AllowManualEnd,
-		auction.AutoExtendEnabled, auction.SnipingWindowSeconds, auction.SnipingExtensionSeconds, auction.BidVisibility,
+		auction.AutoExtendEnabled, auction.AuctionMode, auction.AutoProgressEnabled, auction.LotDurationSeconds,
+		auction.SnipingWindowSeconds, auction.SnipingExtensionSeconds, auction.BidVisibility,
 	)
 	if err != nil {
 		return err

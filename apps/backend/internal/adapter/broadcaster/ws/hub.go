@@ -12,12 +12,16 @@ import (
 )
 
 type Hub struct {
-	mu    sync.RWMutex
-	rooms map[uuid.UUID]map[*websocket.Conn]struct{}
+	mu       sync.RWMutex
+	rooms    map[uuid.UUID]map[*websocket.Conn]struct{}
+	lotRooms map[uuid.UUID]map[*websocket.Conn]struct{}
 }
 
 func NewHub() *Hub {
-	return &Hub{rooms: make(map[uuid.UUID]map[*websocket.Conn]struct{})}
+	return &Hub{
+		rooms:    make(map[uuid.UUID]map[*websocket.Conn]struct{}),
+		lotRooms: make(map[uuid.UUID]map[*websocket.Conn]struct{}),
+	}
 }
 
 func (h *Hub) Join(auctionID uuid.UUID, conn *websocket.Conn) {
@@ -29,6 +33,26 @@ func (h *Hub) Join(auctionID uuid.UUID, conn *websocket.Conn) {
 	h.rooms[auctionID][conn] = struct{}{}
 }
 
+func (h *Hub) JoinLot(lotID uuid.UUID, conn *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, ok := h.lotRooms[lotID]; !ok {
+		h.lotRooms[lotID] = make(map[*websocket.Conn]struct{})
+	}
+	h.lotRooms[lotID][conn] = struct{}{}
+}
+
+func (h *Hub) LeaveLot(lotID uuid.UUID, conn *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if room, ok := h.lotRooms[lotID]; ok {
+		delete(room, conn)
+		if len(room) == 0 {
+			delete(h.lotRooms, lotID)
+		}
+	}
+}
+
 func (h *Hub) Leave(auctionID uuid.UUID, conn *websocket.Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -37,6 +61,32 @@ func (h *Hub) Leave(auctionID uuid.UUID, conn *websocket.Conn) {
 		if len(room) == 0 {
 			delete(h.rooms, auctionID)
 		}
+	}
+}
+
+func (h *Hub) BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.Bid, currentPrice int64, endedAt *time.Time) {
+	h.mu.RLock()
+	room := h.lotRooms[lotID]
+	conns := make([]*websocket.Conn, 0, len(room))
+	for c := range room {
+		conns = append(conns, c)
+	}
+	h.mu.RUnlock()
+	if len(conns) == 0 {
+		return
+	}
+	payload := map[string]any{
+		"type":          "lot_bid_placed",
+		"lot_id":        lotID,
+		"bid_id":        bid.ID,
+		"amount":        bid.Amount,
+		"current_price": currentPrice,
+		"ended_at":      endedAt,
+		"created_at":    bid.CreatedAt,
+	}
+	b, _ := json.Marshal(payload)
+	for _, c := range conns {
+		_ = c.Write(ctx, websocket.MessageText, b)
 	}
 }
 
