@@ -73,3 +73,6 @@ migrate -path apps/backend/migrations -database "$DATABASE_URL" up
   - `PATCH /platform/admin/tenants/{id}/approve`
   - `PATCH /platform/admin/tenants/{id}/reject`
 - Platform admin auth: `Authorization: Bearer <PLATFORM_ADMIN_TOKEN>`
+
+
+![alt text](image.png)
