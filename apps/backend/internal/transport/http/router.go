@@ -20,7 +20,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	r.Use(chimiddleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173"},
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
 	}))
@@ -61,7 +61,10 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(authMW.RequireAuth)
 			r.Use(middleware.RequireRole(domain.RoleAdmin))
+			r.Get("/auctions", h.ListAdminAuctions)
 			r.Post("/auctions", h.CreateAuction)
+			r.Patch("/auctions/{id}", h.UpdateAuction)
+			r.Delete("/auctions/{id}", h.DeleteAuction)
 			r.Patch("/auctions/{id}/start", h.StartAuction)
 			r.Patch("/auctions/{id}/pause", h.PauseAuction)
 			r.Patch("/auctions/{id}/end", h.EndAuction)

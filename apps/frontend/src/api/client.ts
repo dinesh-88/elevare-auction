@@ -1,4 +1,5 @@
 export type Role = "ADMIN" | "BIDDER";
+export type TenantStatus = "PENDING" | "ACTIVE" | "REJECTED";
 
 export interface User {
   id: string;
@@ -76,7 +77,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+async function requestWithToken<T>(path: string, bearerToken: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  headers.set("Authorization", `Bearer ${bearerToken}`);
+
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : null;
+
+  if (!res.ok) {
+    const message = typeof body === "string" ? body : (body?.error as string) || text || "Request failed";
+    throw new Error(message);
+  }
+
+  return body as T;
+}
+
 export const api = {
+  tenantSignup: (payload: {
+    organization_name: string;
+    desired_subdomain: string;
+    admin_email: string;
+    password: string;
+    country: string;
+    estimated_auction_volume?: number;
+  }) => request<JsonRecord>("/signup", { method: "POST", body: JSON.stringify(payload) }),
   getPublicConfig: () => request<TenantPublicConfig>("/public/config"),
   listAuctions: () => request<Auction[]>("/auctions"),
   getAuction: (id: string) => request<Auction>(`/auctions/${id}`),
@@ -90,9 +116,19 @@ export const api = {
     request<JsonRecord>(`/auctions/${auctionId}/bid`, { method: "POST", body: JSON.stringify({ amount }) }),
   createAuction: (payload: JsonRecord) =>
     request<Auction>("/admin/auctions", { method: "POST", body: JSON.stringify(payload) }),
+  listAdminAuctions: () => request<Auction[]>("/admin/auctions"),
+  updateAuction: (id: string, payload: JsonRecord) =>
+    request<Auction>(`/admin/auctions/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}`, { method: "DELETE" }),
   startAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}/start`, { method: "PATCH" }),
   pauseAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}/pause`, { method: "PATCH" }),
   endAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}/end`, { method: "PATCH" }),
   listBidders: () => request<User[]>("/admin/bidders"),
   approveBidder: (id: string) => request<JsonRecord>(`/admin/bidders/${id}/approve`, { method: "PATCH" }),
+  platformListTenants: (platformToken: string, status: TenantStatus = "PENDING") =>
+    requestWithToken<Array<Record<string, unknown>>>(`/platform/admin/tenants?status=${status}`, platformToken),
+  platformApproveTenant: (platformToken: string, tenantId: string) =>
+    requestWithToken<JsonRecord>(`/platform/admin/tenants/${tenantId}/approve`, platformToken, { method: "PATCH" }),
+  platformRejectTenant: (platformToken: string, tenantId: string) =>
+    requestWithToken<JsonRecord>(`/platform/admin/tenants/${tenantId}/reject`, platformToken, { method: "PATCH" }),
 };

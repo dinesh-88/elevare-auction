@@ -33,8 +33,10 @@ export default function BidPanel({ auction, onBidPlaced }: { auction: Auction; o
 
   return (
     <form className="bid-panel" onSubmit={placeBid}>
-      <h3>Place Bid</h3>
-      <label htmlFor="amount">Amount (minimum ${minBid.toLocaleString()})</label>
+      <h3 className="font-heading text-xl text-neutral-900">Place Bid</h3>
+      <label htmlFor="amount" className="text-sm text-neutral-500">
+        Amount (minimum ${minBid.toLocaleString()})
+      </label>
       <input
         id="amount"
         type="number"
@@ -43,7 +45,7 @@ export default function BidPanel({ auction, onBidPlaced }: { auction: Auction; o
         value={amount}
         onChange={(e) => setAmount(Number(e.target.value))}
       />
-      <button type="submit" disabled={submitting}>
+      <button type="submit" className="btn-brand w-full" disabled={submitting}>
         {submitting ? "Placing..." : "Place Bid"}
       </button>
       {error ? <p className="error">{error}</p> : null}

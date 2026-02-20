@@ -240,6 +240,81 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, a)
 }
 
+func (h *Handler) ListAdminAuctions(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctions, err := h.Auction.ListAdmin(r.Context(), tenant.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, auctions)
+}
+
+func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Title                   string               `json:"title"`
+		Description             string               `json:"description"`
+		StartingPrice           int64                `json:"starting_price"`
+		ReservePrice            *int64               `json:"reserve_price"`
+		MinIncrement            int64                `json:"min_increment"`
+		StartTime               time.Time            `json:"start_time"`
+		EndTime                 time.Time            `json:"end_time"`
+		AllowManualStart        bool                 `json:"allow_manual_start"`
+		AllowManualPause        bool                 `json:"allow_manual_pause"`
+		AllowManualEnd          bool                 `json:"allow_manual_end"`
+		AutoExtendEnabled       bool                 `json:"auto_extend_enabled"`
+		SnipingWindowSeconds    int                  `json:"sniping_window_seconds"`
+		SnipingExtensionSeconds int                  `json:"sniping_extension_seconds"`
+		BidVisibility           domain.BidVisibility `json:"bid_visibility"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	a, err := h.Auction.Update(r.Context(), usecase.CreateAuctionInput{
+		TenantID:                tenant.ID,
+		Title:                   req.Title,
+		Description:             req.Description,
+		StartingPrice:           req.StartingPrice,
+		ReservePrice:            req.ReservePrice,
+		MinIncrement:            req.MinIncrement,
+		StartTime:               req.StartTime,
+		EndTime:                 req.EndTime,
+		AllowManualStart:        req.AllowManualStart,
+		AllowManualPause:        req.AllowManualPause,
+		AllowManualEnd:          req.AllowManualEnd,
+		AutoExtendEnabled:       req.AutoExtendEnabled,
+		SnipingWindowSeconds:    req.SnipingWindowSeconds,
+		SnipingExtensionSeconds: req.SnipingExtensionSeconds,
+		BidVisibility:           req.BidVisibility,
+	}, auctionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, a)
+}
+
+func (h *Handler) DeleteAuction(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Auction.Delete(r.Context(), tenant.ID, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "DELETED"})
+}
+
 func (h *Handler) StartAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	id, err := uuid.Parse(chi.URLParam(r, "id"))

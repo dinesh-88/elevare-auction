@@ -26,7 +26,10 @@ type UserRepository interface {
 type AuctionRepository interface {
 	Create(ctx context.Context, auction *domain.Auction) error
 	ListPublic(ctx context.Context, tenantID uuid.UUID, now time.Time) ([]domain.Auction, error)
+	ListAdmin(ctx context.Context, tenantID uuid.UUID) ([]domain.Auction, error)
 	GetByID(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.Auction, error)
+	Update(ctx context.Context, auction *domain.Auction) error
+	Delete(ctx context.Context, tenantID, auctionID uuid.UUID) error
 	UpdateStatus(ctx context.Context, tenantID, auctionID uuid.UUID, status domain.AuctionStatus) error
 	PlaceBidTx(ctx context.Context, in PlaceBidTxInput) (*PlaceBidTxResult, error)
 	RunSchedulerTick(ctx context.Context, now time.Time) error

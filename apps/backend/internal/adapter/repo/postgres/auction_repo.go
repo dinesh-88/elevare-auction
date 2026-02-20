@@ -77,6 +77,30 @@ ORDER BY start_time ASC`
 	return out, rows.Err()
 }
 
+func (r *AuctionRepo) ListAdmin(ctx context.Context, tenantID uuid.UUID) ([]domain.Auction, error) {
+	const q = `
+SELECT id, tenant_id, title, description, metadata, starting_price, current_price, reserve_price, min_increment,
+       start_time, end_time, status, allow_manual_start, allow_manual_pause, allow_manual_end,
+       auto_extend_enabled, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
+FROM auctions
+WHERE tenant_id = $1
+ORDER BY created_at DESC`
+	rows, err := r.DB.Query(ctx, q, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.Auction, 0)
+	for rows.Next() {
+		a, err := scanAuction(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *a)
+	}
+	return out, rows.Err()
+}
+
 func (r *AuctionRepo) GetByID(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.Auction, error) {
 	const q = `
 SELECT id, tenant_id, title, description, metadata, starting_price, current_price, reserve_price, min_increment,
@@ -89,6 +113,56 @@ WHERE tenant_id = $1 AND id = $2`
 		return nil, errors.New("auction not found")
 	}
 	return a, err
+}
+
+func (r *AuctionRepo) Update(ctx context.Context, auction *domain.Auction) error {
+	const q = `
+UPDATE auctions
+SET title = $3,
+    description = $4,
+    starting_price = $5,
+    reserve_price = $6,
+    min_increment = $7,
+    start_time = $8,
+    end_time = $9,
+    allow_manual_start = $10,
+    allow_manual_pause = $11,
+    allow_manual_end = $12,
+    auto_extend_enabled = $13,
+    sniping_window_seconds = $14,
+    sniping_extension_seconds = $15,
+    bid_visibility = $16
+WHERE tenant_id = $1 AND id = $2`
+	ct, err := r.DB.Exec(ctx, q,
+		auction.TenantID, auction.ID,
+		auction.Title, auction.Description, auction.StartingPrice, auction.ReservePrice, auction.MinIncrement,
+		auction.StartTime, auction.EndTime,
+		auction.AllowManualStart, auction.AllowManualPause, auction.AllowManualEnd,
+		auction.AutoExtendEnabled, auction.SnipingWindowSeconds, auction.SnipingExtensionSeconds, auction.BidVisibility,
+	)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("auction not found")
+	}
+	return nil
+}
+
+func (r *AuctionRepo) Delete(ctx context.Context, tenantID, auctionID uuid.UUID) error {
+	const q = `
+DELETE FROM auctions
+WHERE tenant_id = $1
+  AND id = $2
+  AND status IN ('DRAFT','SCHEDULED','PAUSED','ENDED','CANCELLED')`
+	ct, err := r.DB.Exec(ctx, q, tenantID, auctionID)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("auction not found or cannot be deleted while live")
+	}
+	return nil
 }
 
 func (r *AuctionRepo) UpdateStatus(ctx context.Context, tenantID, auctionID uuid.UUID, status domain.AuctionStatus) error {

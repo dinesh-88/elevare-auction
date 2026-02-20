@@ -34,6 +34,11 @@ Frontend env (`apps/frontend/.env`):
 - `VITE_API_BASE_URL=http://localhost:8080`
 - `VITE_WS_BASE_URL=ws://localhost:8080`
 
+Frontend onboarding routes:
+
+- Public tenant signup UI: `http://localhost:5173/signup`
+- Platform review UI: `http://localhost:5173/platform/review`
+
 ## Docker Run (from repo root)
 
 ```bash

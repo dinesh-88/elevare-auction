@@ -36,6 +36,10 @@ func (uc *AuctionUseCase) ListPublic(ctx context.Context, tenantID uuid.UUID, no
 	return uc.Auctions.ListPublic(ctx, tenantID, now)
 }
 
+func (uc *AuctionUseCase) ListAdmin(ctx context.Context, tenantID uuid.UUID) ([]domain.Auction, error) {
+	return uc.Auctions.ListAdmin(ctx, tenantID)
+}
+
 func (uc *AuctionUseCase) Get(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.Auction, error) {
 	return uc.Auctions.GetByID(ctx, tenantID, auctionID)
 }
@@ -72,6 +76,38 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 		return nil, err
 	}
 	return auction, nil
+}
+
+func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auctionID uuid.UUID) (*domain.Auction, error) {
+	if in.Title == "" || in.MinIncrement <= 0 || in.StartingPrice < 0 || !in.EndTime.After(in.StartTime) {
+		return nil, ErrValidation
+	}
+	current, err := uc.Auctions.GetByID(ctx, in.TenantID, auctionID)
+	if err != nil {
+		return nil, err
+	}
+	current.Title = in.Title
+	current.Description = in.Description
+	current.StartingPrice = in.StartingPrice
+	current.ReservePrice = in.ReservePrice
+	current.MinIncrement = in.MinIncrement
+	current.StartTime = in.StartTime
+	current.EndTime = in.EndTime
+	current.AllowManualStart = in.AllowManualStart
+	current.AllowManualPause = in.AllowManualPause
+	current.AllowManualEnd = in.AllowManualEnd
+	current.AutoExtendEnabled = in.AutoExtendEnabled
+	current.SnipingWindowSeconds = in.SnipingWindowSeconds
+	current.SnipingExtensionSeconds = in.SnipingExtensionSeconds
+	current.BidVisibility = in.BidVisibility
+	if err := uc.Auctions.Update(ctx, current); err != nil {
+		return nil, err
+	}
+	return current, nil
+}
+
+func (uc *AuctionUseCase) Delete(ctx context.Context, tenantID, auctionID uuid.UUID) error {
+	return uc.Auctions.Delete(ctx, tenantID, auctionID)
 }
 
 func (uc *AuctionUseCase) Start(ctx context.Context, tenantID, auctionID uuid.UUID) error {

@@ -19,14 +19,17 @@ export default function Home() {
 
   return (
     <section>
-      <div className="hero" style={{ backgroundImage: config?.branding?.hero_image ? `url(${config.branding.hero_image})` : undefined }}>
-        <h1>Live & Upcoming Auctions</h1>
+      <div
+        className="mb-8 flex min-h-[220px] items-end rounded-md border border-neutral-200 bg-neutral-100 bg-cover bg-center p-6"
+        style={{ backgroundImage: config?.branding?.hero_image ? `url(${config.branding.hero_image})` : undefined }}
+      >
+        <h1 className="font-heading text-4xl text-neutral-900">Live & Upcoming Auctions</h1>
       </div>
 
-      {loading ? <p>Loading auctions...</p> : null}
+      {loading ? <p className="text-sm text-neutral-500">Loading auctions...</p> : null}
       {error ? <p className="error">{error}</p> : null}
 
-      <div className="auction-grid">
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
         {auctions.map((a) => (
           <AuctionCard key={a.id} auction={a} />
         ))}

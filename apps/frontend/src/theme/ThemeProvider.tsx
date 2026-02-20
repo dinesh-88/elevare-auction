@@ -21,13 +21,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setConfig(cfg);
 
         const root = document.documentElement;
-        root.style.setProperty("--primary-color", cfg.branding?.primary_color ?? "#1f3b5c");
-        root.style.setProperty("--secondary-color", cfg.branding?.secondary_color ?? "#d6b370");
+        root.style.setProperty("--brand-primary", cfg.branding?.primary_color ?? "#1e2a3a");
+        root.style.setProperty("--brand-secondary", cfg.branding?.secondary_color ?? "#b89a5d");
+        root.style.setProperty("--brand-accent", cfg.branding?.secondary_color ?? "#a67c52");
       })
       .catch(() => {
         const root = document.documentElement;
-        root.style.setProperty("--primary-color", "#1f3b5c");
-        root.style.setProperty("--secondary-color", "#d6b370");
+        root.style.setProperty("--brand-primary", "#1e2a3a");
+        root.style.setProperty("--brand-secondary", "#b89a5d");
+        root.style.setProperty("--brand-accent", "#a67c52");
       })
       .finally(() => {
         if (mounted) setLoading(false);
