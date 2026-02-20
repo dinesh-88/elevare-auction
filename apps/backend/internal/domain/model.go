@@ -2,9 +2,8 @@ package domain
 
 import (
 	"encoding/json"
-	"time"
-
 	"github.com/google/uuid"
+	"time"
 )
 
 type Role string
@@ -50,15 +49,26 @@ const (
 	BidVisibilitySealed    BidVisibility = "SEALED"
 )
 
+type TenantStatus string
+
+const (
+	TenantPending  TenantStatus = "PENDING"
+	TenantActive   TenantStatus = "ACTIVE"
+	TenantRejected TenantStatus = "REJECTED"
+)
+
 type Tenant struct {
-	ID                   uuid.UUID
-	Name                 string
-	Subdomain            string
-	CustomDomain         *string
-	Branding             json.RawMessage
-	RequireAdminApproval bool
-	RequireKYC           bool
-	CreatedAt            time.Time
+	ID                     uuid.UUID
+	Name                   string
+	Subdomain              string
+	CustomDomain           *string
+	Status                 TenantStatus
+	Country                string
+	EstimatedAuctionVolume *int
+	Branding               json.RawMessage
+	RequireAdminApproval   bool
+	RequireKYC             bool
+	CreatedAt              time.Time
 }
 
 type User struct {

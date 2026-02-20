@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 )

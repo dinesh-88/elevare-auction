@@ -19,6 +19,7 @@ Environment variables:
 - `APP_ADDR` (default `:8080`)
 - `DATABASE_URL` (default `postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable`)
 - `JWT_SECRET` (default `dev-secret-change-me`)
+- `PLATFORM_ADMIN_TOKEN` (default `dev-platform-admin-token`)
 
 ## Frontend Local Run
 
@@ -63,3 +64,12 @@ docker compose down -v
 ```bash
 migrate -path apps/backend/migrations -database "$DATABASE_URL" up
 ```
+
+## Tenant Onboarding Flow (Self-Serve)
+
+- Public signup endpoint: `POST /signup`
+- Platform review endpoints:
+  - `GET /platform/admin/tenants?status=PENDING`
+  - `PATCH /platform/admin/tenants/{id}/approve`
+  - `PATCH /platform/admin/tenants/{id}/reject`
+- Platform admin auth: `Authorization: Bearer <PLATFORM_ADMIN_TOKEN>`

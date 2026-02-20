@@ -48,6 +48,7 @@ services:
       APP_ADDR: :8080
       DATABASE_URL: postgres://postgres:postgres@db:5432/elevare-auction?sslmode=disable
       JWT_SECRET: dev-secret-change-me
+      PLATFORM_ADMIN_TOKEN: dev-platform-admin-token
     ports:
       - "8080:8080"
     restart: unless-stopped

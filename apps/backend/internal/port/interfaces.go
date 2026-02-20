@@ -10,6 +10,9 @@ import (
 
 type TenantRepository interface {
 	GetByHost(ctx context.Context, host string) (*domain.Tenant, error)
+	CreatePendingTenantWithAdmin(ctx context.Context, in CreatePendingTenantWithAdminInput) error
+	ListByStatus(ctx context.Context, status domain.TenantStatus) ([]domain.Tenant, error)
+	UpdateStatusAndAdminApproval(ctx context.Context, tenantID uuid.UUID, tenantStatus domain.TenantStatus, adminApproval domain.ApprovalStatus) error
 }
 
 type UserRepository interface {
@@ -40,6 +43,21 @@ type PlaceBidTxInput struct {
 type PlaceBidTxResult struct {
 	Auction domain.Auction
 	Bid     domain.Bid
+}
+
+type CreatePendingTenantWithAdminInput struct {
+	TenantID               uuid.UUID
+	TenantName             string
+	Subdomain              string
+	Country                string
+	EstimatedAuctionVolume *int
+	RequireAdminApproval   bool
+	RequireKYC             bool
+	AdminUserID            uuid.UUID
+	AdminEmail             string
+	AdminPasswordHash      string
+	AdminEmailVerified     bool
+	AdminApprovalStatus    domain.ApprovalStatus
 }
 
 type PasswordHasher interface {

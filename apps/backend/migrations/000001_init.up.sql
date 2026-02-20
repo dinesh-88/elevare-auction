@@ -5,11 +5,16 @@ CREATE TABLE tenants (
   name text NOT NULL,
   subdomain text NOT NULL UNIQUE,
   custom_domain text UNIQUE,
+  status text NOT NULL CHECK (status IN ('PENDING','ACTIVE','REJECTED')) DEFAULT 'PENDING',
+  country text NOT NULL DEFAULT '',
+  estimated_auction_volume integer,
   branding jsonb NOT NULL DEFAULT '{}'::jsonb,
   require_admin_approval boolean NOT NULL DEFAULT true,
   require_kyc boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE INDEX idx_tenants_status_created_at ON tenants(status, created_at DESC);
 
 CREATE TABLE users (
   id uuid PRIMARY KEY,

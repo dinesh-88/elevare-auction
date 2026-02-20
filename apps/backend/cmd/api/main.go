@@ -38,12 +38,13 @@ func main() {
 	authUC := &usecase.AuthUseCase{Users: userRepo, Hasher: hasher, Tokens: jwtSvc}
 	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Broadcaster: hub}
 	bidderUC := &usecase.BidderUseCase{Users: userRepo}
+	onboardingUC := &usecase.OnboardingUseCase{Tenants: tenantRepo, Hasher: hasher}
 
-	h := &httptransport.Handler{Auth: authUC, Auction: auctionUC, Bidder: bidderUC}
+	h := &httptransport.Handler{Auth: authUC, Auction: auctionUC, Bidder: bidderUC, Onboarding: onboardingUC}
 	tenantMW := middleware.TenantMiddleware{Tenants: tenantRepo}
 	authMW := middleware.AuthMiddleware{Tokens: jwtSvc}
 
-	router := httptransport.NewRouter(h, tenantMW, authMW, hub)
+	router := httptransport.NewRouter(h, tenantMW, authMW, hub, cfg.PlatformAdminToken)
 	httptransport.StartScheduler(ctx, auctionUC, 5*time.Second)
 
 	srv := &http.Server{

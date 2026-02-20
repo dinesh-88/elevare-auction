@@ -1,11 +1,10 @@
 package middleware
 
 import (
+	"github.com/dinesh-88/elevare-auction/internal/port"
 	"net"
 	"net/http"
 	"strings"
-
-	"github.com/dinesh-88/elevare-auction/internal/port"
 )
 
 type TenantMiddleware struct {

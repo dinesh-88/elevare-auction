@@ -14,9 +14,79 @@ import (
 )
 
 type Handler struct {
-	Auth    *usecase.AuthUseCase
-	Auction *usecase.AuctionUseCase
-	Bidder  *usecase.BidderUseCase
+	Auth       *usecase.AuthUseCase
+	Auction    *usecase.AuctionUseCase
+	Bidder     *usecase.BidderUseCase
+	Onboarding *usecase.OnboardingUseCase
+}
+
+func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		OrganizationName       string `json:"organization_name"`
+		DesiredSubdomain       string `json:"desired_subdomain"`
+		AdminEmail             string `json:"admin_email"`
+		Password               string `json:"password"`
+		Country                string `json:"country"`
+		EstimatedAuctionVolume *int   `json:"estimated_auction_volume"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	tenant, admin, err := h.Onboarding.PublicSignup(r.Context(), usecase.TenantSignupInput{
+		OrganizationName:       req.OrganizationName,
+		DesiredSubdomain:       req.DesiredSubdomain,
+		AdminEmail:             req.AdminEmail,
+		Password:               req.Password,
+		Country:                req.Country,
+		EstimatedAuctionVolume: req.EstimatedAuctionVolume,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"tenant_id":             tenant.ID,
+		"tenant_status":         tenant.Status,
+		"admin_user_id":         admin.ID,
+		"admin_approval_status": admin.ApprovalStatus,
+	})
+}
+
+func (h *Handler) ListTenantRequests(w http.ResponseWriter, r *http.Request) {
+	status := domain.TenantStatus(r.URL.Query().Get("status"))
+	tenants, err := h.Onboarding.ListTenantRequests(r.Context(), status)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, tenants)
+}
+
+func (h *Handler) ApproveTenant(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid tenant id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Onboarding.ApproveTenant(r.Context(), tenantID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ACTIVE"})
+}
+
+func (h *Handler) RejectTenant(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid tenant id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Onboarding.RejectTenant(r.Context(), tenantID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "REJECTED"})
 }
 
 func (h *Handler) PublicConfig(w http.ResponseWriter, r *http.Request) {

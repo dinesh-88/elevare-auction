@@ -7,12 +7,12 @@ import (
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/cors"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
-func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middleware.AuthMiddleware, hub *wsadapter.Hub) http.Handler {
+func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middleware.AuthMiddleware, hub *wsadapter.Hub, platformAdminToken string) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
@@ -30,6 +30,14 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 		http.Redirect(w, r, "/swagger/index.html", http.StatusTemporaryRedirect)
 	})
 	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/openapi.yaml")))
+	r.Post("/signup", h.PublicTenantSignup)
+
+	r.Route("/platform/admin", func(r chi.Router) {
+		r.Use(middleware.RequirePlatformAdmin(platformAdminToken))
+		r.Get("/tenants", h.ListTenantRequests)
+		r.Patch("/tenants/{id}/approve", h.ApproveTenant)
+		r.Patch("/tenants/{id}/reject", h.RejectTenant)
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(tenantMW.Resolve)
