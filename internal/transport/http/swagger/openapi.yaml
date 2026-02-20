@@ -1,0 +1,193 @@
+openapi: 3.0.3
+info:
+  title: Elevare Auction SaaS API
+  version: 0.1.0
+  description: Multi-tenant auction backend MVP API.
+servers:
+  - url: http://localhost:8080
+paths:
+  /public/config:
+    get:
+      summary: Get tenant public branding config
+      responses:
+        '200':
+          description: OK
+  /auctions:
+    get:
+      summary: List public auctions
+      responses:
+        '200':
+          description: OK
+  /auctions/{id}:
+    get:
+      summary: Get auction details
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+  /auth/register:
+    post:
+      summary: Register bidder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '201':
+          description: Created
+  /auth/login:
+    post:
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /auth/verify-email:
+    post:
+      summary: Mark user email as verified
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: OK
+  /auctions/{id}/bid:
+    post:
+      summary: Place bid
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+      responses:
+        '201':
+          description: Created
+  /admin/auctions:
+    post:
+      summary: Create auction (ADMIN)
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Created
+  /admin/auctions/{id}/start:
+    patch:
+      summary: Start auction (ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+  /admin/auctions/{id}/pause:
+    patch:
+      summary: Pause auction (ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+  /admin/auctions/{id}/end:
+    patch:
+      summary: End auction (ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+  /admin/bidders:
+    get:
+      summary: List bidders (ADMIN)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+  /admin/bidders/{id}/approve:
+    patch:
+      summary: Approve bidder (ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
