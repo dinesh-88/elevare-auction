@@ -15,6 +15,19 @@ Environment variables:
 - `DATABASE_URL` (default `postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable`)
 - `JWT_SECRET` (default `dev-secret-change-me`)
 
+## Frontend (React + Vite)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Optional frontend env vars (`frontend/.env`):
+
+- `VITE_API_BASE_URL=http://localhost:8080`
+- `VITE_WS_BASE_URL=ws://localhost:8080`
+
 ## Run With Docker
 
 Start DB, run migrations, and start API:

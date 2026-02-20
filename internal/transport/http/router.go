@@ -7,6 +7,7 @@ import (
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
@@ -17,6 +18,12 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173"},
+		AllowedMethods:   []string{"GET", "POST", "PATCH", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowCredentials: true,
+	}))
 
 	r.Get("/swagger/openapi.yaml", ServeOpenAPISpec())
 	r.Get("/swagger", func(w http.ResponseWriter, r *http.Request) {
