@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 
-export default function CountdownTimer({ endTime, variant = "default" }: { endTime: Date; variant?: "default" | "large" }) {
+export default function CountdownTimer({
+  endTime,
+  variant = "default",
+  showLabel = true,
+  inline = false,
+}: {
+  endTime: Date;
+  variant?: "default" | "large";
+  showLabel?: boolean;
+  inline?: boolean;
+}) {
   const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
 
   function calculateTimeLeft() {
@@ -23,18 +33,20 @@ export default function CountdownTimer({ endTime, variant = "default" }: { endTi
   if (variant === "large") {
     return (
       <div className="space-y-1">
-        <div className="text-sm text-neutral-500">Auction ends in</div>
-        <div className="bid-amount text-2xl font-heading font-semibold">
+        {showLabel ? <div className="text-sm text-neutral-500">Auction ends in</div> : null}
+        <div className="text-2xl font-heading font-semibold tabular-nums">
           {timeLeft.days > 0 && `${timeLeft.days}d `}
           {fmt(timeLeft.hours)}:{fmt(timeLeft.minutes)}:{fmt(timeLeft.seconds)}
         </div>
       </div>
     );
   }
+  const Tag = inline ? "span" : "div";
   return (
-    <div className="countdown bid-amount">
-      Ends in {timeLeft.days > 0 && `${timeLeft.days}d `}
+    <Tag className="text-sm text-neutral-500 tabular-nums">
+      {showLabel ? "Ends in " : ""}
+      {timeLeft.days > 0 && `${timeLeft.days}d `}
       {fmt(timeLeft.hours)}:{fmt(timeLeft.minutes)}:{fmt(timeLeft.seconds)}
-    </div>
+    </Tag>
   );
 }

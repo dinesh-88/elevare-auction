@@ -26,9 +26,9 @@ export default function AuctionListing() {
   }, [auctions]);
 
   return (
-    <section className="min-h-screen bg-neutral-50">
+    <section className="min-h-screen bg-white">
       <section className="border-b border-neutral-200 bg-white">
-        <div className="container-shell py-12 md:py-16">
+        <div className="mx-auto max-w-[1440px] px-4 py-10 md:px-8 md:py-16">
           {featuredAuction ? (
             <div className="grid grid-cols-1 items-center gap-8 md:gap-12 lg:grid-cols-2">
               <div className="aspect-[4/3] overflow-hidden rounded-xl bg-neutral-100">
@@ -43,12 +43,12 @@ export default function AuctionListing() {
                 )}
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-5 md:space-y-6">
                 <StatusBadge status={featuredAuction.status} />
-                <h2 className="font-heading text-3xl md:text-4xl">{featuredAuction.title}</h2>
+                <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl">{featuredAuction.title}</h2>
                 <div className="space-y-2">
                   <div className="text-sm text-neutral-500">Current Bid</div>
-                  <div className="bid-amount text-3xl font-heading font-bold text-neutral-900 md:text-4xl">
+                  <div className="bid-amount text-2xl font-heading font-bold text-neutral-900 sm:text-3xl md:text-4xl">
                     $ {featuredAuction.current_price.toLocaleString()}
                   </div>
                 </div>
@@ -64,7 +64,7 @@ export default function AuctionListing() {
         </div>
       </section>
 
-      <section className="container-shell py-12 md:py-16">
+      <section className="mx-auto max-w-[1440px] px-4 py-12 md:px-8 md:py-16">
         <div className="mb-8">
           <h2 className="font-heading text-2xl md:text-3xl">Live Auctions</h2>
           <p className="text-neutral-500">Browse all available lots</p>

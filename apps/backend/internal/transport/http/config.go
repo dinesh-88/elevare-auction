@@ -10,6 +10,15 @@ type Config struct {
 	DatabaseURL        string
 	JWTSecret          string
 	PlatformAdminToken string
+	StorageProvider    string
+	UploadsDir         string
+	S3Bucket           string
+	S3Region           string
+	S3Endpoint         string
+	S3AccessKeyID      string
+	S3SecretAccessKey  string
+	S3PublicBaseURL    string
+	S3UsePathStyle     bool
 	JWTTTL             time.Duration
 }
 
@@ -20,6 +29,15 @@ func LoadConfig() Config {
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable"),
 		JWTSecret:          getEnv("JWT_SECRET", "dev-secret-change-me"),
 		PlatformAdminToken: getEnv("PLATFORM_ADMIN_TOKEN", "dev-platform-admin-token"),
+		StorageProvider:    getEnv("STORAGE_PROVIDER", "local"),
+		UploadsDir:         getEnv("UPLOADS_DIR", "/tmp/elevare-uploads"),
+		S3Bucket:           getEnv("S3_BUCKET", ""),
+		S3Region:           getEnv("S3_REGION", "us-east-1"),
+		S3Endpoint:         getEnv("S3_ENDPOINT", ""),
+		S3AccessKeyID:      getEnv("S3_ACCESS_KEY_ID", ""),
+		S3SecretAccessKey:  getEnv("S3_SECRET_ACCESS_KEY", ""),
+		S3PublicBaseURL:    getEnv("S3_PUBLIC_BASE_URL", ""),
+		S3UsePathStyle:     getEnvBool("S3_USE_PATH_STYLE", true),
 		JWTTTL:             ttl,
 	}
 }
@@ -29,4 +47,19 @@ func getEnv(k, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getEnvBool(k string, fallback bool) bool {
+	v := os.Getenv(k)
+	if v == "" {
+		return fallback
+	}
+	switch v {
+	case "1", "true", "TRUE", "True", "yes", "YES", "on", "ON":
+		return true
+	case "0", "false", "FALSE", "False", "no", "NO", "off", "OFF":
+		return false
+	default:
+		return fallback
+	}
 }

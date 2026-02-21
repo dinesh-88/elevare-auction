@@ -45,6 +45,7 @@ type LotRepository interface {
 	End(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error
 	OnAuctionStart(ctx context.Context, tenantID, auctionID uuid.UUID, now time.Time) error
 	PlaceBidTx(ctx context.Context, in PlaceLotBidTxInput) (*PlaceLotBidTxResult, error)
+	ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error)
 	RunSchedulerTick(ctx context.Context, now time.Time) error
 }
 

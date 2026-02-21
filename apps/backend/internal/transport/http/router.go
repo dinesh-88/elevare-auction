@@ -2,6 +2,8 @@ package httptransport
 
 import (
 	"net/http"
+	"os"
+	"strings"
 
 	wsadapter "github.com/dinesh-88/elevare-auction/internal/adapter/broadcaster/ws"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
@@ -12,7 +14,7 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
-func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middleware.AuthMiddleware, hub *wsadapter.Hub, platformAdminToken string) http.Handler {
+func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middleware.AuthMiddleware, hub *wsadapter.Hub, platformAdminToken string, uploadsDir string, serveLocalUploads bool) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
@@ -24,6 +26,13 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
 	}))
+	if serveLocalUploads {
+		uploadsDir = strings.TrimSpace(uploadsDir)
+		if uploadsDir != "" {
+			_ = os.MkdirAll(uploadsDir, 0o755)
+			r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsDir))))
+		}
+	}
 
 	r.Get("/swagger/openapi.yaml", ServeOpenAPISpec())
 	r.Get("/swagger", func(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +57,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 		r.Get("/auctions/{id}/ws", AuctionWS(hub))
 		r.Get("/auctions/{auctionId}/lots", h.ListLotsByAuction)
 		r.Get("/lots/{lotId}", h.GetLot)
+		r.Get("/lots/{lotId}/bids", h.ListLotBids)
 		r.Get("/lots/{id}/ws", LotWS(hub))
 
 		r.Route("/auth", func(r chi.Router) {
@@ -77,6 +87,8 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Delete("/lots/{lotId}", h.DeleteLot)
 			r.Post("/lots/{lotId}/start", h.StartLot)
 			r.Post("/lots/{lotId}/end", h.EndLot)
+			r.Post("/uploads/auction-image", h.UploadAuctionImage)
+			r.Post("/uploads/lot-image", h.UploadLotImage)
 			r.Get("/bidders", h.ListBidders)
 			r.Patch("/bidders/{id}/approve", h.ApproveBidder)
 		})

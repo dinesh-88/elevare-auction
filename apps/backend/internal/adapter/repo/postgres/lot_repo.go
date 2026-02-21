@@ -40,14 +40,14 @@ INSERT INTO lots (
 )
 SELECT $1, $2, $3, $4, $5, $6,
        $7, $8, $9, $10,
-       '{}'::jsonb, $11, now(), now()
+       $11, $12, now(), now()
 WHERE EXISTS (
-  SELECT 1 FROM auctions WHERE id = $2 AND tenant_id = $12
+  SELECT 1 FROM auctions WHERE id = $2 AND tenant_id = $13
 )`
 	ct, err := r.DB.Exec(ctx, q,
 		lot.ID, lot.AuctionID, lot.LotNumber, lot.OrderIndex, lot.Title, lot.Description,
 		lot.StartingPrice, lot.CurrentPrice, lot.ReservePrice, lot.MinIncrement,
-		lot.Status, tenantID,
+		lot.Metadata, lot.Status, tenantID,
 	)
 	if err != nil {
 		return err
@@ -68,13 +68,14 @@ SET lot_number = $3,
     starting_price = $7,
     reserve_price = $8,
     min_increment = $9,
+    metadata = $10,
     updated_at = now()
 FROM auctions a
 WHERE l.auction_id = a.id
   AND a.tenant_id = $1
   AND l.id = $2`
 	ct, err := r.DB.Exec(ctx, q, tenantID, lot.ID,
-		lot.LotNumber, lot.OrderIndex, lot.Title, lot.Description, lot.StartingPrice, lot.ReservePrice, lot.MinIncrement,
+		lot.LotNumber, lot.OrderIndex, lot.Title, lot.Description, lot.StartingPrice, lot.ReservePrice, lot.MinIncrement, lot.Metadata,
 	)
 	if err != nil {
 		return err
@@ -529,4 +530,35 @@ WHERE status = 'LIVE'
 	}
 
 	return rows.Err()
+}
+
+func (r *LotRepo) ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	const q = `
+SELECT b.id, b.user_id, b.amount, b.created_at
+FROM lot_bids b
+JOIN lots l ON l.id = b.lot_id
+JOIN auctions a ON a.id = l.auction_id
+WHERE a.tenant_id = $1 AND b.lot_id = $2
+ORDER BY b.created_at DESC
+LIMIT $3`
+	rows, err := r.DB.Query(ctx, q, tenantID, lotID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]domain.Bid, 0)
+	for rows.Next() {
+		var b domain.Bid
+		if err := rows.Scan(&b.ID, &b.UserID, &b.Amount, &b.CreatedAt); err != nil {
+			return nil, err
+		}
+		id := lotID
+		b.LotID = &id
+		out = append(out, b)
+	}
+	return out, rows.Err()
 }

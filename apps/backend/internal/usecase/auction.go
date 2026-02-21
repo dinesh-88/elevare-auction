@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
@@ -18,6 +19,7 @@ type CreateAuctionInput struct {
 	TenantID                uuid.UUID
 	Title                   string
 	Description             string
+	Metadata                json.RawMessage
 	StartTime               time.Time
 	EndTime                 time.Time
 	AllowManualStart        bool
@@ -57,6 +59,7 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 		TenantID:                in.TenantID,
 		Title:                   in.Title,
 		Description:             in.Description,
+		Metadata:                in.Metadata,
 		StartTime:               in.StartTime,
 		EndTime:                 in.EndTime,
 		Status:                  status,
@@ -93,6 +96,7 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 	}
 	current.Title = in.Title
 	current.Description = in.Description
+	current.Metadata = in.Metadata
 	current.StartTime = in.StartTime
 	current.EndTime = in.EndTime
 	current.AllowManualStart = in.AllowManualStart
@@ -105,6 +109,9 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 	current.SnipingWindowSeconds = in.SnipingWindowSeconds
 	current.SnipingExtensionSeconds = in.SnipingExtensionSeconds
 	current.BidVisibility = in.BidVisibility
+	if len(current.Metadata) == 0 {
+		current.Metadata = []byte(`{}`)
+	}
 	if current.AuctionMode == "" {
 		current.AuctionMode = domain.AuctionModeTimed
 	}

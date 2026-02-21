@@ -45,10 +45,9 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      APP_ADDR: :8080
-      DATABASE_URL: postgres://postgres:postgres@db:5432/elevare-auction?sslmode=disable
-      JWT_SECRET: dev-secret-change-me
-      PLATFORM_ADMIN_TOKEN: dev-platform-admin-token
+      APP_ADDR: :8080    
+    env_file:
+      - .env
     ports:
       - "8080:8080"
     restart: unless-stopped

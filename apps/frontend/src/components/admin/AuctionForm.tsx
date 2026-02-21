@@ -1,8 +1,11 @@
-import type { Auction } from "../../api/client";
+import { useState } from "react";
+import { api, type Auction } from "../../api/client";
+import ImageUploader from "./ImageUploader";
 
 export type AuctionFormState = {
   title: string;
   description: string;
+  images: string[];
   start_time: string;
   end_time: string;
   allow_manual_start: boolean;
@@ -22,6 +25,7 @@ export const now = new Date();
 export const defaultAuctionFormState = (): AuctionFormState => ({
   title: "",
   description: "",
+  images: [],
   start_time: new Date(now.getTime() + 10 * 60 * 1000).toISOString().slice(0, 16),
   end_time: new Date(now.getTime() + 70 * 60 * 1000).toISOString().slice(0, 16),
   auto_extend_enabled: true,
@@ -45,6 +49,12 @@ export const toInputDateTime = (iso: string) => {
 export const fromAuction = (a: Auction): AuctionFormState => ({
   title: a.title,
   description: a.description,
+  images:
+    a.metadata?.images && a.metadata.images.length > 0
+      ? a.metadata.images
+      : a.metadata?.image
+        ? [a.metadata.image]
+        : [],
   start_time: toInputDateTime(a.start_time),
   end_time: toInputDateTime(a.end_time),
   allow_manual_start: a.allow_manual_start,
@@ -60,9 +70,22 @@ export const fromAuction = (a: Auction): AuctionFormState => ({
 });
 
 export const toPayload = (form: AuctionFormState) => ({
-  ...form,
+  title: form.title,
+  description: form.description,
+  metadata: {
+    image: form.images[0] ?? "",
+    images: form.images,
+  },
+  bid_visibility: form.bid_visibility,
+  auction_mode: form.auction_mode,
+  allow_manual_start: form.allow_manual_start,
+  allow_manual_pause: form.allow_manual_pause,
+  allow_manual_end: form.allow_manual_end,
+  auto_extend_enabled: form.auto_extend_enabled,
   auto_progress_enabled: form.auction_mode === "SEQUENTIAL" ? form.auto_progress_enabled : false,
   lot_duration_seconds: form.auction_mode === "SEQUENTIAL" ? form.lot_duration_seconds : 0,
+  sniping_window_seconds: form.sniping_window_seconds,
+  sniping_extension_seconds: form.sniping_extension_seconds,
   start_time: new Date(form.start_time).toISOString(),
   end_time: new Date(form.end_time).toISOString(),
 });
@@ -78,6 +101,8 @@ export default function AuctionForm({
   onSubmit: (e: React.FormEvent) => void;
   submitLabel: string;
 }) {
+  const [uploadingHint, setUploadingHint] = useState<string | null>(null);
+
   return (
     <form className="form-grid" onSubmit={onSubmit}>
       <label>Title</label>
@@ -85,6 +110,22 @@ export default function AuctionForm({
 
       <label>Description</label>
       <textarea value={form.description} rows={4} onChange={(e) => onChange({ ...form, description: e.target.value })} />
+
+      <ImageUploader
+        label="Auction Images"
+        images={form.images}
+        altText={form.title || "Auction image"}
+        onChange={(images) => onChange({ ...form, images })}
+        onUploadOne={async (file) => {
+          setUploadingHint("Uploading...");
+          try {
+            return await api.uploadAuctionImage(file);
+          } finally {
+            setUploadingHint(null);
+          }
+        }}
+      />
+      {uploadingHint ? <p className="text-sm text-neutral-500">{uploadingHint}</p> : null}
 
       <label>Start Time</label>
       <input

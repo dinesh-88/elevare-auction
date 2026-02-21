@@ -1,6 +1,7 @@
 package httptransport
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -19,6 +20,7 @@ type Handler struct {
 	Lot        *usecase.LotUseCase
 	Bidder     *usecase.BidderUseCase
 	Onboarding *usecase.OnboardingUseCase
+	Storage    port.ObjectStorage
 }
 
 func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +161,21 @@ func (h *Handler) GetLot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, lot)
 }
 
+func (h *Handler) ListLotBids(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
+	if err != nil {
+		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		return
+	}
+	bids, err := h.Lot.ListBidsByLot(r.Context(), tenant.ID, lotID, 100)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, bids)
+}
+
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	var req struct {
@@ -230,6 +247,7 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Title                   string               `json:"title"`
 		Description             string               `json:"description"`
+		Metadata                json.RawMessage      `json:"metadata"`
 		StartTime               time.Time            `json:"start_time"`
 		EndTime                 time.Time            `json:"end_time"`
 		AllowManualStart        bool                 `json:"allow_manual_start"`
@@ -251,6 +269,7 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		TenantID:                tenant.ID,
 		Title:                   req.Title,
 		Description:             req.Description,
+		Metadata:                req.Metadata,
 		StartTime:               req.StartTime,
 		EndTime:                 req.EndTime,
 		AllowManualStart:        req.AllowManualStart,
@@ -279,13 +298,14 @@ func (h *Handler) CreateLot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		LotNumber     string `json:"lot_number"`
-		OrderIndex    int    `json:"order_index"`
-		Title         string `json:"title"`
-		Description   string `json:"description"`
-		StartingPrice int64  `json:"starting_price"`
-		ReservePrice  *int64 `json:"reserve_price"`
-		MinIncrement  int64  `json:"min_increment"`
+		LotNumber     string          `json:"lot_number"`
+		OrderIndex    int             `json:"order_index"`
+		Title         string          `json:"title"`
+		Description   string          `json:"description"`
+		Metadata      json.RawMessage `json:"metadata"`
+		StartingPrice int64           `json:"starting_price"`
+		ReservePrice  *int64          `json:"reserve_price"`
+		MinIncrement  int64           `json:"min_increment"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
@@ -298,6 +318,7 @@ func (h *Handler) CreateLot(w http.ResponseWriter, r *http.Request) {
 		OrderIndex:    req.OrderIndex,
 		Title:         req.Title,
 		Description:   req.Description,
+		Metadata:      req.Metadata,
 		StartingPrice: req.StartingPrice,
 		ReservePrice:  req.ReservePrice,
 		MinIncrement:  req.MinIncrement,
@@ -317,13 +338,14 @@ func (h *Handler) UpdateLot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		LotNumber     string `json:"lot_number"`
-		OrderIndex    int    `json:"order_index"`
-		Title         string `json:"title"`
-		Description   string `json:"description"`
-		StartingPrice int64  `json:"starting_price"`
-		ReservePrice  *int64 `json:"reserve_price"`
-		MinIncrement  int64  `json:"min_increment"`
+		LotNumber     string          `json:"lot_number"`
+		OrderIndex    int             `json:"order_index"`
+		Title         string          `json:"title"`
+		Description   string          `json:"description"`
+		Metadata      json.RawMessage `json:"metadata"`
+		StartingPrice int64           `json:"starting_price"`
+		ReservePrice  *int64          `json:"reserve_price"`
+		MinIncrement  int64           `json:"min_increment"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
@@ -335,6 +357,7 @@ func (h *Handler) UpdateLot(w http.ResponseWriter, r *http.Request) {
 		OrderIndex:    req.OrderIndex,
 		Title:         req.Title,
 		Description:   req.Description,
+		Metadata:      req.Metadata,
 		StartingPrice: req.StartingPrice,
 		ReservePrice:  req.ReservePrice,
 		MinIncrement:  req.MinIncrement,
@@ -438,6 +461,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Title                   string               `json:"title"`
 		Description             string               `json:"description"`
+		Metadata                json.RawMessage      `json:"metadata"`
 		StartTime               time.Time            `json:"start_time"`
 		EndTime                 time.Time            `json:"end_time"`
 		AllowManualStart        bool                 `json:"allow_manual_start"`
@@ -459,6 +483,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		TenantID:                tenant.ID,
 		Title:                   req.Title,
 		Description:             req.Description,
+		Metadata:                req.Metadata,
 		StartTime:               req.StartTime,
 		EndTime:                 req.EndTime,
 		AllowManualStart:        req.AllowManualStart,

@@ -13,7 +13,7 @@ export default function AdminSidebar() {
   return (
     <aside className="admin-sidebar">
       <h2 className="mb-4 font-heading text-2xl text-neutral-900">Elevare Admin</h2>
-      <p className="mb-4 text-xs text-neutral-500">Auction control center</p>
+      <p className="mb-4 text-xs text-neutral-500">Manage auctions, lots, and bidders.</p>
       <nav>
         {links.map((link) => (
           <Link key={link.to} to={link.to} className={location.pathname === link.to ? "active" : ""}>

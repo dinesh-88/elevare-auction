@@ -48,7 +48,7 @@ export default function BidInput({
               onChange={(e) => setBidAmount(Number(e.target.value))}
               min={currentBid + minIncrement}
               step={minIncrement}
-              className="w-full rounded-lg border border-neutral-200 py-3 pl-12 pr-4"
+              className="w-full rounded-lg border border-neutral-200 py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
             />
           </div>
           <p className="mt-1 text-xs text-neutral-500">
@@ -56,22 +56,37 @@ export default function BidInput({
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <ElevareButton type="button" variant="secondary" className="flex-1 px-3 py-2 text-sm" onClick={() => quickBid(minIncrement)}>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <ElevareButton
+            type="button"
+            variant="secondary"
+            className="flex-1 px-3 py-2 text-sm"
+            onClick={() => quickBid(minIncrement)}
+          >
             +{currency}
             {minIncrement}
           </ElevareButton>
-          <ElevareButton type="button" variant="secondary" className="flex-1 px-3 py-2 text-sm" onClick={() => quickBid(minIncrement * 5)}>
+          <ElevareButton
+            type="button"
+            variant="secondary"
+            className="flex-1 px-3 py-2 text-sm"
+            onClick={() => quickBid(minIncrement * 5)}
+          >
             +{currency}
             {minIncrement * 5}
           </ElevareButton>
-          <ElevareButton type="button" variant="secondary" className="flex-1 px-3 py-2 text-sm" onClick={() => quickBid(minIncrement * 10)}>
+          <ElevareButton
+            type="button"
+            variant="secondary"
+            className="flex-1 px-3 py-2 text-sm"
+            onClick={() => quickBid(minIncrement * 10)}
+          >
             +{currency}
             {minIncrement * 10}
           </ElevareButton>
         </div>
 
-        <ElevareButton type="submit" className="w-full py-3" disabled={submitting}>
+        <ElevareButton type="submit" size="large" className="w-full" disabled={submitting}>
           {submitting ? "Placing..." : "Place Bid"}
         </ElevareButton>
       </form>

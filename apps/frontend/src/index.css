@@ -11,10 +11,7 @@
   }
 
   body {
-    @apply m-0 bg-neutral-50 text-neutral-800 font-body antialiased;
-    background-image:
-      radial-gradient(circle at 15% -10%, #ffffff 6%, transparent 45%),
-      linear-gradient(180deg, #fdfdfc 0%, #f8f8f6 100%);
+    @apply m-0 bg-white text-neutral-800 font-body antialiased;
   }
 
   a {

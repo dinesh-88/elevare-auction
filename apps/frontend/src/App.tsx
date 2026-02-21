@@ -6,6 +6,8 @@ import Auctions from "./pages/admin/Auctions";
 import CreateAuction from "./pages/admin/CreateAuction";
 import Bidders from "./pages/admin/Bidders";
 import Lots from "./pages/admin/Lots";
+import CreateLot from "./pages/admin/CreateLot";
+import EditLot from "./pages/admin/EditLot";
 import AuctionDetail from "./pages/public/AuctionDetail";
 import AuctionListing from "./pages/public/AuctionListing";
 import Home from "./pages/public/Home";
@@ -32,6 +34,8 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="auctions" element={<Auctions />} />
         <Route path="auctions/:auctionId/lots" element={<Lots />} />
+        <Route path="auctions/:auctionId/lots/create" element={<CreateLot />} />
+        <Route path="auctions/:auctionId/lots/:lotId/edit" element={<EditLot />} />
         <Route path="create-auction" element={<CreateAuction />} />
         <Route path="bidders" element={<Bidders />} />
       </Route>

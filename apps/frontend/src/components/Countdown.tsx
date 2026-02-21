@@ -1,5 +1,5 @@
 import CountdownTimer from "./CountdownTimer";
 
 export default function Countdown({ endTime }: { endTime: string }) {
-  return <CountdownTimer endTime={new Date(endTime)} />;
+  return <CountdownTimer endTime={new Date(endTime)} showLabel={false} inline />;
 }

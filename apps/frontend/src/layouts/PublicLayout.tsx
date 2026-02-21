@@ -8,7 +8,7 @@ export default function PublicLayout() {
   const { isAuthenticated, user, logout } = useAuth();
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-800 font-body">
+    <div className="min-h-screen bg-white text-neutral-800 font-body">
       <Header
         tenantName={config?.name ?? "Auction"}
         tenantLogoUrl={config?.branding?.logo_url}
@@ -17,13 +17,9 @@ export default function PublicLayout() {
         onLogout={logout}
       />
 
-      <main className="container-shell py-12">
+      <main>
         <Outlet />
       </main>
-
-      <footer className="border-t border-neutral-200 bg-white py-6 text-center text-sm text-neutral-500">
-        {config?.branding?.footer_text ?? "Powered by Elevare Auction"}
-      </footer>
     </div>
   );
 }

@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
@@ -21,6 +22,7 @@ type CreateLotInput struct {
 	OrderIndex    int
 	Title         string
 	Description   string
+	Metadata      json.RawMessage
 	StartingPrice int64
 	ReservePrice  *int64
 	MinIncrement  int64
@@ -37,11 +39,15 @@ func (uc *LotUseCase) Create(ctx context.Context, in CreateLotInput) (*domain.Lo
 		OrderIndex:    in.OrderIndex,
 		Title:         in.Title,
 		Description:   in.Description,
+		Metadata:      in.Metadata,
 		StartingPrice: in.StartingPrice,
 		CurrentPrice:  in.StartingPrice,
 		ReservePrice:  in.ReservePrice,
 		MinIncrement:  in.MinIncrement,
 		Status:        domain.LotPending,
+	}
+	if len(lot.Metadata) == 0 {
+		lot.Metadata = []byte(`{}`)
 	}
 	if err := uc.Lots.Create(ctx, in.TenantID, lot); err != nil {
 		return nil, err
@@ -61,6 +67,9 @@ func (uc *LotUseCase) Update(ctx context.Context, tenantID, lotID uuid.UUID, in 
 	lot.OrderIndex = in.OrderIndex
 	lot.Title = in.Title
 	lot.Description = in.Description
+	if len(in.Metadata) > 0 {
+		lot.Metadata = in.Metadata
+	}
 	lot.StartingPrice = in.StartingPrice
 	lot.ReservePrice = in.ReservePrice
 	lot.MinIncrement = in.MinIncrement
@@ -116,6 +125,10 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 	}
 	uc.Broadcaster.BroadcastLotBid(ctx, res.Lot.ID, res.Bid, res.Lot.CurrentPrice, res.Lot.EndedAt)
 	return res, nil
+}
+
+func (uc *LotUseCase) ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error) {
+	return uc.Lots.ListBidsByLot(ctx, tenantID, lotID, limit)
 }
 
 func (uc *LotUseCase) SchedulerTick(ctx context.Context, now time.Time) error {

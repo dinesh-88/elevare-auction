@@ -12,6 +12,14 @@ export interface User {
   created_at: string;
 }
 
+export interface LotBid {
+  id: string;
+  lot_id: string;
+  user_id: string;
+  amount: number;
+  created_at: string;
+}
+
 export interface Auction {
   id: string;
   tenant_id: string;
@@ -52,6 +60,7 @@ export interface Lot {
   metadata?: {
     image?: string;
     images?: string[];
+    details?: Array<{ label: string; value: string }>;
     artist?: string;
     date?: string;
     dimensions?: string;
@@ -91,14 +100,32 @@ export const setAuthTokenGetter = (fn: TokenGetter) => {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
+const resolveMediaUrl = (value: string): string => {
+  if (!value) return value;
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  if (!value.startsWith("/")) return value;
+  return `${API_BASE}${value}`;
+};
+
 function normalizeAuction(raw: unknown): Auction {
   const r = (raw ?? {}) as Record<string, unknown>;
+  const rawMetadata = (r.metadata ?? r.Metadata ?? {}) as Record<string, unknown>;
+  const normalizedMetadata: Auction["metadata"] = {
+    ...(rawMetadata as Auction["metadata"]),
+  };
+  if (typeof rawMetadata.image === "string") {
+    normalizedMetadata.image = resolveMediaUrl(rawMetadata.image);
+  }
+  if (Array.isArray(rawMetadata.images)) {
+    normalizedMetadata.images = rawMetadata.images.filter((x): x is string => typeof x === "string").map(resolveMediaUrl);
+  }
+
   return {
     id: String(r.id ?? r.ID ?? ""),
     tenant_id: String(r.tenant_id ?? r.TenantID ?? ""),
     title: String(r.title ?? r.Title ?? ""),
     description: String(r.description ?? r.Description ?? ""),
-    metadata: (r.metadata ?? r.Metadata ?? {}) as Auction["metadata"],
+    metadata: normalizedMetadata,
     starting_price: Number(r.starting_price ?? r.StartingPrice ?? 0),
     current_price: Number(r.current_price ?? r.CurrentPrice ?? 0),
     reserve_price: (r.reserve_price ?? r.ReservePrice ?? null) as number | null,
@@ -122,6 +149,16 @@ function normalizeAuction(raw: unknown): Auction {
 
 function normalizeLot(raw: unknown): Lot {
   const r = (raw ?? {}) as Record<string, unknown>;
+  const rawMetadata = (r.metadata ?? r.Metadata ?? {}) as Record<string, unknown>;
+  const normalizedMetadata: Lot["metadata"] = {
+    ...(rawMetadata as Lot["metadata"]),
+  };
+  if (typeof rawMetadata.image === "string") {
+    normalizedMetadata.image = resolveMediaUrl(rawMetadata.image);
+  }
+  if (Array.isArray(rawMetadata.images)) {
+    normalizedMetadata.images = rawMetadata.images.filter((x): x is string => typeof x === "string").map(resolveMediaUrl);
+  }
   return {
     id: String(r.id ?? r.ID ?? ""),
     auction_id: String(r.auction_id ?? r.AuctionID ?? ""),
@@ -133,7 +170,7 @@ function normalizeLot(raw: unknown): Lot {
     current_price: Number(r.current_price ?? r.CurrentPrice ?? 0),
     reserve_price: (r.reserve_price ?? r.ReservePrice ?? null) as number | null,
     min_increment: Number(r.min_increment ?? r.MinIncrement ?? 0),
-    metadata: (r.metadata ?? r.Metadata ?? {}) as Lot["metadata"],
+    metadata: normalizedMetadata,
     status: String(r.status ?? r.Status ?? "PENDING") as Lot["status"],
     started_at: (r.started_at ?? r.StartedAt ?? null) as string | null,
     ended_at: (r.ended_at ?? r.EndedAt ?? null) as string | null,
@@ -142,18 +179,39 @@ function normalizeLot(raw: unknown): Lot {
   };
 }
 
+function normalizeLotBid(raw: unknown): LotBid {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    lot_id: String(r.lot_id ?? r.LotID ?? (r.lotId as string | undefined) ?? ""),
+    user_id: String(r.user_id ?? r.UserID ?? ""),
+    amount: Number(r.amount ?? r.Amount ?? 0),
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  headers.set("Content-Type", "application/json");
+  if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+  }
 
   if (!res.ok) {
-    const message = typeof body === "string" ? body : (body?.error as string) || text || "Request failed";
+    const bodyRecord = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+    const message = typeof body === "string" ? body : (bodyRecord?.error as string) || text || "Request failed";
     throw new Error(message);
   }
 
@@ -162,15 +220,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function requestWithToken<T>(path: string, bearerToken: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  headers.set("Content-Type", "application/json");
+  if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   headers.set("Authorization", `Bearer ${bearerToken}`);
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+  }
 
   if (!res.ok) {
-    const message = typeof body === "string" ? body : (body?.error as string) || text || "Request failed";
+    const bodyRecord = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+    const message = typeof body === "string" ? body : (bodyRecord?.error as string) || text || "Request failed";
     throw new Error(message);
   }
 
@@ -191,6 +259,7 @@ export const api = {
   getAuction: async (id: string) => normalizeAuction(await request<unknown>(`/auctions/${id}`)),
   listLotsByAuction: async (auctionId: string) => (await request<unknown[]>(`/auctions/${auctionId}/lots`)).map(normalizeLot),
   getLot: async (lotId: string) => normalizeLot(await request<unknown>(`/lots/${lotId}`)),
+  listLotBids: async (lotId: string) => (await request<unknown[]>(`/lots/${lotId}/bids`)).map(normalizeLotBid),
   register: (payload: { email: string; password: string }) =>
     request<JsonRecord>("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   login: (payload: { email: string; password: string }) =>
@@ -222,6 +291,16 @@ export const api = {
     request<JsonRecord>(`/admin/auctions/${auctionId}/reorder-lots`, { method: "POST", body: JSON.stringify({ lot_ids: lotIds }) }),
   startLot: (lotId: string) => request<JsonRecord>(`/admin/lots/${lotId}/start`, { method: "POST" }),
   endLot: (lotId: string) => request<JsonRecord>(`/admin/lots/${lotId}/end`, { method: "POST" }),
+  uploadAuctionImage: async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<{ url: string }>("/admin/uploads/auction-image", { method: "POST", body: form });
+  },
+  uploadLotImage: async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<{ url: string }>("/admin/uploads/lot-image", { method: "POST", body: form });
+  },
   platformListTenants: (platformToken: string, status: TenantStatus = "PENDING") =>
     requestWithToken<Array<Record<string, unknown>>>(`/platform/admin/tenants?status=${status}`, platformToken),
   platformApproveTenant: (platformToken: string, tenantId: string) =>

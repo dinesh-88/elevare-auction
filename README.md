@@ -20,6 +20,39 @@ Environment variables:
 - `DATABASE_URL` (default `postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable`)
 - `JWT_SECRET` (default `dev-secret-change-me`)
 - `PLATFORM_ADMIN_TOKEN` (default `dev-platform-admin-token`)
+- `STORAGE_PROVIDER` (`local` or `s3`, default `local`)
+- `UPLOADS_DIR` (used when `STORAGE_PROVIDER=local`, default `/tmp/elevare-uploads`)
+- `S3_BUCKET` (required when `STORAGE_PROVIDER=s3`)
+- `S3_REGION` (default `us-east-1`)
+- `S3_ENDPOINT` (optional, required for Cloudflare R2)
+- `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`
+- `S3_PUBLIC_BASE_URL` (recommended public/CDN base URL)
+- `S3_USE_PATH_STYLE` (`true`/`false`, default `true`)
+
+Cloudflare R2 example:
+
+```bash
+STORAGE_PROVIDER=s3
+S3_BUCKET=your-bucket
+S3_REGION=auto
+S3_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_PUBLIC_BASE_URL=https://pub-<hash>.r2.dev
+S3_USE_PATH_STYLE=true
+```
+
+AWS S3 example:
+
+```bash
+STORAGE_PROVIDER=s3
+S3_BUCKET=your-bucket
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_PUBLIC_BASE_URL=https://your-bucket.s3.amazonaws.com
+S3_USE_PATH_STYLE=false
+```
 
 ## Frontend Local Run
 

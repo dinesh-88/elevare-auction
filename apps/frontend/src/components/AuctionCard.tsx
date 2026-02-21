@@ -16,11 +16,11 @@ export default function AuctionCard({ auction }: { auction: Auction }) {
           )}
         </div>
 
-        <div className="space-y-3 p-6">
-          <div className="text-sm text-neutral-500">Auction Event</div>
-          <h3 className="font-heading text-xl text-neutral-900">{auction.title}</h3>
+        <div className="space-y-3 p-5 md:p-6">
+          <div className="text-sm text-neutral-500">Auction</div>
+          <h3 className="font-heading text-lg font-medium text-neutral-900 md:text-xl">{auction.title}</h3>
           <div className="flex items-baseline gap-2">
-            <span className="bid-amount text-2xl font-heading font-semibold text-neutral-900">${auction.current_price.toLocaleString()}</span>
+            <span className="text-xl font-heading font-semibold text-neutral-900 md:text-2xl">${auction.current_price.toLocaleString()}</span>
           </div>
           <CountdownTimer endTime={new Date(auction.end_time)} />
           <div className="flex items-center gap-2 pt-2 text-brand-primary">

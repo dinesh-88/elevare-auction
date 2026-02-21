@@ -1,20 +1,35 @@
 import { useState } from "react";
 
-export default function LotImageGallery({ images, alt }: { images: string[]; alt: string }) {
+export default function LotImageGallery({
+  images,
+  alt,
+  variant = "default",
+}: {
+  images: string[];
+  alt: string;
+  variant?: "default" | "compact";
+}) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const compact = variant === "compact";
 
   if (images.length === 0) {
-    return <div className="grid aspect-square place-content-center rounded-lg bg-neutral-50 text-sm text-neutral-500">No image</div>;
+    return (
+      <div
+        className={`grid place-content-center rounded-lg bg-neutral-50 text-sm text-neutral-500 ${compact ? "aspect-[4/3] max-w-md" : "aspect-square"}`}
+      >
+        No image
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="aspect-square overflow-hidden rounded-lg bg-neutral-50">
+    <div className={`space-y-4 ${compact ? "max-w-md" : ""}`}>
+      <div className={`overflow-hidden rounded-lg bg-neutral-50 ${compact ? "aspect-[4/3]" : "aspect-square"}`}>
         <img src={images[selectedIndex]} alt={alt} className="h-full w-full object-cover" />
       </div>
 
       {images.length > 1 ? (
-        <div className="grid grid-cols-5 gap-2">
+        <div className={`grid gap-2 ${compact ? "grid-cols-4" : "grid-cols-5"}`}>
           {images.map((image, index) => (
             <button
               key={`${image}-${index}`}
