@@ -5,7 +5,7 @@ import { useAuth } from "../hooks/useAuth";
 
 export default function PublicLayout() {
   const { config } = useTheme();
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, isAdmin, user, logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-white text-neutral-800 font-body">
@@ -13,6 +13,7 @@ export default function PublicLayout() {
         tenantName={config?.name ?? "Elevare"}
         tenantLogoUrl={config?.branding?.logo_url}
         isAuthenticated={isAuthenticated}
+        isAdmin={isAdmin}
         userEmail={user?.email}
         onLogout={logout}
       />

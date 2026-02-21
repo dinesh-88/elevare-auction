@@ -82,6 +82,7 @@ export interface LotFinancials {
   lot_id: string;
   winner_user?: string | null;
   hammer_price?: number | null;
+  invoice_id?: string | null;
   fees: Array<{
     name: string;
     type: "PERCENTAGE" | "FIXED";
@@ -89,6 +90,33 @@ export interface LotFinancials {
     amount: number;
   }>;
   total_due?: number | null;
+}
+
+export interface Invoice {
+  id: string;
+  lot_id: string;
+  tenant_id: string;
+  winner_user_id: string;
+  invoice_number: string;
+  issued_at: string;
+  due_date?: string | null;
+  currency: string;
+  total_amount: number;
+  snapshot: {
+    hammer_price: number;
+    fees: Array<{
+      name: string;
+      type: "PERCENTAGE" | "FIXED";
+      value: number;
+      amount: number;
+    }>;
+    total_due: number;
+  };
+  status: "ISSUED" | "PAID" | "CANCELLED";
+  created_at: string;
+  lot_number?: string;
+  lot_title?: string;
+  auction_title?: string;
 }
 
 export type FeeCalculationType = "PERCENTAGE" | "FIXED";
@@ -312,6 +340,18 @@ async function requestWithToken<T>(path: string, bearerToken: string, init?: Req
   return body as T;
 }
 
+async function requestBinary(path: string, init?: RequestInit): Promise<Blob> {
+  const headers = new Headers(init?.headers);
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Request failed");
+  }
+  return res.blob();
+}
+
 export const api = {
   tenantSignup: (payload: {
     organization_name: string;
@@ -327,7 +367,13 @@ export const api = {
   listLotsByAuction: async (auctionId: string) => (await request<unknown[]>(`/auctions/${auctionId}/lots`)).map(normalizeLot),
   getLot: async (lotId: string) => normalizeLot(await request<unknown>(`/lots/${lotId}`)),
   getLotFinancials: (lotId: string) => request<LotFinancials>(`/lots/${lotId}/financials`),
+  getInvoice: (invoiceId: string) => request<Invoice>(`/invoices/${invoiceId}`),
+  updateInvoiceStatus: (invoiceId: string, status: "ISSUED" | "PAID" | "CANCELLED") =>
+    request<JsonRecord>(`/admin/invoices/${invoiceId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  generateLotInvoice: (lotId: string) => request<Invoice>(`/admin/lots/${lotId}/invoice/generate`, { method: "POST" }),
+  downloadInvoicePDF: (invoiceId: string) => requestBinary(`/invoices/${invoiceId}/pdf`),
   listLotBids: async (lotId: string) => (await request<unknown[]>(`/lots/${lotId}/bids`)).map(normalizeLotBid),
+  listMyWinningLots: async () => (await request<unknown[]>("/me/winnings")).map(normalizeLot),
   register: (payload: { email: string; password: string }) =>
     request<JsonRecord>("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   login: (payload: { email: string; password: string }) =>

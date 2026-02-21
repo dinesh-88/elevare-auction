@@ -36,6 +36,7 @@ func main() {
 	auctionRepo := &postgres.AuctionRepo{DB: db}
 	lotRepo := &postgres.LotRepo{DB: db}
 	feeRepo := &postgres.FeeRepo{DB: db}
+	invoiceRepo := &postgres.InvoiceRepo{DB: db}
 
 	hasher := &security.Argon2Hasher{}
 	jwtSvc := &security.JWTService{Secret: []byte(cfg.JWTSecret), TTL: cfg.JWTTTL}
@@ -45,6 +46,7 @@ func main() {
 	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Broadcaster: hub}
 	lotUC := &usecase.LotUseCase{Lots: lotRepo, Broadcaster: hub}
 	feeUC := &usecase.FeeUseCase{Fees: feeRepo}
+	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo}
 	bidderUC := &usecase.BidderUseCase{Users: userRepo}
 	onboardingUC := &usecase.OnboardingUseCase{Tenants: tenantRepo, Hasher: hasher}
 
@@ -86,6 +88,7 @@ func main() {
 		Auction:    auctionUC,
 		Lot:        lotUC,
 		Fee:        feeUC,
+		Invoice:    invoiceUC,
 		Bidder:     bidderUC,
 		Onboarding: onboardingUC,
 		Storage:    objectStorage,

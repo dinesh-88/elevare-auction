@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type Lot } from "../../api/client";
+import { api, type Invoice, type Lot, type LotFinancials } from "../../api/client";
 import ImageUploader from "../../components/admin/ImageUploader";
 import ElevareButton from "../../components/ui/ElevareButton";
 import IconButton from "../../components/ui/IconButton";
@@ -81,6 +81,8 @@ export default function EditLot() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [financials, setFinancials] = useState<LotFinancials | null>(null);
+  const [invoice, setInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {
     if (!lotId) return;
@@ -88,7 +90,27 @@ export default function EditLot() {
     setError(null);
     api
       .getLot(lotId)
-      .then((lot) => setForm(formFromLot(lot)))
+      .then(async (lot) => {
+        setForm(formFromLot(lot));
+        if (lot.status === "ENDED") {
+          try {
+            const snapshot = await api.getLotFinancials(lotId);
+            setFinancials(snapshot);
+            if (snapshot.invoice_id) {
+              const inv = await api.getInvoice(snapshot.invoice_id);
+              setInvoice(inv);
+            } else {
+              setInvoice(null);
+            }
+          } catch {
+            setFinancials(null);
+            setInvoice(null);
+          }
+        } else {
+          setFinancials(null);
+          setInvoice(null);
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load lot"))
       .finally(() => setLoading(false));
   }, [lotId]);
@@ -118,6 +140,32 @@ export default function EditLot() {
       setError(err instanceof Error ? err.message : "Failed to update lot");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const markInvoiceStatus = async (status: "PAID" | "CANCELLED") => {
+    if (!invoice) return;
+    try {
+      setError(null);
+      await api.updateInvoiceStatus(invoice.id, status);
+      const refreshed = await api.getInvoice(invoice.id);
+      setInvoice(refreshed);
+      setMessage(`Invoice marked as ${status}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update invoice status");
+    }
+  };
+
+  const generateInvoice = async () => {
+    if (!lotId) return;
+    try {
+      setError(null);
+      const inv = await api.generateLotInvoice(lotId);
+      setInvoice(inv);
+      setFinancials((prev) => (prev ? { ...prev, invoice_id: inv.id } : prev));
+      setMessage("Invoice generated.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate invoice");
     }
   };
 
@@ -212,6 +260,55 @@ export default function EditLot() {
               Cancel
             </ElevareButton>
           </div>
+
+          {financials ? (
+            <div className="mt-4 rounded-md border border-neutral-200 bg-neutral-50 p-4">
+              <h3 className="mb-2 font-heading text-lg text-neutral-900">Settlement Snapshot</h3>
+              {financials.hammer_price == null ? (
+                <p className="text-sm text-neutral-600">No winning bid was recorded.</p>
+              ) : (
+                <>
+                  <p className="text-sm text-neutral-700">
+                    Hammer Price: <span className="bid-amount font-medium text-neutral-900">${financials.hammer_price.toLocaleString()}</span>
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {financials.fees?.map((fee, idx) => (
+                      <div key={`${fee.name}-${idx}`} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="text-neutral-600">
+                          {fee.name} {fee.type === "PERCENTAGE" ? `(${fee.value}%)` : ""}
+                        </span>
+                        <span className="bid-amount text-neutral-900">${fee.amount.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-3 border-t border-neutral-200 pt-2 text-sm font-medium text-neutral-900">
+                    Total Due: <span className="bid-amount">${(financials.total_due ?? 0).toLocaleString()}</span>
+                  </p>
+                  {invoice ? (
+                    <div className="mt-3 rounded-md border border-neutral-200 bg-white p-3 text-sm">
+                      <p className="text-neutral-700">
+                        Invoice: <span className="font-medium text-neutral-900">{invoice.invoice_number}</span> ({invoice.status})
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <ElevareButton type="button" variant="secondary" onClick={() => markInvoiceStatus("PAID")}>
+                          Mark Paid
+                        </ElevareButton>
+                        <ElevareButton type="button" variant="secondary" onClick={() => markInvoiceStatus("CANCELLED")}>
+                          Mark Cancelled
+                        </ElevareButton>
+                      </div>
+                    </div>
+                  ) : financials && financials.hammer_price != null ? (
+                    <div className="mt-3">
+                      <ElevareButton type="button" variant="secondary" onClick={generateInvoice}>
+                        Generate Invoice
+                      </ElevareButton>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
         </form>
       ) : null}
     </section>

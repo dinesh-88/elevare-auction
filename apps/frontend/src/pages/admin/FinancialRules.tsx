@@ -42,16 +42,11 @@ export default function FinancialRules() {
     applies_to: "HAMMER" as FeeAppliesTo,
     taxable: false,
   });
+  const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-
-  const currentScopeId = useMemo(() => {
-    if (scopeType === "TENANT") return "__TENANT__";
-    if (scopeType === "AUCTION") return selectedAuctionId;
-    return selectedLotId;
-  }, [scopeType, selectedAuctionId, selectedLotId]);
 
   const resolveScopeId = (tenantId: string): string => {
     if (scopeType === "TENANT") return tenantId;
@@ -121,17 +116,24 @@ export default function FinancialRules() {
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load assignments"));
   }, [scopeType, selectedAuctionId, selectedLotId, auctions]);
 
-  const createComponent = async (e: React.FormEvent) => {
+  const saveComponent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setError(null);
       setMessage(null);
-      const created = await api.createFeeComponent(form);
-      setComponents((prev) => [created, ...prev]);
+      if (editingComponentId) {
+        const updated = await api.updateFeeComponent(editingComponentId, form);
+        setComponents((prev) => prev.map((c) => (c.id === editingComponentId ? updated : c)));
+        setMessage("Fee component updated.");
+      } else {
+        const created = await api.createFeeComponent(form);
+        setComponents((prev) => [created, ...prev]);
+        setMessage("Fee component created.");
+      }
       setForm({ name: "", calculation_type: "PERCENTAGE", value: 0, applies_to: "HAMMER", taxable: false });
-      setMessage("Fee component created.");
+      setEditingComponentId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create fee component");
+      setError(err instanceof Error ? err.message : "Failed to save fee component");
     }
   };
 
@@ -207,7 +209,7 @@ export default function FinancialRules() {
           <h2 className="mb-3 font-heading text-xl">Fee Components</h2>
           <p className="mb-4 text-sm text-neutral-500">Reusable fee definitions available for scope assignments.</p>
 
-          <form className="grid gap-3" onSubmit={createComponent}>
+          <form className="grid gap-3" onSubmit={saveComponent}>
             <label>Name</label>
             <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Buyer's Premium" required />
             <label>Type</label>
@@ -233,7 +235,21 @@ export default function FinancialRules() {
               Taxable
             </label>
             <div>
-              <ElevareButton type="submit">Add Fee Component</ElevareButton>
+              <div className="flex gap-2">
+                <ElevareButton type="submit">{editingComponentId ? "Save Changes" : "Add Fee Component"}</ElevareButton>
+                {editingComponentId ? (
+                  <ElevareButton
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setEditingComponentId(null);
+                      setForm({ name: "", calculation_type: "PERCENTAGE", value: 0, applies_to: "HAMMER", taxable: false });
+                    }}
+                  >
+                    Cancel
+                  </ElevareButton>
+                ) : null}
+              </div>
             </div>
           </form>
 
@@ -248,9 +264,27 @@ export default function FinancialRules() {
                   </p>
                 </div>
                 {c.active ? (
-                  <ElevareButton type="button" variant="secondary" onClick={() => deactivateComponent(c.id)}>
-                    Archive
-                  </ElevareButton>
+                  <div className="flex gap-2">
+                    <ElevareButton
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setEditingComponentId(c.id);
+                        setForm({
+                          name: c.name,
+                          calculation_type: c.calculation_type,
+                          value: c.value,
+                          applies_to: c.applies_to,
+                          taxable: c.taxable,
+                        });
+                      }}
+                    >
+                      Edit
+                    </ElevareButton>
+                    <ElevareButton type="button" variant="secondary" onClick={() => deactivateComponent(c.id)}>
+                      Archive
+                    </ElevareButton>
+                  </div>
                 ) : (
                   <span className="text-xs text-neutral-500">Archived</span>
                 )}

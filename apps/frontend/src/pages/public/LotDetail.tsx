@@ -121,9 +121,7 @@ export default function LotDetail() {
     lot?.auction_id,
     (event) => {
       setAuctionStatus(event.status);
-      if (event.status === "LIVE") {
-        void load();
-      }
+      void load();
     },
     Boolean(lot?.auction_id),
   );
@@ -136,6 +134,34 @@ export default function LotDetail() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to place bid");
       throw err;
+    }
+  };
+
+  const downloadInvoice = async () => {
+    if (!financials?.invoice_id) return;
+    try {
+      const blob = await api.downloadInvoicePDF(financials.invoice_id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${financials.invoice_id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download invoice");
+    }
+  };
+
+  const generateInvoiceManually = async () => {
+    if (!lotId || !isAdmin) return;
+    try {
+      setError(null);
+      const inv = await api.generateLotInvoice(lotId);
+      setFinancials((prev) => (prev ? { ...prev, invoice_id: inv.id } : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate invoice");
     }
   };
 
@@ -298,6 +324,18 @@ export default function LotDetail() {
                   )}
                   <div className="mt-4 border-t border-neutral-200 pt-4 text-base font-medium text-neutral-900">
                     Total Due: <span className="bid-amount">${(financials.total_due ?? 0).toLocaleString()}</span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {financials.invoice_id ? (
+                      <button type="button" className="btn-brand" onClick={downloadInvoice}>
+                        Download Invoice (PDF)
+                      </button>
+                    ) : null}
+                    {isAdmin && !financials.invoice_id && financials.hammer_price != null ? (
+                      <button type="button" className="btn-brand" onClick={generateInvoiceManually}>
+                        Generate Invoice
+                      </button>
+                    ) : null}
                   </div>
                 </>
               )}

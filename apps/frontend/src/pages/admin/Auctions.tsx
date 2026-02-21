@@ -122,6 +122,9 @@ export default function Auctions() {
                   <Link className="btn-brand" to={`/admin/auctions/${a.id}/lots`}>
                     Lots
                   </Link>
+                  <Link className="btn-link-brand" to={`/admin/auctions/${a.id}/financial-rules`}>
+                    Financial Rules
+                  </Link>
                   <ElevareButton variant="secondary" onClick={() => startEdit(a)}>
                     Edit
                   </ElevareButton>

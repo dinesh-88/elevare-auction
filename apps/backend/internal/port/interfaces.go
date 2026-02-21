@@ -46,6 +46,7 @@ type LotRepository interface {
 	OnAuctionStart(ctx context.Context, tenantID, auctionID uuid.UUID, now time.Time) error
 	PlaceBidTx(ctx context.Context, in PlaceLotBidTxInput) (*PlaceLotBidTxResult, error)
 	ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error)
+	ListWonByUser(ctx context.Context, tenantID, userID uuid.UUID, limit int) ([]domain.Lot, error)
 	RunSchedulerTick(ctx context.Context, now time.Time) error
 }
 
@@ -59,6 +60,13 @@ type FeeRepository interface {
 	CreateAssignment(ctx context.Context, tenantID uuid.UUID, assignment *domain.FeeAssignment) error
 	ListAssignments(ctx context.Context, tenantID uuid.UUID, scopeType domain.FeeScopeType, scopeID uuid.UUID) ([]domain.FeeAssignment, error)
 	DeleteAssignment(ctx context.Context, tenantID, assignmentID uuid.UUID) error
+}
+
+type InvoiceRepository interface {
+	GetByID(ctx context.Context, tenantID, invoiceID uuid.UUID) (*domain.Invoice, error)
+	GetByLotID(ctx context.Context, tenantID, lotID uuid.UUID) (*domain.Invoice, error)
+	GenerateForLot(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) (*domain.Invoice, error)
+	UpdateStatus(ctx context.Context, tenantID, invoiceID uuid.UUID, status domain.InvoiceStatus) error
 }
 
 type PlaceLotBidTxInput struct {

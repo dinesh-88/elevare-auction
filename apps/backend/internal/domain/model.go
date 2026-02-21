@@ -229,3 +229,30 @@ type Bid struct {
 	Amount    int64
 	CreatedAt time.Time
 }
+
+type InvoiceStatus string
+
+const (
+	InvoiceIssued    InvoiceStatus = "ISSUED"
+	InvoicePaid      InvoiceStatus = "PAID"
+	InvoiceCancelled InvoiceStatus = "CANCELLED"
+)
+
+type Invoice struct {
+	ID            uuid.UUID
+	LotID         uuid.UUID
+	TenantID      uuid.UUID
+	WinnerUserID  uuid.UUID
+	InvoiceNumber string
+	IssuedAt      time.Time
+	DueDate       *time.Time
+	Currency      string
+	TotalAmount   int64
+	Snapshot      json.RawMessage
+	Status        InvoiceStatus
+	CreatedAt     time.Time
+
+	LotNumber    string
+	LotTitle     string
+	AuctionTitle string
+}

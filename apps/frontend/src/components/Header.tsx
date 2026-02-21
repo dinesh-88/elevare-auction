@@ -6,12 +6,14 @@ export default function Header({
   tenantName,
   tenantLogoUrl,
   isAuthenticated,
+  isAdmin,
   userEmail,
   onLogout,
 }: {
   tenantName?: string;
   tenantLogoUrl?: string;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   userEmail?: string;
   onLogout: () => void;
 }) {
@@ -40,6 +42,11 @@ export default function Header({
           <Link to="/auctions" className="text-neutral-900 no-underline hover:text-neutral-500">
             Auctions
           </Link>
+          {isAuthenticated && !isAdmin ? (
+            <Link to="/my-winnings" className="text-neutral-900 no-underline hover:text-neutral-500">
+              My Winnings
+            </Link>
+          ) : null}
           {!isAuthenticated ? (
             <>
               <Link to="/login" className="text-neutral-900 no-underline hover:text-neutral-500">
@@ -77,6 +84,11 @@ export default function Header({
               <Link to="/auctions" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
                 Auctions
               </Link>
+              {isAuthenticated && !isAdmin ? (
+                <Link to="/my-winnings" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
+                  My Winnings
+                </Link>
+              ) : null}
               {!isAuthenticated ? (
                 <>
                   <Link to="/login" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>

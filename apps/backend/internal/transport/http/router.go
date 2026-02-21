@@ -70,6 +70,9 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Use(authMW.RequireAuth)
 			r.Post("/lots/{lotId}/bid", h.PlaceLotBid)
 			r.Get("/lots/{lotId}/financials", h.GetLotFinancials)
+			r.Get("/me/winnings", h.ListMyWinningLots)
+			r.Get("/invoices/{invoiceId}", h.GetInvoice)
+			r.Get("/invoices/{invoiceId}/pdf", h.DownloadInvoicePDF)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
@@ -88,6 +91,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Delete("/lots/{lotId}", h.DeleteLot)
 			r.Post("/lots/{lotId}/start", h.StartLot)
 			r.Post("/lots/{lotId}/end", h.EndLot)
+			r.Post("/lots/{lotId}/invoice/generate", h.GenerateLotInvoice)
 			r.Post("/uploads/auction-image", h.UploadAuctionImage)
 			r.Post("/uploads/lot-image", h.UploadLotImage)
 			r.Get("/fees/components", h.ListFeeComponents)
@@ -97,6 +101,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Get("/fees/assignments", h.ListFeeAssignments)
 			r.Post("/fees/assignments", h.CreateFeeAssignment)
 			r.Delete("/fees/assignments/{id}", h.DeleteFeeAssignment)
+			r.Patch("/invoices/{invoiceId}/status", h.UpdateInvoiceStatus)
 			r.Get("/bidders", h.ListBidders)
 			r.Patch("/bidders/{id}/approve", h.ApproveBidder)
 		})

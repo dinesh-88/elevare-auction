@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -464,6 +465,44 @@ FOR UPDATE`
 }
 
 func (r *LotRepo) RunSchedulerTick(ctx context.Context, now time.Time) error {
+	const qAuctionEndedCandidates = `
+SELECT l.id
+FROM lots l
+JOIN auctions a ON a.id = l.auction_id
+WHERE a.status = 'ENDED'
+  AND l.status NOT IN ('ENDED','CANCELLED')`
+	endedRows, err := r.DB.Query(ctx, qAuctionEndedCandidates)
+	if err != nil {
+		return err
+	}
+	endedCandidates := make([]uuid.UUID, 0)
+	for endedRows.Next() {
+		var lotID uuid.UUID
+		if err := endedRows.Scan(&lotID); err != nil {
+			endedRows.Close()
+			return err
+		}
+		endedCandidates = append(endedCandidates, lotID)
+	}
+	if err := endedRows.Err(); err != nil {
+		endedRows.Close()
+		return err
+	}
+	endedRows.Close()
+	for _, lotID := range endedCandidates {
+		tx, err := r.DB.BeginTx(ctx, pgx.TxOptions{})
+		if err != nil {
+			return err
+		}
+		if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now); err != nil {
+			_ = tx.Rollback(ctx)
+			return err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+	}
+
 	const qTimedCandidates = `
 SELECT l.id
 FROM lots l
@@ -645,6 +684,12 @@ LIMIT 1`, lotID).Scan(&winnerID, &winningAmount)
 			return err
 		}
 		snapshot = b
+
+		if winnerUserID != nil {
+			if err := r.createInvoiceForSettlementTx(ctx, tx, lotID, tenantID, *winnerUserID, computedTotal, snapshot, now); err != nil {
+				return err
+			}
+		}
 	}
 
 	const q = `
@@ -814,6 +859,57 @@ func appliesToRank(appliesTo string) int {
 	}
 }
 
+func (r *LotRepo) createInvoiceForSettlementTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	lotID uuid.UUID,
+	tenantID uuid.UUID,
+	winnerUserID uuid.UUID,
+	totalAmount int64,
+	snapshot []byte,
+	now time.Time,
+) error {
+	var existing uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT id FROM invoices WHERE lot_id = $1`, lotID).Scan(&existing); err == nil {
+		return nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+
+	var prefix string
+	var counter int64
+	if err := tx.QueryRow(ctx, `
+UPDATE tenants
+SET invoice_counter = invoice_counter + 1
+WHERE id = $1
+RETURNING invoice_prefix, invoice_counter
+`, tenantID).Scan(&prefix, &counter); err != nil {
+		return err
+	}
+	if prefix == "" {
+		prefix = "INV"
+	}
+	invoiceNumber := fmt.Sprintf("%s-%04d-%06d", prefix, now.Year(), counter)
+	dueDate := now.AddDate(0, 0, 7)
+
+	const q = `
+INSERT INTO invoices (
+  id, lot_id, tenant_id, winner_user_id,
+  invoice_number, issued_at, due_date, currency,
+  total_amount, snapshot, status, created_at
+) VALUES (
+  $1,$2,$3,$4,
+  $5,$6,$7,$8,
+  $9,$10,'ISSUED',now()
+)`
+	_, err := tx.Exec(ctx, q,
+		uuid.New(), lotID, tenantID, winnerUserID,
+		invoiceNumber, now, dueDate, "USD",
+		totalAmount, snapshot,
+	)
+	return err
+}
+
 func (r *LotRepo) ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error) {
 	if limit <= 0 {
 		limit = 100
@@ -841,6 +937,40 @@ LIMIT $3`
 		id := lotID
 		b.LotID = &id
 		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+func (r *LotRepo) ListWonByUser(ctx context.Context, tenantID, userID uuid.UUID, limit int) ([]domain.Lot, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	const q = `
+SELECT l.id, l.auction_id, l.lot_number, l.order_index,
+       l.title, l.description,
+       l.starting_price, l.current_price, l.reserve_price, l.min_increment,
+       l.metadata, l.status,
+       l.hammer_price, l.total_due, l.winner_user_id, l.financial_snapshot,
+       l.started_at, l.ended_at, l.created_at, l.updated_at
+FROM lots l
+JOIN auctions a ON a.id = l.auction_id
+WHERE a.tenant_id = $1
+  AND l.winner_user_id = $2
+  AND l.status = 'ENDED'
+ORDER BY l.ended_at DESC NULLS LAST, l.created_at DESC
+LIMIT $3`
+	rows, err := r.DB.Query(ctx, q, tenantID, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.Lot, 0)
+	for rows.Next() {
+		l, err := scanLot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *l)
 	}
 	return out, rows.Err()
 }

@@ -19,6 +19,7 @@ type Handler struct {
 	Auction    *usecase.AuctionUseCase
 	Lot        *usecase.LotUseCase
 	Fee        *usecase.FeeUseCase
+	Invoice    *usecase.InvoiceUseCase
 	Bidder     *usecase.BidderUseCase
 	Onboarding *usecase.OnboardingUseCase
 	Storage    port.ObjectStorage
@@ -219,12 +220,17 @@ func (h *Handler) GetLotFinancials(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var invoiceID *uuid.UUID
+	if inv, err := h.Invoice.GetByLotAuthorized(r.Context(), tenant.ID, lot.ID, claims.UserID, claims.Role); err == nil {
+		invoiceID = &inv.ID
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"lot_id":       lot.ID,
 		"winner_user":  lot.WinnerUserID,
 		"hammer_price": lot.HammerPrice,
 		"fees":         snapshot.Fees,
 		"total_due":    lot.TotalDue,
+		"invoice_id":   invoiceID,
 	})
 }
 
@@ -241,6 +247,25 @@ func (h *Handler) ListLotBids(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, bids)
+}
+
+func (h *Handler) ListMyWinningLots(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	lots, err := h.Lot.ListWonByUser(r.Context(), tenant.ID, claims.UserID, 200)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	resp := make([]lotPublicResponse, 0, len(lots))
+	for i := range lots {
+		resp = append(resp, toLotPublicResponse(lots[i]))
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {

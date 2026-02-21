@@ -81,10 +81,10 @@ func (uc *FeeUseCase) DeactivateComponent(ctx context.Context, tenantID, compone
 }
 
 type CreateFeeAssignmentInput struct {
-	TenantID        uuid.UUID
-	ScopeType       domain.FeeScopeType
-	ScopeID         uuid.UUID
-	FeeComponentID  uuid.UUID
+	TenantID       uuid.UUID
+	ScopeType      domain.FeeScopeType
+	ScopeID        uuid.UUID
+	FeeComponentID uuid.UUID
 }
 
 func (uc *FeeUseCase) CreateAssignment(ctx context.Context, in CreateFeeAssignmentInput) (*domain.FeeAssignment, error) {

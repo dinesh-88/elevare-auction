@@ -17,6 +17,7 @@ import LotDetail from "./pages/public/LotDetail";
 import Register from "./pages/public/Register";
 import TenantSignup from "./pages/public/TenantSignup";
 import TenantRequests from "./pages/platform/TenantRequests";
+import MyWinnings from "./pages/public/MyWinnings";
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/lots/:lotId" element={<LotDetail />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/my-winnings" element={<MyWinnings />} />
         <Route path="/signup" element={<TenantSignup />} />
       </Route>
 

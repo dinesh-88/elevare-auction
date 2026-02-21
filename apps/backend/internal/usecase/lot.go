@@ -131,6 +131,10 @@ func (uc *LotUseCase) ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UU
 	return uc.Lots.ListBidsByLot(ctx, tenantID, lotID, limit)
 }
 
+func (uc *LotUseCase) ListWonByUser(ctx context.Context, tenantID, userID uuid.UUID, limit int) ([]domain.Lot, error) {
+	return uc.Lots.ListWonByUser(ctx, tenantID, userID, limit)
+}
+
 func (uc *LotUseCase) SchedulerTick(ctx context.Context, now time.Time) error {
 	return uc.Lots.RunSchedulerTick(ctx, now)
 }
