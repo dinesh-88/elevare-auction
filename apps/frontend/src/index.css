@@ -82,7 +82,7 @@
   }
 
   .container-shell {
-    @apply max-w-container mx-auto px-6;
+    @apply mx-auto w-[min(1440px,96vw)] px-4 md:px-8;
   }
 
   .bid-amount {

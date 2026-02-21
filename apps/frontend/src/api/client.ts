@@ -49,7 +49,17 @@ export interface Lot {
   current_price: number;
   reserve_price?: number | null;
   min_increment: number;
-  metadata?: { image?: string; images?: string[] };
+  metadata?: {
+    image?: string;
+    images?: string[];
+    artist?: string;
+    date?: string;
+    dimensions?: string;
+    medium?: string;
+    provenance?: string;
+    condition_report?: string;
+    [key: string]: unknown;
+  };
   status: "PENDING" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED";
   started_at?: string | null;
   ended_at?: string | null;

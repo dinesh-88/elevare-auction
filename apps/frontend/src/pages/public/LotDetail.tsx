@@ -113,48 +113,95 @@ export default function LotDetail() {
     bidder: "Bidder",
     timestamp: new Date(b.created_at),
   }));
+  const meta = lot.metadata ?? {};
+  const medium = typeof meta.medium === "string" ? meta.medium : "Not specified";
+  const dimensions = typeof meta.dimensions === "string" ? meta.dimensions : "Not specified";
+  const date = typeof meta.date === "string" ? meta.date : "Not specified";
+  const provenance = typeof meta.provenance === "string" ? meta.provenance : "Not specified";
+  const conditionReport = typeof meta.condition_report === "string" ? meta.condition_report : "No condition report available.";
 
   return (
-    <section className="grid gap-12 md:grid-cols-5">
-      <div className="md:col-span-3">
-        <LotImageGallery images={images} alt={lot.title} />
+    <section className="space-y-12">
+      <div className="grid gap-12 md:grid-cols-5">
+        <div className="md:col-span-3">
+          <LotImageGallery images={images} alt={lot.title} />
+        </div>
+
+        <aside className="space-y-6 md:col-span-2">
+          <h1 className="font-heading text-3xl">{lot.title}</h1>
+          <p className="text-sm text-neutral-600">{lot.description}</p>
+          <p className="text-sm text-neutral-500">
+            Lot {lot.lot_number} • <StatusBadge status={lot.status} />
+          </p>
+
+          <div>
+            <p className="text-sm text-neutral-500">Current Bid</p>
+            <div className="bid-amount text-4xl font-heading text-brand-primary">${lot.current_price.toLocaleString()}</div>
+          </div>
+
+          {lot.status === "LIVE" && auctionStatus === "LIVE" && lot.ended_at ? (
+            <div>
+              <p className="text-sm text-neutral-500">Ends In</p>
+              <div className="text-xl"><Countdown endTime={lot.ended_at} /></div>
+            </div>
+          ) : null}
+
+          {isAuthenticated && !isAdmin && lot.status === "LIVE" && auctionStatus === "LIVE" ? (
+            <BidInput currentBid={lot.current_price} currency="$" minIncrement={lot.min_increment} onPlaceBid={placeBid} />
+          ) : isAuthenticated && !isAdmin && auctionStatus !== "LIVE" ? (
+            <p className="text-sm text-neutral-500">Bidding is disabled because auction is not live.</p>
+          ) : isAuthenticated && !isAdmin && lot.status !== "LIVE" ? (
+            <p className="text-sm text-neutral-500">Bidding is disabled because this lot is not live.</p>
+          ) : isAuthenticated && isAdmin ? (
+            <p className="text-sm text-neutral-500">Admin view: bidding is disabled on public frontend.</p>
+          ) : (
+            <p className="text-sm">Login to place a bid.</p>
+          )}
+
+          <div className="history-panel">
+            <BidHistory bids={formattedHistory} currency="$" />
+          </div>
+        </aside>
       </div>
 
-      <aside className="space-y-6 md:col-span-2">
-        <h1 className="font-heading text-3xl">{lot.title}</h1>
-        <p className="text-sm text-neutral-600">{lot.description}</p>
-        <p className="text-sm text-neutral-500">
-          Lot {lot.lot_number} • <StatusBadge status={lot.status} />
-        </p>
+      <div className="max-w-4xl space-y-8 md:space-y-12">
+        <div>
+          <h2 className="mb-4 font-heading text-2xl">Description</h2>
+          <p className="leading-relaxed text-neutral-700">{lot.description}</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 rounded-lg bg-neutral-50 p-4 md:grid-cols-2 md:gap-8 md:p-6">
+          <div>
+            <h3 className="mb-3 text-base font-medium md:text-lg">Details</h3>
+            <dl className="space-y-2">
+              <div>
+                <dt className="text-sm text-neutral-500">Medium</dt>
+                <dd className="text-neutral-900">{medium}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-neutral-500">Dimensions</dt>
+                <dd className="text-neutral-900">{dimensions}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-neutral-500">Date</dt>
+                <dd className="text-neutral-900">{date}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-base font-medium md:text-lg">Provenance</h3>
+            <p className="text-neutral-900">{provenance}</p>
+          </div>
+        </div>
 
         <div>
-          <p className="text-sm text-neutral-500">Current Bid</p>
-          <div className="bid-amount text-4xl font-heading text-brand-primary">${lot.current_price.toLocaleString()}</div>
-        </div>
-
-        {lot.status === "LIVE" && auctionStatus === "LIVE" && lot.ended_at ? (
-          <div>
-            <p className="text-sm text-neutral-500">Ends In</p>
-            <div className="text-xl"><Countdown endTime={lot.ended_at} /></div>
+          <h2 className="mb-4 font-heading text-2xl">Condition Report</h2>
+          <div className="rounded-lg bg-neutral-50 p-4 md:p-6">
+            <p className="leading-relaxed text-neutral-700">{conditionReport}</p>
           </div>
-        ) : null}
-
-        {isAuthenticated && !isAdmin && lot.status === "LIVE" && auctionStatus === "LIVE" ? (
-          <BidInput currentBid={lot.current_price} currency="$" minIncrement={lot.min_increment} onPlaceBid={placeBid} />
-        ) : isAuthenticated && !isAdmin && auctionStatus !== "LIVE" ? (
-          <p className="text-sm text-neutral-500">Bidding is disabled because auction is not live.</p>
-        ) : isAuthenticated && !isAdmin && lot.status !== "LIVE" ? (
-          <p className="text-sm text-neutral-500">Bidding is disabled because this lot is not live.</p>
-        ) : isAuthenticated && isAdmin ? (
-          <p className="text-sm text-neutral-500">Admin view: bidding is disabled on public frontend.</p>
-        ) : (
-          <p className="text-sm">Login to place a bid.</p>
-        )}
-
-        <div className="history-panel">
-          <BidHistory bids={formattedHistory} currency="$" />
         </div>
-      </aside>
+      </div>
     </section>
   );
 }

@@ -9,7 +9,13 @@ export default function PublicLayout() {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-800 font-body">
-      <Header tenantName={config?.name ?? "Auction"} isAuthenticated={isAuthenticated} userEmail={user?.email} onLogout={logout} />
+      <Header
+        tenantName={config?.name ?? "Auction"}
+        tenantLogoUrl={config?.branding?.logo_url}
+        isAuthenticated={isAuthenticated}
+        userEmail={user?.email}
+        onLogout={logout}
+      />
 
       <main className="container-shell py-12">
         <Outlet />

@@ -7,6 +7,7 @@ import CreateAuction from "./pages/admin/CreateAuction";
 import Bidders from "./pages/admin/Bidders";
 import Lots from "./pages/admin/Lots";
 import AuctionDetail from "./pages/public/AuctionDetail";
+import AuctionListing from "./pages/public/AuctionListing";
 import Home from "./pages/public/Home";
 import Login from "./pages/public/Login";
 import LotDetail from "./pages/public/LotDetail";
@@ -19,6 +20,7 @@ export default function App() {
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Home />} />
+        <Route path="/auctions" element={<AuctionListing />} />
         <Route path="/auction/:id" element={<AuctionDetail />} />
         <Route path="/lots/:lotId" element={<LotDetail />} />
         <Route path="/login" element={<Login />} />
