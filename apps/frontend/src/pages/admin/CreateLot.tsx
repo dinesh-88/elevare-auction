@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../api/client";
 import ImageUploader from "../../components/admin/ImageUploader";
 import ElevareButton from "../../components/ui/ElevareButton";
 import IconButton from "../../components/ui/IconButton";
-import { TrashIcon } from "../../components/ui/icons";
 
 type LotFormState = {
   lot_number: string;
@@ -135,7 +135,7 @@ export default function CreateLot() {
                   aria-label={`Remove detail ${idx + 1}`}
                   title="Remove detail"
                 >
-                  <TrashIcon className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" />
                 </IconButton>
               </div>
             ))}

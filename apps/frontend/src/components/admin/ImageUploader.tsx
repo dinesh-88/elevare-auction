@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 import LotImageGallery from "../LotImageGallery";
 import ElevareButton from "../ui/ElevareButton";
 import IconButton from "../ui/IconButton";
-import { TrashIcon } from "../ui/icons";
 
 type UploadOneFn = (file: File) => Promise<{ url: string }>;
 
@@ -101,7 +101,7 @@ export default function ImageUploader({
           <div className="flex flex-wrap gap-2">
             {images.map((url, idx) => (
               <IconButton key={url} onClick={() => removeImage(url)} aria-label={`Remove image ${idx + 1}`} title={`Remove image ${idx + 1}`}>
-                <TrashIcon className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" />
               </IconButton>
             ))}
           </div>

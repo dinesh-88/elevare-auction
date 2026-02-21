@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
+import { ArrowDown, ArrowUp, Pencil, Play, Square, Trash2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Lot } from "../../api/client";
 import { useLotsSockets } from "../../hooks/useLotsSockets";
 import StatusBadge from "../../components/ui/StatusBadge";
 import IconButton from "../../components/ui/IconButton";
-import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlayIcon, StopIcon, TrashIcon } from "../../components/ui/icons";
 
 export default function Lots() {
   const { auctionId } = useParams();
@@ -168,10 +168,10 @@ export default function Lots() {
 
                 <div className="flex flex-wrap gap-2 border-t border-neutral-100 pt-3">
                   <IconButton onClick={() => move(idx, -1)} aria-label="Move up" title="Move up">
-                    <ArrowUpIcon className="h-4 w-4" />
+                    <ArrowUp className="h-4 w-4" />
                   </IconButton>
                   <IconButton onClick={() => move(idx, 1)} aria-label="Move down" title="Move down">
-                    <ArrowDownIcon className="h-4 w-4" />
+                    <ArrowDown className="h-4 w-4" />
                   </IconButton>
                   <Link
                     to={`/admin/auctions/${auctionId}/lots/${lot.id}/edit`}
@@ -179,16 +179,16 @@ export default function Lots() {
                     aria-label="Edit lot"
                     title="Edit lot"
                   >
-                    <PencilIcon className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" />
                   </Link>
                   <IconButton onClick={() => startLot(lot.id)} aria-label="Start lot" title="Start lot">
-                    <PlayIcon className="h-4 w-4" />
+                    <Play className="h-4 w-4" />
                   </IconButton>
                   <IconButton onClick={() => endLot(lot.id)} aria-label="End lot" title="End lot">
-                    <StopIcon className="h-4 w-4" />
+                    <Square className="h-4 w-4" />
                   </IconButton>
                   <IconButton onClick={() => removeLot(lot.id)} aria-label="Delete lot" title="Delete lot">
-                    <TrashIcon className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" />
                   </IconButton>
                 </div>
               </div>

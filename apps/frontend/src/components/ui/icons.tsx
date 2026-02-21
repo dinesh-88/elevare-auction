@@ -4,10 +4,10 @@ type IconProps = SVGProps<SVGSVGElement>;
 
 export function TrashIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M3 6h18" />
-      <path d="M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6" />
-      <path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 7h16" />
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <path d="M7 7l1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12" />
       <path d="M10 11v6" />
       <path d="M14 11v6" />
     </svg>
@@ -25,16 +25,18 @@ export function PencilIcon(props: IconProps) {
 
 export function ArrowUpIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="m18 15-6-6-6 6" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 19V7" />
+      <path d="M6 13l6-6 6 6" />
     </svg>
   );
 }
 
 export function ArrowDownIcon(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="m6 9 6 6 6-6" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 5v12" />
+      <path d="M6 11l6 6 6-6" />
     </svg>
   );
 }
@@ -42,7 +44,7 @@ export function ArrowDownIcon(props: IconProps) {
 export function PlayIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
-      <path d="M8 5.14v13.72a1 1 0 0 0 1.5.87l10.5-6.86a1 1 0 0 0 0-1.74L9.5 4.27A1 1 0 0 0 8 5.14Z" />
+      <path d="M8 5v14l11-7z" />
     </svg>
   );
 }
@@ -50,8 +52,7 @@ export function PlayIcon(props: IconProps) {
 export function StopIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
-      <rect x="6" y="6" width="12" height="12" rx="1.8" />
+      <rect x="6" y="6" width="12" height="12" rx="2" />
     </svg>
   );
 }
-
