@@ -10,7 +10,7 @@ export default function PublicLayout() {
   return (
     <div className="min-h-screen bg-white text-neutral-800 font-body">
       <Header
-        tenantName={config?.name ?? "Auction"}
+        tenantName={config?.name ?? "Elevare"}
         tenantLogoUrl={config?.branding?.logo_url}
         isAuthenticated={isAuthenticated}
         userEmail={user?.email}

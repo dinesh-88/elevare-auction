@@ -70,10 +70,25 @@ export interface Lot {
     [key: string]: unknown;
   };
   status: "PENDING" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED";
+  hammer_price?: number | null;
+  sale_result?: "SOLD" | "RESERVE_NOT_MET" | "";
   started_at?: string | null;
   ended_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface LotFinancials {
+  lot_id: string;
+  winner_user?: string | null;
+  hammer_price?: number | null;
+  fees: Array<{
+    name: string;
+    type: "PERCENTAGE" | "FIXED";
+    value: number;
+    amount: number;
+  }>;
+  total_due?: number | null;
 }
 
 export interface TenantPublicConfig {
@@ -172,6 +187,8 @@ function normalizeLot(raw: unknown): Lot {
     min_increment: Number(r.min_increment ?? r.MinIncrement ?? 0),
     metadata: normalizedMetadata,
     status: String(r.status ?? r.Status ?? "PENDING") as Lot["status"],
+    hammer_price: (r.hammer_price ?? r.HammerPrice ?? null) as number | null,
+    sale_result: String(r.sale_result ?? r.SaleResult ?? "") as Lot["sale_result"],
     started_at: (r.started_at ?? r.StartedAt ?? null) as string | null,
     ended_at: (r.ended_at ?? r.EndedAt ?? null) as string | null,
     created_at: String(r.created_at ?? r.CreatedAt ?? ""),
@@ -259,6 +276,7 @@ export const api = {
   getAuction: async (id: string) => normalizeAuction(await request<unknown>(`/auctions/${id}`)),
   listLotsByAuction: async (auctionId: string) => (await request<unknown[]>(`/auctions/${auctionId}/lots`)).map(normalizeLot),
   getLot: async (lotId: string) => normalizeLot(await request<unknown>(`/lots/${lotId}`)),
+  getLotFinancials: (lotId: string) => request<LotFinancials>(`/lots/${lotId}/financials`),
   listLotBids: async (lotId: string) => (await request<unknown[]>(`/lots/${lotId}/bids`)).map(normalizeLotBid),
   register: (payload: { email: string; password: string }) =>
     request<JsonRecord>("/auth/register", { method: "POST", body: JSON.stringify(payload) }),

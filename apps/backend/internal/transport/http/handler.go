@@ -23,6 +23,27 @@ type Handler struct {
 	Storage    port.ObjectStorage
 }
 
+type lotPublicResponse struct {
+	ID            uuid.UUID        `json:"id"`
+	AuctionID     uuid.UUID        `json:"auction_id"`
+	LotNumber     string           `json:"lot_number"`
+	OrderIndex    int              `json:"order_index"`
+	Title         string           `json:"title"`
+	Description   string           `json:"description"`
+	StartingPrice int64            `json:"starting_price"`
+	CurrentPrice  int64            `json:"current_price"`
+	ReservePrice  *int64           `json:"reserve_price"`
+	MinIncrement  int64            `json:"min_increment"`
+	Metadata      json.RawMessage  `json:"metadata"`
+	Status        domain.LotStatus `json:"status"`
+	HammerPrice   *int64           `json:"hammer_price"`
+	SaleResult    string           `json:"sale_result"`
+	StartedAt     *time.Time       `json:"started_at"`
+	EndedAt       *time.Time       `json:"ended_at"`
+	CreatedAt     time.Time        `json:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at"`
+}
+
 func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OrganizationName       string `json:"organization_name"`
@@ -143,7 +164,11 @@ func (h *Handler) ListLotsByAuction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, lots)
+	resp := make([]lotPublicResponse, 0, len(lots))
+	for i := range lots {
+		resp = append(resp, toLotPublicResponse(lots[i]))
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) GetLot(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +183,48 @@ func (h *Handler) GetLot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	writeJSON(w, http.StatusOK, lot)
+	writeJSON(w, http.StatusOK, toLotPublicResponse(*lot))
+}
+
+func (h *Handler) GetLotFinancials(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
+	if err != nil {
+		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		return
+	}
+	lot, err := h.Lot.GetByID(r.Context(), tenant.ID, lotID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	isAdmin := claims.Role == domain.RoleAdmin
+	isWinner := lot.WinnerUserID != nil && claims.UserID == *lot.WinnerUserID
+	if !isAdmin && !isWinner {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var snapshot domain.LotFinancialSnapshot
+	if len(lot.FinancialData) > 0 {
+		if err := json.Unmarshal(lot.FinancialData, &snapshot); err != nil {
+			http.Error(w, "invalid financial snapshot", http.StatusInternalServerError)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"lot_id":       lot.ID,
+		"winner_user":  lot.WinnerUserID,
+		"hammer_price": lot.HammerPrice,
+		"fees":         snapshot.Fees,
+		"total_due":    lot.TotalDue,
+	})
 }
 
 func (h *Handler) ListLotBids(w http.ResponseWriter, r *http.Request) {
@@ -620,4 +686,35 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, res)
+}
+
+func toLotPublicResponse(l domain.Lot) lotPublicResponse {
+	saleResult := ""
+	if l.Status == domain.LotEnded {
+		if l.HammerPrice != nil && (l.ReservePrice == nil || *l.HammerPrice >= *l.ReservePrice) {
+			saleResult = "SOLD"
+		} else {
+			saleResult = "RESERVE_NOT_MET"
+		}
+	}
+	return lotPublicResponse{
+		ID:            l.ID,
+		AuctionID:     l.AuctionID,
+		LotNumber:     l.LotNumber,
+		OrderIndex:    l.OrderIndex,
+		Title:         l.Title,
+		Description:   l.Description,
+		StartingPrice: l.StartingPrice,
+		CurrentPrice:  l.CurrentPrice,
+		ReservePrice:  l.ReservePrice,
+		MinIncrement:  l.MinIncrement,
+		Metadata:      l.Metadata,
+		Status:        l.Status,
+		HammerPrice:   l.HammerPrice,
+		SaleResult:    saleResult,
+		StartedAt:     l.StartedAt,
+		EndedAt:       l.EndedAt,
+		CreatedAt:     l.CreatedAt,
+		UpdatedAt:     l.UpdatedAt,
+	}
 }

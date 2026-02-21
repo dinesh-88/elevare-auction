@@ -139,10 +139,36 @@ type Lot struct {
 	MinIncrement  int64
 	Metadata      json.RawMessage
 	Status        LotStatus
+	HammerPrice   *int64
+	TotalDue      *int64
+	WinnerUserID  *uuid.UUID
+	FinancialData json.RawMessage
 	StartedAt     *time.Time
 	EndedAt       *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+type FeeType string
+
+const (
+	FeeTypePercentage FeeType = "PERCENTAGE"
+	FeeTypeFixed      FeeType = "FIXED"
+)
+
+type FinancialFee struct {
+	Name      string  `json:"name"`
+	Type      FeeType `json:"type"`
+	Value     float64 `json:"value"`
+	Amount    int64   `json:"amount"`
+	AppliesTo string  `json:"applies_to,omitempty"`
+	Taxable   bool    `json:"taxable"`
+}
+
+type LotFinancialSnapshot struct {
+	HammerPrice int64          `json:"hammer_price"`
+	Fees        []FinancialFee `json:"fees"`
+	TotalDue    int64          `json:"total_due"`
 }
 
 type LotImage struct {

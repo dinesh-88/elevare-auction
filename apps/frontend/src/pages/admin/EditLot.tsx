@@ -176,8 +176,9 @@ export default function EditLot() {
                   }}
                   aria-label={`Remove detail ${idx + 1}`}
                   title="Remove detail"
+                  tooltip="Remove detail"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 size={16} strokeWidth={2.2} />
                 </IconButton>
               </div>
             ))}

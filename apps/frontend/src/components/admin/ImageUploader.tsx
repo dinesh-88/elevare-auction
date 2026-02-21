@@ -100,8 +100,14 @@ export default function ImageUploader({
           <LotImageGallery images={images} alt={altText} variant="compact" />
           <div className="flex flex-wrap gap-2">
             {images.map((url, idx) => (
-              <IconButton key={url} onClick={() => removeImage(url)} aria-label={`Remove image ${idx + 1}`} title={`Remove image ${idx + 1}`}>
-                <Trash2 className="h-4 w-4" />
+              <IconButton
+                key={url}
+                onClick={() => removeImage(url)}
+                aria-label={`Remove image ${idx + 1}`}
+                title={`Remove image ${idx + 1}`}
+                tooltip="Remove image"
+              >
+                <Trash2 size={16} strokeWidth={2.2} />
               </IconButton>
             ))}
           </div>

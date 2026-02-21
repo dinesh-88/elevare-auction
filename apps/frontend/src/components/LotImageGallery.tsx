@@ -35,7 +35,7 @@ export default function LotImageGallery({
               key={`${image}-${index}`}
               type="button"
               onClick={() => setSelectedIndex(index)}
-              className={`aspect-square overflow-hidden rounded-md border-2 transition-all ${index === selectedIndex ? "border-brand-primary" : "border-transparent hover:border-neutral-200"}`}
+              className={`aspect-square overflow-hidden rounded-md border-2 transition-all ${index === selectedIndex ? "border-neutral-400 ring-1 ring-neutral-300/70" : "border-transparent hover:border-neutral-200"}`}
             >
               <img src={image} alt={`${alt} - view ${index + 1}`} className="h-full w-full object-cover" />
             </button>

@@ -208,7 +208,7 @@ export default function AuctionDetail() {
                 type="button"
                 onClick={() => setSelectedLotId(lot.id)}
                 className={`group overflow-hidden rounded-lg border bg-white text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${
-                  selectedLot.id === lot.id ? "border-brand-primary ring-1 ring-brand-primary/30" : "border-neutral-200"
+                  selectedLot.id === lot.id ? "border-neutral-400 ring-1 ring-neutral-300/70" : "border-neutral-200"
                 }`}
               >
                 <div className="aspect-[4/3] overflow-hidden bg-neutral-100">

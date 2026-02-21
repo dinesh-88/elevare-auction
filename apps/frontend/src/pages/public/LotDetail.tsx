@@ -4,7 +4,7 @@ import Countdown from "../../components/Countdown";
 import BidHistory from "../../components/BidHistory";
 import BidInput from "../../components/BidInput";
 import LotImageGallery from "../../components/LotImageGallery";
-import { api, type Lot } from "../../api/client";
+import { api, type Lot, type LotFinancials } from "../../api/client";
 import { useAuth } from "../../hooks/useAuth";
 import { useAuctionSocket } from "../../hooks/useAuctionSocket";
 import { useLotSocket } from "../../hooks/useLotSocket";
@@ -18,11 +18,13 @@ interface LotBidHistory {
 
 export default function LotDetail() {
   const { lotId } = useParams();
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, user } = useAuth();
   const [lot, setLot] = useState<Lot | null>(null);
   const [auctionStatus, setAuctionStatus] = useState<"DRAFT" | "SCHEDULED" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED" | null>(null);
   const [relatedLots, setRelatedLots] = useState<Lot[]>([]);
   const [history, setHistory] = useState<LotBidHistory[]>([]);
+  const [financials, setFinancials] = useState<LotFinancials | null>(null);
+  const [canViewFinancials, setCanViewFinancials] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -58,6 +60,30 @@ export default function LotDetail() {
     }, 5000);
     return () => window.clearInterval(id);
   }, [lot, auctionStatus, load]);
+
+  useEffect(() => {
+    if (!lotId || !lot || lot.status !== "ENDED" || !isAuthenticated) {
+      setFinancials(null);
+      setCanViewFinancials(false);
+      return;
+    }
+    let cancelled = false;
+    api
+      .getLotFinancials(lotId)
+      .then((data) => {
+        if (cancelled) return;
+        setFinancials(data);
+        setCanViewFinancials(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFinancials(null);
+        setCanViewFinancials(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lotId, lot, isAuthenticated]);
 
   useLotSocket(
     lotId,
@@ -148,6 +174,9 @@ export default function LotDetail() {
   ].filter((d) => d.value !== "");
   const details = dynamicDetails.length > 0 ? dynamicDetails : fallbackDetails;
   const conditionReport = typeof meta.condition_report === "string" ? meta.condition_report : "Condition report will be added soon.";
+  const isEnded = lot.status === "ENDED";
+  const hammerPrice = lot.hammer_price ?? null;
+  const isWinner = Boolean(user && financials?.winner_user && user.id === financials.winner_user);
 
   return (
     <section className="mx-auto max-w-[1440px] space-y-10 px-4 py-6 md:space-y-12 md:px-8 md:py-12">
@@ -175,6 +204,13 @@ export default function LotDetail() {
               <div className="bid-amount text-[30px] font-heading font-bold leading-none text-brand-primary sm:text-[32px] md:text-[40px]">
                 ${lot.current_price.toLocaleString()}
               </div>
+              {isEnded && hammerPrice !== null ? (
+                <div className="mt-3 space-y-1 text-sm">
+                  <p className="font-medium text-neutral-900">Winning Bid (Hammer): ${hammerPrice.toLocaleString()}</p>
+                  {lot.sale_result ? <p className="text-neutral-600">Result: {lot.sale_result === "SOLD" ? "Sold" : "Reserve Not Met"}</p> : null}
+                  <p className="text-neutral-500">Buyer&apos;s premium may apply.</p>
+                </div>
+              ) : null}
             </div>
 
             {lot.status === "LIVE" && auctionStatus === "LIVE" && lot.ended_at ? (
@@ -234,6 +270,41 @@ export default function LotDetail() {
           </div>
         </div>
 
+        {isEnded && canViewFinancials && financials ? (
+          <div>
+            <h2 className="mb-4 font-heading text-2xl">{isAdmin ? "Settlement Breakdown" : isWinner ? "Your Settlement Breakdown" : "Financial Breakdown"}</h2>
+            <div className="rounded-lg bg-neutral-50 p-4 md:p-6">
+              {financials.hammer_price === null || financials.hammer_price === undefined ? (
+                <p className="text-sm text-neutral-600">No winning bid was recorded for this lot.</p>
+              ) : (
+                <>
+                  <div className="mb-3 text-neutral-700">
+                    Winning Bid: <span className="bid-amount font-medium text-neutral-900">${financials.hammer_price.toLocaleString()}</span>
+                  </div>
+                  {financials.fees?.length ? (
+                    <dl className="space-y-2">
+                      {financials.fees.map((fee, idx) => (
+                        <div key={`${fee.name}-${idx}`} className="flex items-center justify-between gap-4 text-sm">
+                          <dt className="text-neutral-600">
+                            {fee.name}
+                            {fee.type === "PERCENTAGE" ? ` (${fee.value}%)` : ""}
+                          </dt>
+                          <dd className="bid-amount text-neutral-900">${fee.amount.toLocaleString()}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="text-sm text-neutral-600">No additional fees.</p>
+                  )}
+                  <div className="mt-4 border-t border-neutral-200 pt-4 text-base font-medium text-neutral-900">
+                    Total Due: <span className="bid-amount">${(financials.total_due ?? 0).toLocaleString()}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {relatedLots.length > 0 ? (
           <div>
             <h2 className="mb-4 font-heading text-2xl">Other Lots in This Auction</h2>
@@ -250,7 +321,7 @@ export default function LotDetail() {
                   <Link
                     key={l.id}
                     to={`/lots/${l.id}`}
-                    className="group block overflow-hidden rounded-lg border border-neutral-200 bg-white transition-shadow hover:shadow-md"
+                    className="group block overflow-hidden rounded-lg border border-neutral-200 bg-white outline-none transition-shadow hover:shadow-md focus-visible:border-neutral-400 focus-visible:ring-2 focus-visible:ring-neutral-300/70"
                   >
                     <div className="aspect-[4/3] overflow-hidden bg-neutral-100">
                       {image ? (

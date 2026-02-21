@@ -69,6 +69,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.RequireAuth)
 			r.Post("/lots/{lotId}/bid", h.PlaceLotBid)
+			r.Get("/lots/{lotId}/financials", h.GetLotFinancials)
 		})
 
 		r.Route("/admin", func(r chi.Router) {

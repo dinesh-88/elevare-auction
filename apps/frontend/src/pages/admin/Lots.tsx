@@ -167,28 +167,31 @@ export default function Lots() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 border-t border-neutral-100 pt-3">
-                  <IconButton onClick={() => move(idx, -1)} aria-label="Move up" title="Move up">
-                    <ArrowUp className="h-4 w-4" />
+                  <IconButton onClick={() => move(idx, -1)} aria-label="Move up" title="Move up" tooltip="Move up">
+                    <ArrowUp size={16} strokeWidth={2.2} />
                   </IconButton>
-                  <IconButton onClick={() => move(idx, 1)} aria-label="Move down" title="Move down">
-                    <ArrowDown className="h-4 w-4" />
+                  <IconButton onClick={() => move(idx, 1)} aria-label="Move down" title="Move down" tooltip="Move down">
+                    <ArrowDown size={16} strokeWidth={2.2} />
                   </IconButton>
                   <Link
                     to={`/admin/auctions/${auctionId}/lots/${lot.id}/edit`}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 text-neutral-700 transition hover:bg-neutral-100"
+                    className="group/edit-button relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 text-neutral-700 outline-none transition hover:bg-neutral-100 focus-visible:border-neutral-400 focus-visible:ring-2 focus-visible:ring-neutral-300/70"
                     aria-label="Edit lot"
                     title="Edit lot"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil size={16} strokeWidth={2.2} />
+                    <span className="pointer-events-none absolute -top-8 left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-900 px-2 py-1 text-[11px] text-white shadow-sm group-hover/edit-button:block">
+                      Edit
+                    </span>
                   </Link>
-                  <IconButton onClick={() => startLot(lot.id)} aria-label="Start lot" title="Start lot">
-                    <Play className="h-4 w-4" />
+                  <IconButton onClick={() => startLot(lot.id)} aria-label="Start lot" title="Start lot" tooltip="Start">
+                    <Play size={16} strokeWidth={2.2} />
                   </IconButton>
-                  <IconButton onClick={() => endLot(lot.id)} aria-label="End lot" title="End lot">
-                    <Square className="h-4 w-4" />
+                  <IconButton onClick={() => endLot(lot.id)} aria-label="End lot" title="End lot" tooltip="End">
+                    <Square size={16} strokeWidth={2.2} />
                   </IconButton>
-                  <IconButton onClick={() => removeLot(lot.id)} aria-label="Delete lot" title="Delete lot">
-                    <Trash2 className="h-4 w-4" />
+                  <IconButton onClick={() => removeLot(lot.id)} aria-label="Delete lot" title="Delete lot" tooltip="Delete">
+                    <Trash2 size={16} strokeWidth={2.2} />
                   </IconButton>
                 </div>
               </div>

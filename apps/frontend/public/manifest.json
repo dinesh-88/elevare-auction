@@ -1,0 +1,20 @@
+{
+  "name": "Elevare",
+  "short_name": "Elevare",
+  "description": "Auction infrastructure platform for institutions",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/apple-touch-icon.svg",
+      "sizes": "180x180",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#1E2A3A",
+  "background_color": "#1E2A3A",
+  "display": "standalone"
+}
