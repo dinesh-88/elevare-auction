@@ -58,7 +58,6 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.RequireAuth)
-			r.Post("/auctions/{id}/bid", h.PlaceBid)
 			r.Post("/lots/{lotId}/bid", h.PlaceLotBid)
 		})
 

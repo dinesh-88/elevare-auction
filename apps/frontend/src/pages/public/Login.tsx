@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+import ElevareButton from "../../components/ui/ElevareButton";
 
 export default function Login() {
   const { login } = useAuth();
@@ -26,18 +27,19 @@ export default function Login() {
 
   return (
     <section className="auth-card">
-      <h1>Login</h1>
+      <h1 className="font-heading text-3xl">Login</h1>
+      <p className="text-sm text-neutral-600">Access your tenant dashboard or bidder account.</p>
       <form onSubmit={submit}>
         <label>Email</label>
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <label>Password</label>
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        <button type="submit" disabled={submitting}>
+        <ElevareButton type="submit" disabled={submitting}>
           {submitting ? "Signing in..." : "Login"}
-        </button>
+        </ElevareButton>
         {error ? <p className="error">{error}</p> : null}
       </form>
-      <p>
+      <p className="text-sm text-neutral-600">
         No account? <Link to="/register">Register</Link>
       </p>
     </section>

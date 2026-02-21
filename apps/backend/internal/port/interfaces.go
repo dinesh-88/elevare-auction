@@ -31,7 +31,6 @@ type AuctionRepository interface {
 	Update(ctx context.Context, auction *domain.Auction) error
 	Delete(ctx context.Context, tenantID, auctionID uuid.UUID) error
 	UpdateStatus(ctx context.Context, tenantID, auctionID uuid.UUID, status domain.AuctionStatus) error
-	PlaceBidTx(ctx context.Context, in PlaceBidTxInput) (*PlaceBidTxResult, error)
 	RunSchedulerTick(ctx context.Context, now time.Time) error
 }
 
@@ -47,19 +46,6 @@ type LotRepository interface {
 	OnAuctionStart(ctx context.Context, tenantID, auctionID uuid.UUID, now time.Time) error
 	PlaceBidTx(ctx context.Context, in PlaceLotBidTxInput) (*PlaceLotBidTxResult, error)
 	RunSchedulerTick(ctx context.Context, now time.Time) error
-}
-
-type PlaceBidTxInput struct {
-	TenantID  uuid.UUID
-	AuctionID uuid.UUID
-	UserID    uuid.UUID
-	Amount    int64
-	Now       time.Time
-}
-
-type PlaceBidTxResult struct {
-	Auction domain.Auction
-	Bid     domain.Bid
 }
 
 type PlaceLotBidTxInput struct {
@@ -108,6 +94,7 @@ type TokenClaims struct {
 }
 
 type Broadcaster interface {
-	BroadcastBid(ctx context.Context, auctionID uuid.UUID, bid domain.Bid, currentPrice int64, endTime time.Time)
 	BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.Bid, currentPrice int64, endedAt *time.Time)
+	BroadcastLotStatus(ctx context.Context, lotID uuid.UUID, status domain.LotStatus)
+	BroadcastAuctionStatus(ctx context.Context, auctionID uuid.UUID, status domain.AuctionStatus)
 }

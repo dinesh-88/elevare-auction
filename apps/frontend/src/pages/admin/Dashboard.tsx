@@ -18,16 +18,21 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <section>
-      <h1>Dashboard</h1>
+    <section className="page-shell">
+      <header className="section-head">
+        <div>
+          <h1 className="section-title">Dashboard</h1>
+          <p className="section-copy">Snapshot of current auction activity.</p>
+        </div>
+      </header>
       <div className="stats-grid">
-        <article className="stat-card">
-          <h3>Visible Auctions</h3>
-          <p>{auctionsCount}</p>
+        <article className="panel">
+          <p className="text-sm text-neutral-500">Visible Auctions</p>
+          <p className="mt-2 font-heading text-4xl">{auctionsCount}</p>
         </article>
-        <article className="stat-card">
-          <h3>Pending Bidders</h3>
-          <p>{pendingBidders}</p>
+        <article className="panel">
+          <p className="text-sm text-neutral-500">Pending Bidders</p>
+          <p className="mt-2 font-heading text-4xl">{pendingBidders}</p>
         </article>
       </div>
     </section>

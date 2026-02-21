@@ -230,9 +230,6 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Title                   string               `json:"title"`
 		Description             string               `json:"description"`
-		StartingPrice           int64                `json:"starting_price"`
-		ReservePrice            *int64               `json:"reserve_price"`
-		MinIncrement            int64                `json:"min_increment"`
 		StartTime               time.Time            `json:"start_time"`
 		EndTime                 time.Time            `json:"end_time"`
 		AllowManualStart        bool                 `json:"allow_manual_start"`
@@ -254,9 +251,6 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		TenantID:                tenant.ID,
 		Title:                   req.Title,
 		Description:             req.Description,
-		StartingPrice:           req.StartingPrice,
-		ReservePrice:            req.ReservePrice,
-		MinIncrement:            req.MinIncrement,
 		StartTime:               req.StartTime,
 		EndTime:                 req.EndTime,
 		AllowManualStart:        req.AllowManualStart,
@@ -444,9 +438,6 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Title                   string               `json:"title"`
 		Description             string               `json:"description"`
-		StartingPrice           int64                `json:"starting_price"`
-		ReservePrice            *int64               `json:"reserve_price"`
-		MinIncrement            int64                `json:"min_increment"`
 		StartTime               time.Time            `json:"start_time"`
 		EndTime                 time.Time            `json:"end_time"`
 		AllowManualStart        bool                 `json:"allow_manual_start"`
@@ -468,9 +459,6 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		TenantID:                tenant.ID,
 		Title:                   req.Title,
 		Description:             req.Description,
-		StartingPrice:           req.StartingPrice,
-		ReservePrice:            req.ReservePrice,
-		MinIncrement:            req.MinIncrement,
 		StartTime:               req.StartTime,
 		EndTime:                 req.EndTime,
 		AllowManualStart:        req.AllowManualStart,
@@ -570,43 +558,6 @@ func (h *Handler) ApproveBidder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "APPROVED"})
-}
-
-func (h *Handler) PlaceBid(w http.ResponseWriter, r *http.Request) {
-	tenant, _ := middleware.TenantFromContext(r.Context())
-	claims, ok := middleware.ClaimsFromContext(r.Context())
-	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
-		return
-	}
-	if claims.Role != domain.RoleBidder && claims.Role != domain.RoleAdmin {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-	auctionID, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
-		return
-	}
-	var req struct {
-		Amount int64 `json:"amount"`
-	}
-	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
-	}
-	res, err := h.Auction.PlaceBid(r.Context(), port.PlaceBidTxInput{
-		TenantID:  tenant.ID,
-		AuctionID: auctionID,
-		UserID:    claims.UserID,
-		Amount:    req.Amount,
-		Now:       time.Now().UTC(),
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusCreated, res)
 }
 
 func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {

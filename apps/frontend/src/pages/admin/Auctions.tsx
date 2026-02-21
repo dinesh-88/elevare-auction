@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Auction } from "../../api/client";
 import AuctionForm, { fromAuction, toPayload, type AuctionFormState } from "../../components/admin/AuctionForm";
+import ElevareButton from "../../components/ui/ElevareButton";
+import StatusBadge from "../../components/ui/StatusBadge";
 
 export default function Auctions() {
   const [auctions, setAuctions] = useState<Auction[]>([]);
@@ -85,8 +87,16 @@ export default function Auctions() {
   };
 
   return (
-    <section>
-      <h1 className="mb-4 font-heading text-2xl">Manage Auctions</h1>
+    <section className="page-shell">
+      <header className="section-head">
+        <div>
+          <h1 className="section-title">Manage Auctions</h1>
+          <p className="section-copy">Control auction lifecycle and configuration.</p>
+        </div>
+        <Link className="btn-brand" to="/admin/create-auction">
+          New Auction
+        </Link>
+      </header>
       {error ? <p className="error mb-3">{error}</p> : null}
       {message ? <p className="success mb-3">{message}</p> : null}
 
@@ -105,28 +115,28 @@ export default function Auctions() {
             {auctions.map((a) => (
               <tr key={a.id}>
                 <td>{a.title}</td>
-                <td>{a.status}</td>
+                <td><StatusBadge status={a.status} /></td>
                 <td>${a.current_price.toLocaleString()}</td>
                 <td>{new Date(a.end_time).toLocaleString()}</td>
                 <td className="actions">
                   <Link className="btn-brand" to={`/admin/auctions/${a.id}/lots`}>
                     Lots
                   </Link>
-                  <button className="btn-brand" onClick={() => startEdit(a)}>
+                  <ElevareButton variant="secondary" onClick={() => startEdit(a)}>
                     Edit
-                  </button>
-                  <button className="btn-brand" onClick={() => setStatus("start", a.id)}>
+                  </ElevareButton>
+                  <ElevareButton onClick={() => setStatus("start", a.id)}>
                     Start
-                  </button>
-                  <button className="btn-brand" onClick={() => setStatus("pause", a.id)}>
+                  </ElevareButton>
+                  <ElevareButton variant="secondary" onClick={() => setStatus("pause", a.id)}>
                     Pause
-                  </button>
-                  <button className="btn-brand" onClick={() => setStatus("end", a.id)}>
+                  </ElevareButton>
+                  <ElevareButton variant="secondary" onClick={() => setStatus("end", a.id)}>
                     End
-                  </button>
-                  <button className="btn-brand" onClick={() => removeAuction(a.id)}>
+                  </ElevareButton>
+                  <ElevareButton variant="secondary" onClick={() => removeAuction(a.id)}>
                     Delete
-                  </button>
+                  </ElevareButton>
                 </td>
               </tr>
             ))}
@@ -135,20 +145,20 @@ export default function Auctions() {
       </div>
 
       {selectedAuction && form ? (
-        <div>
+        <div className="panel">
           <h2 className="font-heading text-xl">Edit Auction</h2>
           <AuctionForm form={form} onChange={setForm} onSubmit={saveEdit} submitLabel="Save changes" />
           <div className="actions">
-            <button
+            <ElevareButton
               type="button"
-              className="btn-brand"
+              variant="secondary"
               onClick={() => {
                 setSelectedId(null);
                 setForm(null);
               }}
             >
               Cancel
-            </button>
+            </ElevareButton>
           </div>
         </div>
       ) : null}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../../api/client";
+import ElevareButton from "../../components/ui/ElevareButton";
 
 export default function TenantSignup() {
   const [form, setForm] = useState({
@@ -38,8 +39,8 @@ export default function TenantSignup() {
 
   return (
     <section className="auth-card onboarding-card">
-      <h1>Organization Signup</h1>
-      <p>Create your Elevare tenant request.</p>
+      <h1 className="font-heading text-3xl">Organization Signup</h1>
+      <p className="text-sm text-neutral-600">Create your Elevare tenant request.</p>
       <form onSubmit={submit}>
         <label>Organization name</label>
         <input value={form.organization_name} onChange={(e) => setForm({ ...form, organization_name: e.target.value })} required />
@@ -80,9 +81,9 @@ export default function TenantSignup() {
           onChange={(e) => setForm({ ...form, estimated_auction_volume: e.target.value })}
         />
 
-        <button type="submit" disabled={loading}>
+        <ElevareButton type="submit" disabled={loading}>
           {loading ? "Submitting..." : "Submit request"}
-        </button>
+        </ElevareButton>
       </form>
       {error ? <p className="error">{error}</p> : null}
       {message ? <p className="success">{message}</p> : null}

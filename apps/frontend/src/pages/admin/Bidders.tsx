@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type User } from "../../api/client";
+import ElevareButton from "../../components/ui/ElevareButton";
+import StatusBadge from "../../components/ui/StatusBadge";
 
 export default function Bidders() {
   const [bidders, setBidders] = useState<User[]>([]);
@@ -26,8 +28,13 @@ export default function Bidders() {
   };
 
   return (
-    <section>
-      <h1>Bidders</h1>
+    <section className="page-shell">
+      <header className="section-head">
+        <div>
+          <h1 className="section-title">Bidders</h1>
+          <p className="section-copy">Approve or review bidder access.</p>
+        </div>
+      </header>
       {error ? <p className="error">{error}</p> : null}
       <div className="table-wrap">
         <table>
@@ -44,9 +51,13 @@ export default function Bidders() {
               <tr key={b.id}>
                 <td>{b.email}</td>
                 <td>{b.email_verified ? "Yes" : "No"}</td>
-                <td>{b.approval_status}</td>
+                <td><StatusBadge status={b.approval_status} /></td>
                 <td>
-                  {b.approval_status === "PENDING" ? <button onClick={() => approve(b.id)}>Approve</button> : "-"}
+                  {b.approval_status === "PENDING" ? (
+                    <ElevareButton onClick={() => approve(b.id)}>Approve</ElevareButton>
+                  ) : (
+                    "-"
+                  )}
                 </td>
               </tr>
             ))}

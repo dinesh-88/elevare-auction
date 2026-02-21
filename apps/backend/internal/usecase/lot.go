@@ -82,11 +82,19 @@ func (uc *LotUseCase) Reorder(ctx context.Context, tenantID, auctionID uuid.UUID
 }
 
 func (uc *LotUseCase) Start(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error {
-	return uc.Lots.Start(ctx, tenantID, lotID, now)
+	if err := uc.Lots.Start(ctx, tenantID, lotID, now); err != nil {
+		return err
+	}
+	uc.Broadcaster.BroadcastLotStatus(ctx, lotID, domain.LotLive)
+	return nil
 }
 
 func (uc *LotUseCase) End(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error {
-	return uc.Lots.End(ctx, tenantID, lotID, now)
+	if err := uc.Lots.End(ctx, tenantID, lotID, now); err != nil {
+		return err
+	}
+	uc.Broadcaster.BroadcastLotStatus(ctx, lotID, domain.LotEnded)
+	return nil
 }
 
 func (uc *LotUseCase) OnAuctionStart(ctx context.Context, tenantID, auctionID uuid.UUID, now time.Time) error {

@@ -22,9 +22,17 @@ export default function CreateAuction() {
   };
 
   return (
-    <section>
-      <h1 className="mb-4 font-heading text-2xl">Create Auction</h1>
-      <AuctionForm form={form} onChange={setForm} onSubmit={submit} submitLabel="Create Auction" />
+    <section className="page-shell">
+      <header className="section-head">
+        <div>
+          <h1 className="section-title">Create Auction</h1>
+          <p className="section-copy">Set schedule, mode, and bid behavior.</p>
+        </div>
+      </header>
+
+      <div className="panel">
+        <AuctionForm form={form} onChange={setForm} onSubmit={submit} submitLabel="Create Auction" />
+      </div>
 
       {error ? <p className="error">{error}</p> : null}
       {message ? <p className="success">{message}</p> : null}

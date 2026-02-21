@@ -1,18 +1,11 @@
 import { useEffect } from "react";
 
-interface BidEvent {
-  bid_id: string;
-  amount: number;
-  current_price: number;
-  end_time: string;
-  created_at: string;
+interface AuctionStatusEvent {
+  auction_id: string;
+  status: "DRAFT" | "SCHEDULED" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED";
 }
 
-export function useAuctionSocket(
-  auctionId: string | undefined,
-  onBidEvent: (event: BidEvent) => void,
-  enabled = true,
-) {
+export function useAuctionSocket(auctionId: string | undefined, onStatusEvent: (event: AuctionStatusEvent) => void, enabled = true) {
   useEffect(() => {
     if (!auctionId || !enabled) return;
 
@@ -24,13 +17,13 @@ export function useAuctionSocket(
 
     ws.onmessage = (evt) => {
       try {
-        const data = JSON.parse(evt.data) as { type?: string } & BidEvent;
-        if (data.type === "bid_placed") onBidEvent(data);
+        const data = JSON.parse(evt.data) as { type?: string } & AuctionStatusEvent;
+        if (data.type === "auction_status_changed") onStatusEvent(data);
       } catch {
         // ignore invalid socket payloads
       }
     };
 
     return () => ws.close();
-  }, [auctionId, enabled, onBidEvent]);
+  }, [auctionId, enabled, onStatusEvent]);
 }

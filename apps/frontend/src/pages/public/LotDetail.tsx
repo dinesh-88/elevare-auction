@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import Countdown from "../../components/Countdown";
+import BidHistory from "../../components/BidHistory";
+import BidInput from "../../components/BidInput";
+import LotImageGallery from "../../components/LotImageGallery";
 import { api, type Lot } from "../../api/client";
 import { useAuth } from "../../hooks/useAuth";
+import { useAuctionSocket } from "../../hooks/useAuctionSocket";
 import { useLotSocket } from "../../hooks/useLotSocket";
+import StatusBadge from "../../components/ui/StatusBadge";
 
 interface LotBidHistory {
   bid_id: string;
@@ -13,9 +18,9 @@ interface LotBidHistory {
 
 export default function LotDetail() {
   const { lotId } = useParams();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const [lot, setLot] = useState<Lot | null>(null);
-  const [amount, setAmount] = useState(0);
+  const [auctionStatus, setAuctionStatus] = useState<"DRAFT" | "SCHEDULED" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED" | null>(null);
   const [history, setHistory] = useState<LotBidHistory[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +29,8 @@ export default function LotDetail() {
     try {
       const data = await api.getLot(lotId);
       setLot(data);
-      setAmount(data.current_price + data.min_increment);
+      const auction = await api.getAuction(data.auction_id);
+      setAuctionStatus(auction.status);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load lot");
     }
@@ -33,6 +39,14 @@ export default function LotDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!lot || auctionStatus !== "LIVE" || lot.status !== "LIVE") return;
+    const id = window.setInterval(() => {
+      void load();
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [lot, auctionStatus, load]);
 
   useLotSocket(
     lotId,
@@ -47,77 +61,98 @@ export default function LotDetail() {
           : prev,
       );
       setHistory((prev) => [{ bid_id: event.bid_id, amount: event.amount, created_at: event.created_at }, ...prev]);
-      setAmount((prev) => prev + (lot?.min_increment ?? 1));
+    },
+    (event) => {
+      setLot((prev) => {
+        if (!prev) return prev;
+        if (event.status === "ENDED" || event.status === "CANCELLED") {
+          return { ...prev, status: event.status, ended_at: new Date().toISOString() };
+        }
+        return { ...prev, status: event.status };
+      });
+      if (event.status === "LIVE") {
+        void load();
+      }
     },
     true,
   );
 
-  const placeBid = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useAuctionSocket(
+    lot?.auction_id,
+    (event) => {
+      setAuctionStatus(event.status);
+      if (event.status === "LIVE") {
+        void load();
+      }
+    },
+    Boolean(lot?.auction_id),
+  );
+
+  const placeBid = async (nextAmount: number) => {
     if (!lotId) return;
     try {
       setError(null);
-      await api.placeLotBid(lotId, amount);
+      await api.placeLotBid(lotId, nextAmount);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to place bid");
+      throw err;
     }
   };
 
   if (error) return <p className="error">{error}</p>;
   if (!lot) return <p className="text-sm text-neutral-500">Loading lot...</p>;
 
-  const image = lot.metadata?.image ?? lot.metadata?.images?.[0];
+  const images = lot.metadata?.images?.length
+    ? lot.metadata.images
+    : lot.metadata?.image
+      ? [lot.metadata.image]
+      : [];
+  const formattedHistory = history.map((b) => ({
+    id: b.bid_id,
+    amount: b.amount,
+    bidder: "Bidder",
+    timestamp: new Date(b.created_at),
+  }));
 
   return (
     <section className="grid gap-12 md:grid-cols-5">
       <div className="md:col-span-3">
-        <div className="mb-6 overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
-          {image ? <img src={image} alt={lot.title} className="w-full object-cover" /> : <div className="grid h-72 place-content-center">No image</div>}
-        </div>
+        <LotImageGallery images={images} alt={lot.title} />
       </div>
 
       <aside className="space-y-6 md:col-span-2">
         <h1 className="font-heading text-3xl">{lot.title}</h1>
         <p className="text-sm text-neutral-600">{lot.description}</p>
-        <p className="text-sm text-neutral-500">Lot {lot.lot_number} • {lot.status}</p>
+        <p className="text-sm text-neutral-500">
+          Lot {lot.lot_number} • <StatusBadge status={lot.status} />
+        </p>
 
         <div>
           <p className="text-sm text-neutral-500">Current Bid</p>
           <div className="bid-amount text-4xl font-heading text-brand-primary">${lot.current_price.toLocaleString()}</div>
         </div>
 
-        {lot.ended_at ? (
+        {lot.status === "LIVE" && auctionStatus === "LIVE" && lot.ended_at ? (
           <div>
             <p className="text-sm text-neutral-500">Ends In</p>
             <div className="text-xl"><Countdown endTime={lot.ended_at} /></div>
           </div>
         ) : null}
 
-        {isAuthenticated ? (
-          <form className="bid-panel" onSubmit={placeBid}>
-            <label>Bid Amount</label>
-            <input
-              type="number"
-              min={lot.current_price + lot.min_increment}
-              step={lot.min_increment}
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
-            />
-            <button className="btn-brand" type="submit">Place Bid</button>
-          </form>
+        {isAuthenticated && !isAdmin && lot.status === "LIVE" && auctionStatus === "LIVE" ? (
+          <BidInput currentBid={lot.current_price} currency="$" minIncrement={lot.min_increment} onPlaceBid={placeBid} />
+        ) : isAuthenticated && !isAdmin && auctionStatus !== "LIVE" ? (
+          <p className="text-sm text-neutral-500">Bidding is disabled because auction is not live.</p>
+        ) : isAuthenticated && !isAdmin && lot.status !== "LIVE" ? (
+          <p className="text-sm text-neutral-500">Bidding is disabled because this lot is not live.</p>
+        ) : isAuthenticated && isAdmin ? (
+          <p className="text-sm text-neutral-500">Admin view: bidding is disabled on public frontend.</p>
         ) : (
           <p className="text-sm">Login to place a bid.</p>
         )}
 
         <div className="history-panel">
-          <h3 className="font-heading text-xl">Bid History</h3>
-          {history.length === 0 ? <p className="text-sm text-neutral-500">No bids yet.</p> : null}
-          {history.map((b) => (
-            <div key={b.bid_id} className="mt-2 flex justify-between border-t border-neutral-100 pt-2 text-sm">
-              <span className="bid-amount text-brand-primary">${b.amount.toLocaleString()}</span>
-              <span className="text-neutral-500">{new Date(b.created_at).toLocaleString()}</span>
-            </div>
-          ))}
+          <BidHistory bids={formattedHistory} currency="$" />
         </div>
       </aside>
     </section>

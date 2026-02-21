@@ -8,7 +8,17 @@ interface LotBidEvent {
   created_at: string;
 }
 
-export function useLotSocket(lotId: string | undefined, onBidEvent: (event: LotBidEvent) => void, enabled = true) {
+interface LotStatusEvent {
+  lot_id: string;
+  status: "PENDING" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED";
+}
+
+export function useLotSocket(
+  lotId: string | undefined,
+  onBidEvent: (event: LotBidEvent) => void,
+  onStatusEvent?: (event: LotStatusEvent) => void,
+  enabled = true,
+) {
   useEffect(() => {
     if (!lotId || !enabled) return;
 
@@ -20,13 +30,14 @@ export function useLotSocket(lotId: string | undefined, onBidEvent: (event: LotB
 
     ws.onmessage = (evt) => {
       try {
-        const data = JSON.parse(evt.data) as { type?: string } & LotBidEvent;
+        const data = JSON.parse(evt.data) as { type?: string } & LotBidEvent & LotStatusEvent;
         if (data.type === "lot_bid_placed") onBidEvent(data);
+        if (data.type === "lot_status_changed" && onStatusEvent) onStatusEvent(data);
       } catch {
         // ignore invalid socket payload
       }
     };
 
     return () => ws.close();
-  }, [lotId, enabled, onBidEvent]);
+  }, [lotId, enabled, onBidEvent, onStatusEvent]);
 }

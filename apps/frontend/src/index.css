@@ -1,12 +1,7 @@
+@import "./theme/figma-theme.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-:root {
-  --brand-primary: #1e2a3a;
-  --brand-secondary: #b89a5d;
-  --brand-accent: #a67c52;
-}
 
 @layer base {
   html,
@@ -16,8 +11,10 @@
   }
 
   body {
-    @apply m-0 bg-neutral-50 text-neutral-800 font-body;
-    background-image: radial-gradient(circle at 20% -10%, #ffffff 5%, transparent 45%);
+    @apply m-0 bg-neutral-50 text-neutral-800 font-body antialiased;
+    background-image:
+      radial-gradient(circle at 15% -10%, #ffffff 6%, transparent 45%),
+      linear-gradient(180deg, #fdfdfc 0%, #f8f8f6 100%);
   }
 
   a {
@@ -36,6 +33,54 @@
 }
 
 @layer components {
+  .page-shell {
+    @apply space-y-6;
+  }
+
+  .section-head {
+    @apply flex items-center justify-between gap-3;
+  }
+
+  .section-title {
+    @apply font-heading text-3xl text-neutral-900;
+  }
+
+  .section-copy {
+    @apply text-sm text-neutral-600;
+  }
+
+  .panel {
+    @apply rounded-lg border bg-white p-6;
+    border-color: var(--border-soft);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  }
+
+  .status-pill {
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium;
+    background: #f2f2ef;
+    color: #4e4e49;
+  }
+
+  .status-pill.live,
+  .status-pill.active,
+  .status-pill.approved {
+    background: #e8f4ea;
+    color: #235b2f;
+  }
+
+  .status-pill.paused,
+  .status-pill.pending {
+    background: #fff3d9;
+    color: #7b5714;
+  }
+
+  .status-pill.ended,
+  .status-pill.cancelled,
+  .status-pill.rejected {
+    background: #fde8e8;
+    color: #8a2424;
+  }
+
   .container-shell {
     @apply max-w-container mx-auto px-6;
   }
@@ -59,7 +104,10 @@
   .stat-card,
   .table-wrap,
   .form-grid {
-    @apply border border-neutral-200 rounded-md bg-white p-6;
+    @apply rounded-lg border p-6;
+    border-color: var(--border-soft);
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   }
 
   .bid-panel,
@@ -94,7 +142,7 @@
   }
 
   .admin-main {
-    @apply w-[min(1050px,95vw)] mx-auto my-5;
+    @apply w-[min(1120px,95vw)] mx-auto my-6;
   }
 
   .stats-grid {
@@ -126,7 +174,7 @@
   }
 
   .btn-brand {
-    @apply inline-flex items-center justify-center rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90;
+    @apply inline-flex items-center justify-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition hover:opacity-90;
   }
 
   .btn-link-brand {

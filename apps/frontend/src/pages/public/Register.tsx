@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../../api/client";
+import ElevareButton from "../../components/ui/ElevareButton";
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -25,15 +26,16 @@ export default function Register() {
 
   return (
     <section className="auth-card">
-      <h1>Register</h1>
+      <h1 className="font-heading text-3xl">Register</h1>
+      <p className="text-sm text-neutral-600">Create a bidder account for this tenant.</p>
       <form onSubmit={submit}>
         <label>Email</label>
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <label>Password</label>
         <input type="password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} required />
-        <button type="submit" disabled={submitting}>
+        <ElevareButton type="submit" disabled={submitting}>
           {submitting ? "Submitting..." : "Register"}
-        </button>
+        </ElevareButton>
         {error ? <p className="error">{error}</p> : null}
         {message ? <p className="success">{message}</p> : null}
       </form>

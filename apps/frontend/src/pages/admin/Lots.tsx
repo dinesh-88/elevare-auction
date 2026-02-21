@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Lot } from "../../api/client";
+import { useLotsSockets } from "../../hooks/useLotsSockets";
+import ElevareButton from "../../components/ui/ElevareButton";
+import StatusBadge from "../../components/ui/StatusBadge";
 
 export default function Lots() {
   const { auctionId } = useParams();
@@ -28,6 +31,27 @@ export default function Lots() {
   useEffect(() => {
     load();
   }, [auctionId]);
+
+  useLotsSockets(
+    lots.map((l) => l.id),
+    (lotId, event) => {
+      setLots((prev) =>
+        prev.map((l) =>
+          l.id === lotId
+            ? {
+                ...l,
+                current_price: event.current_price,
+                ended_at: event.ended_at ?? l.ended_at,
+              }
+            : l,
+        ),
+      );
+    },
+    (lotId, event) => {
+      setLots((prev) => prev.map((l) => (l.id === lotId ? { ...l, status: event.status } : l)));
+    },
+    lots.length > 0,
+  );
 
   const createLot = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,9 +116,12 @@ export default function Lots() {
   };
 
   return (
-    <section>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="font-heading text-2xl">Manage Lots</h1>
+    <section className="page-shell">
+      <div className="section-head">
+        <div>
+          <h1 className="section-title">Manage Lots</h1>
+          <p className="section-copy">Create, reorder and control lot status.</p>
+        </div>
         <Link className="btn-link-brand" to="/admin/auctions">← Back to Auctions</Link>
       </div>
 
@@ -117,7 +144,7 @@ export default function Lots() {
         <input value={form.reserve_price} onChange={(e) => setForm({ ...form, reserve_price: e.target.value })} />
         <label>Min Increment</label>
         <input type="number" value={form.min_increment} onChange={(e) => setForm({ ...form, min_increment: Number(e.target.value) })} required />
-        <button className="btn-brand" type="submit">Create Lot</button>
+        <ElevareButton type="submit">Create Lot</ElevareButton>
       </form>
 
       <div className="table-wrap">
@@ -136,14 +163,14 @@ export default function Lots() {
               <tr key={lot.id}>
                 <td>{lot.order_index}</td>
                 <td>{lot.lot_number} - {lot.title}</td>
-                <td>{lot.status}</td>
+                <td><StatusBadge status={lot.status} /></td>
                 <td>${lot.current_price.toLocaleString()}</td>
                 <td className="actions">
-                  <button className="btn-brand" onClick={() => move(idx, -1)}>↑</button>
-                  <button className="btn-brand" onClick={() => move(idx, 1)}>↓</button>
-                  <button className="btn-brand" onClick={() => startLot(lot.id)}>Start</button>
-                  <button className="btn-brand" onClick={() => endLot(lot.id)}>End</button>
-                  <button className="btn-brand" onClick={() => removeLot(lot.id)}>Delete</button>
+                  <ElevareButton variant="secondary" onClick={() => move(idx, -1)}>↑</ElevareButton>
+                  <ElevareButton variant="secondary" onClick={() => move(idx, 1)}>↓</ElevareButton>
+                  <ElevareButton onClick={() => startLot(lot.id)}>Start</ElevareButton>
+                  <ElevareButton variant="secondary" onClick={() => endLot(lot.id)}>End</ElevareButton>
+                  <ElevareButton variant="secondary" onClick={() => removeLot(lot.id)}>Delete</ElevareButton>
                 </td>
               </tr>
             ))}

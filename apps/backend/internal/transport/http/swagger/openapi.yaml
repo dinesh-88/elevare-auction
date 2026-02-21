@@ -154,31 +154,6 @@ paths:
       responses:
         '200':
           description: OK
-  /auctions/{id}/bid:
-    post:
-      summary: Place bid
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [amount]
-              properties:
-                amount:
-                  type: integer
-      responses:
-        '201':
-          description: Created
   /admin/auctions:
     get:
       summary: List all auctions (ADMIN)

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type TenantStatus } from "../../api/client";
+import ElevareButton from "../../components/ui/ElevareButton";
+import StatusBadge from "../../components/ui/StatusBadge";
 
 const TOKEN_KEY = "platform_admin_token";
 
@@ -46,9 +48,13 @@ export default function TenantRequests() {
   };
 
   return (
-    <section className="platform-shell">
-      <h1>Platform Onboarding Review</h1>
-      <p>Use your platform admin token to review tenant requests.</p>
+    <section className="platform-shell page-shell">
+      <header className="section-head">
+        <div>
+          <h1 className="section-title">Platform Onboarding Review</h1>
+          <p className="section-copy">Use your platform admin token to review tenant requests.</p>
+        </div>
+      </header>
 
       <div className="platform-token-row">
         <input
@@ -57,7 +63,7 @@ export default function TenantRequests() {
           value={token}
           onChange={(e) => setToken(e.target.value)}
         />
-        <button onClick={saveToken}>Load</button>
+        <ElevareButton onClick={saveToken}>Load</ElevareButton>
       </div>
 
       <div className="platform-filters">
@@ -92,13 +98,13 @@ export default function TenantRequests() {
                 <tr key={id}>
                   <td>{String(r.name ?? "")}</td>
                   <td>{String(r.subdomain ?? "")}</td>
-                  <td>{String(r.status ?? "")}</td>
+                  <td><StatusBadge status={String(r.status ?? "")} /></td>
                   <td>{String(r.country ?? "")}</td>
                   <td>{String(r.estimated_auction_volume ?? "-")}</td>
                   <td>{r.created_at ? new Date(String(r.created_at)).toLocaleString() : ""}</td>
                   <td className="actions">
-                    <button disabled={status !== "PENDING"} onClick={() => applyAction(id, "approve")}>Approve</button>
-                    <button disabled={status !== "PENDING"} onClick={() => applyAction(id, "reject")}>Reject</button>
+                    <ElevareButton disabled={status !== "PENDING"} onClick={() => applyAction(id, "approve")}>Approve</ElevareButton>
+                    <ElevareButton variant="secondary" disabled={status !== "PENDING"} onClick={() => applyAction(id, "reject")}>Reject</ElevareButton>
                   </td>
                 </tr>
               );

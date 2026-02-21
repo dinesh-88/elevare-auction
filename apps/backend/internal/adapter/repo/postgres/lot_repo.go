@@ -187,23 +187,31 @@ func (r *LotRepo) Start(ctx context.Context, tenantID, lotID uuid.UUID, now time
 	defer tx.Rollback(ctx)
 
 	const lockQ = `
-SELECT l.auction_id, a.auction_mode, a.lot_duration_seconds, l.status
+SELECT l.auction_id, a.status, a.end_time, a.auction_mode, a.lot_duration_seconds, l.status
 FROM lots l
 JOIN auctions a ON a.id = l.auction_id
 WHERE l.id = $1 AND a.tenant_id = $2
 FOR UPDATE`
 	var auctionID uuid.UUID
+	var auctionStatus domain.AuctionStatus
+	var auctionEnd time.Time
 	var mode domain.AuctionMode
 	var lotDuration int
 	var status domain.LotStatus
-	if err := tx.QueryRow(ctx, lockQ, lotID, tenantID).Scan(&auctionID, &mode, &lotDuration, &status); err != nil {
+	if err := tx.QueryRow(ctx, lockQ, lotID, tenantID).Scan(&auctionID, &auctionStatus, &auctionEnd, &mode, &lotDuration, &status); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errors.New("lot not found")
 		}
 		return err
 	}
+	if auctionStatus != domain.AuctionLive {
+		return errors.New("auction is not live")
+	}
 	if status == domain.LotLive {
 		return errors.New("lot already live")
+	}
+	if status == domain.LotCancelled {
+		return errors.New("cancelled lot cannot be started")
 	}
 
 	if mode == domain.AuctionModeSequential {
@@ -218,11 +226,19 @@ FOR UPDATE`
 	}
 
 	var endedAt *time.Time
-	if mode == domain.AuctionModeSequential && lotDuration > 0 {
-		t := now.Add(time.Duration(lotDuration) * time.Second)
+	if mode == domain.AuctionModeSequential {
+		if lotDuration > 0 {
+			t := now.Add(time.Duration(lotDuration) * time.Second)
+			endedAt = &t
+		}
+	} else {
+		if !now.Before(auctionEnd) {
+			return errors.New("auction already ended")
+		}
+		t := auctionEnd
 		endedAt = &t
 	}
-	const upd = `UPDATE lots SET status = 'LIVE', started_at = $3, ended_at = COALESCE($4, ended_at), updated_at = now() WHERE id = $1 AND auction_id = $2`
+	const upd = `UPDATE lots SET status = 'LIVE', started_at = $3, ended_at = $4, updated_at = now() WHERE id = $1 AND auction_id = $2`
 	if _, err := tx.Exec(ctx, upd, lotID, auctionID, now, endedAt); err != nil {
 		return err
 	}
@@ -277,7 +293,7 @@ FOR UPDATE`
 				t := now.Add(time.Duration(lotDuration) * time.Second)
 				endedAt = &t
 			}
-			const activateQ = `UPDATE lots SET status = 'LIVE', started_at = $2, ended_at = COALESCE($3, ended_at), updated_at = now() WHERE id = $1`
+			const activateQ = `UPDATE lots SET status = 'LIVE', started_at = $2, ended_at = $3, updated_at = now() WHERE id = $1`
 			if _, err := tx.Exec(ctx, activateQ, nextID, now, endedAt); err != nil {
 				return err
 			}
@@ -317,7 +333,7 @@ FOR UPDATE`
 	if mode == domain.AuctionModeTimed {
 		const q = `
 UPDATE lots
-SET status = 'LIVE', started_at = COALESCE(started_at, $2), ended_at = COALESCE(ended_at, $3), updated_at = now()
+SET status = 'LIVE', started_at = COALESCE(started_at, $2), ended_at = $3, updated_at = now()
 WHERE auction_id = $1 AND status IN ('PENDING','PAUSED')`
 		if _, err := tx.Exec(ctx, q, auctionID, now, auctionEnd); err != nil {
 			return err
@@ -340,7 +356,7 @@ WHERE auction_id = $1 AND status IN ('PENDING','PAUSED')`
 			t := now.Add(time.Duration(lotDuration) * time.Second)
 			endedAt = &t
 		}
-		const qActivate = `UPDATE lots SET status = 'LIVE', started_at = $2, ended_at = COALESCE($3, ended_at), updated_at = now() WHERE id = $1`
+		const qActivate = `UPDATE lots SET status = 'LIVE', started_at = $2, ended_at = $3, updated_at = now() WHERE id = $1`
 		if _, err := tx.Exec(ctx, qActivate, nextID, now, endedAt); err != nil {
 			return err
 		}
@@ -362,12 +378,14 @@ SELECT l.id, l.auction_id, l.lot_number, l.order_index,
        l.starting_price, l.current_price, l.reserve_price, l.min_increment,
        l.metadata, l.status,
        l.started_at, l.ended_at, l.created_at, l.updated_at,
+       a.status,
        a.auto_extend_enabled, a.sniping_window_seconds, a.sniping_extension_seconds
 FROM lots l
 JOIN auctions a ON a.id = l.auction_id
 WHERE l.id = $1 AND a.tenant_id = $2
 FOR UPDATE`
 	var lot domain.Lot
+	var auctionStatus domain.AuctionStatus
 	var autoExtend bool
 	var snipingWindow, snipingExtension int
 	err = tx.QueryRow(ctx, lockQ, in.LotID, in.TenantID).Scan(
@@ -376,6 +394,7 @@ FOR UPDATE`
 		&lot.StartingPrice, &lot.CurrentPrice, &lot.ReservePrice, &lot.MinIncrement,
 		&lot.Metadata, &lot.Status,
 		&lot.StartedAt, &lot.EndedAt, &lot.CreatedAt, &lot.UpdatedAt,
+		&auctionStatus,
 		&autoExtend, &snipingWindow, &snipingExtension,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -385,6 +404,9 @@ FOR UPDATE`
 		return nil, err
 	}
 
+	if auctionStatus != domain.AuctionLive {
+		return nil, errors.New("auction is not live")
+	}
 	if lot.Status != domain.LotLive {
 		return nil, errors.New("lot is not live")
 	}
@@ -492,7 +514,7 @@ WHERE status = 'LIVE'
 				t := now.Add(time.Duration(lotDuration) * time.Second)
 				nextEndedAt = &t
 			}
-			if _, err := tx.Exec(ctx, `UPDATE lots SET status = 'LIVE', started_at = $2, ended_at = COALESCE($3, ended_at), updated_at = now() WHERE id = $1`, nextID, now, nextEndedAt); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE lots SET status = 'LIVE', started_at = $2, ended_at = $3, updated_at = now() WHERE id = $1`, nextID, now, nextEndedAt); err != nil {
 				tx.Rollback(ctx)
 				return err
 			}

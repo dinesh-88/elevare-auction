@@ -90,6 +90,50 @@ func (h *Hub) BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.B
 	}
 }
 
+func (h *Hub) BroadcastLotStatus(ctx context.Context, lotID uuid.UUID, status domain.LotStatus) {
+	h.mu.RLock()
+	room := h.lotRooms[lotID]
+	conns := make([]*websocket.Conn, 0, len(room))
+	for c := range room {
+		conns = append(conns, c)
+	}
+	h.mu.RUnlock()
+	if len(conns) == 0 {
+		return
+	}
+	payload := map[string]any{
+		"type":   "lot_status_changed",
+		"lot_id": lotID,
+		"status": status,
+	}
+	b, _ := json.Marshal(payload)
+	for _, c := range conns {
+		_ = c.Write(ctx, websocket.MessageText, b)
+	}
+}
+
+func (h *Hub) BroadcastAuctionStatus(ctx context.Context, auctionID uuid.UUID, status domain.AuctionStatus) {
+	h.mu.RLock()
+	room := h.rooms[auctionID]
+	conns := make([]*websocket.Conn, 0, len(room))
+	for c := range room {
+		conns = append(conns, c)
+	}
+	h.mu.RUnlock()
+	if len(conns) == 0 {
+		return
+	}
+	payload := map[string]any{
+		"type":       "auction_status_changed",
+		"auction_id": auctionID,
+		"status":     status,
+	}
+	b, _ := json.Marshal(payload)
+	for _, c := range conns {
+		_ = c.Write(ctx, websocket.MessageText, b)
+	}
+}
+
 func (h *Hub) BroadcastBid(ctx context.Context, auctionID uuid.UUID, bid domain.Bid, currentPrice int64, endTime time.Time) {
 	h.mu.RLock()
 	room := h.rooms[auctionID]

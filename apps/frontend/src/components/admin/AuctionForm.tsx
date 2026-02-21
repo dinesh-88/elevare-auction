@@ -3,15 +3,15 @@ import type { Auction } from "../../api/client";
 export type AuctionFormState = {
   title: string;
   description: string;
-  starting_price: number;
-  reserve_price: string;
-  min_increment: number;
   start_time: string;
   end_time: string;
   allow_manual_start: boolean;
   allow_manual_pause: boolean;
   allow_manual_end: boolean;
   auto_extend_enabled: boolean;
+  auction_mode: "TIMED" | "SEQUENTIAL";
+  auto_progress_enabled: boolean;
+  lot_duration_seconds: number;
   sniping_window_seconds: number;
   sniping_extension_seconds: number;
   bid_visibility: "PUBLIC" | "ANONYMOUS" | "SEALED";
@@ -22,9 +22,6 @@ export const now = new Date();
 export const defaultAuctionFormState = (): AuctionFormState => ({
   title: "",
   description: "",
-  starting_price: 100,
-  reserve_price: "",
-  min_increment: 10,
   start_time: new Date(now.getTime() + 10 * 60 * 1000).toISOString().slice(0, 16),
   end_time: new Date(now.getTime() + 70 * 60 * 1000).toISOString().slice(0, 16),
   auto_extend_enabled: true,
@@ -34,6 +31,9 @@ export const defaultAuctionFormState = (): AuctionFormState => ({
   allow_manual_pause: true,
   allow_manual_end: true,
   bid_visibility: "PUBLIC",
+  auction_mode: "TIMED",
+  auto_progress_enabled: true,
+  lot_duration_seconds: 120,
 });
 
 export const toInputDateTime = (iso: string) => {
@@ -45,15 +45,15 @@ export const toInputDateTime = (iso: string) => {
 export const fromAuction = (a: Auction): AuctionFormState => ({
   title: a.title,
   description: a.description,
-  starting_price: a.starting_price,
-  reserve_price: a.reserve_price == null ? "" : String(a.reserve_price),
-  min_increment: a.min_increment,
   start_time: toInputDateTime(a.start_time),
   end_time: toInputDateTime(a.end_time),
   allow_manual_start: a.allow_manual_start,
   allow_manual_pause: a.allow_manual_pause,
   allow_manual_end: a.allow_manual_end,
   auto_extend_enabled: a.auto_extend_enabled,
+  auction_mode: a.auction_mode,
+  auto_progress_enabled: a.auto_progress_enabled,
+  lot_duration_seconds: a.lot_duration_seconds,
   sniping_window_seconds: a.sniping_window_seconds,
   sniping_extension_seconds: a.sniping_extension_seconds,
   bid_visibility: a.bid_visibility,
@@ -61,7 +61,8 @@ export const fromAuction = (a: Auction): AuctionFormState => ({
 
 export const toPayload = (form: AuctionFormState) => ({
   ...form,
-  reserve_price: form.reserve_price ? Number(form.reserve_price) : null,
+  auto_progress_enabled: form.auction_mode === "SEQUENTIAL" ? form.auto_progress_enabled : false,
+  lot_duration_seconds: form.auction_mode === "SEQUENTIAL" ? form.lot_duration_seconds : 0,
   start_time: new Date(form.start_time).toISOString(),
   end_time: new Date(form.end_time).toISOString(),
 });
@@ -84,25 +85,6 @@ export default function AuctionForm({
 
       <label>Description</label>
       <textarea value={form.description} rows={4} onChange={(e) => onChange({ ...form, description: e.target.value })} />
-
-      <label>Starting Price</label>
-      <input
-        type="number"
-        value={form.starting_price}
-        onChange={(e) => onChange({ ...form, starting_price: Number(e.target.value) })}
-        required
-      />
-
-      <label>Reserve Price</label>
-      <input value={form.reserve_price} onChange={(e) => onChange({ ...form, reserve_price: e.target.value })} />
-
-      <label>Min Increment</label>
-      <input
-        type="number"
-        value={form.min_increment}
-        onChange={(e) => onChange({ ...form, min_increment: Number(e.target.value) })}
-        required
-      />
 
       <label>Start Time</label>
       <input
@@ -129,6 +111,32 @@ export default function AuctionForm({
         <option value="ANONYMOUS">ANONYMOUS</option>
         <option value="SEALED">SEALED</option>
       </select>
+
+      <label>Auction Mode</label>
+      <select
+        value={form.auction_mode}
+        onChange={(e) => onChange({ ...form, auction_mode: e.target.value as AuctionFormState["auction_mode"] })}
+      >
+        <option value="TIMED">TIMED</option>
+        <option value="SEQUENTIAL">SEQUENTIAL</option>
+      </select>
+
+      <label>Auto Progress (Sequential)</label>
+      <input
+        type="checkbox"
+        checked={form.auto_progress_enabled}
+        disabled={form.auction_mode !== "SEQUENTIAL"}
+        onChange={(e) => onChange({ ...form, auto_progress_enabled: e.target.checked })}
+      />
+
+      <label>Lot Duration Seconds (Sequential)</label>
+      <input
+        type="number"
+        min={0}
+        value={form.lot_duration_seconds}
+        disabled={form.auction_mode !== "SEQUENTIAL"}
+        onChange={(e) => onChange({ ...form, lot_duration_seconds: Number(e.target.value) })}
+      />
 
       <label>Auto Extend</label>
       <input

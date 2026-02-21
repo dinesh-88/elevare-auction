@@ -11,8 +11,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const TOKEN_KEY = "elevare_token";
-const USER_KEY = "elevare_user";
 
 function normalizeUser(raw: unknown): User | null {
   if (!raw || typeof raw !== "object") return null;
@@ -36,12 +34,8 @@ function normalizeUser(raw: unknown): User | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
-  const [user, setUser] = useState<User | null>(() => {
-    const raw = localStorage.getItem(USER_KEY);
-    if (!raw) return null;
-    return normalizeUser(JSON.parse(raw));
-  });
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     setAuthTokenGetter(() => token);
@@ -53,16 +47,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!normalizedUser) throw new Error("Invalid user payload");
     setToken(res.token);
     setUser(normalizedUser);
-    localStorage.setItem(TOKEN_KEY, res.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
     return normalizedUser;
   };
 
   const logout = () => {
     setToken(null);
     setUser(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
   };
 
   const value = useMemo(

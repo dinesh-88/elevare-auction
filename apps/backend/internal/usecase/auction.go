@@ -18,9 +18,6 @@ type CreateAuctionInput struct {
 	TenantID                uuid.UUID
 	Title                   string
 	Description             string
-	StartingPrice           int64
-	ReservePrice            *int64
-	MinIncrement            int64
 	StartTime               time.Time
 	EndTime                 time.Time
 	AllowManualStart        bool
@@ -48,7 +45,7 @@ func (uc *AuctionUseCase) Get(ctx context.Context, tenantID, auctionID uuid.UUID
 }
 
 func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*domain.Auction, error) {
-	if in.Title == "" || in.MinIncrement <= 0 || in.StartingPrice < 0 || !in.EndTime.After(in.StartTime) {
+	if in.Title == "" || !in.EndTime.After(in.StartTime) {
 		return nil, ErrValidation
 	}
 	status := domain.AuctionScheduled
@@ -60,10 +57,6 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 		TenantID:                in.TenantID,
 		Title:                   in.Title,
 		Description:             in.Description,
-		StartingPrice:           in.StartingPrice,
-		CurrentPrice:            in.StartingPrice,
-		ReservePrice:            in.ReservePrice,
-		MinIncrement:            in.MinIncrement,
 		StartTime:               in.StartTime,
 		EndTime:                 in.EndTime,
 		Status:                  status,
@@ -78,6 +71,9 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 		SnipingExtensionSeconds: in.SnipingExtensionSeconds,
 		BidVisibility:           in.BidVisibility,
 	}
+	if len(auction.Metadata) == 0 {
+		auction.Metadata = []byte(`{}`)
+	}
 	if auction.AuctionMode == "" {
 		auction.AuctionMode = domain.AuctionModeTimed
 	}
@@ -88,7 +84,7 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 }
 
 func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auctionID uuid.UUID) (*domain.Auction, error) {
-	if in.Title == "" || in.MinIncrement <= 0 || in.StartingPrice < 0 || !in.EndTime.After(in.StartTime) {
+	if in.Title == "" || !in.EndTime.After(in.StartTime) {
 		return nil, ErrValidation
 	}
 	current, err := uc.Auctions.GetByID(ctx, in.TenantID, auctionID)
@@ -97,9 +93,6 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 	}
 	current.Title = in.Title
 	current.Description = in.Description
-	current.StartingPrice = in.StartingPrice
-	current.ReservePrice = in.ReservePrice
-	current.MinIncrement = in.MinIncrement
 	current.StartTime = in.StartTime
 	current.EndTime = in.EndTime
 	current.AllowManualStart = in.AllowManualStart
@@ -126,24 +119,27 @@ func (uc *AuctionUseCase) Delete(ctx context.Context, tenantID, auctionID uuid.U
 }
 
 func (uc *AuctionUseCase) Start(ctx context.Context, tenantID, auctionID uuid.UUID) error {
-	return uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionLive)
+	if err := uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionLive); err != nil {
+		return err
+	}
+	uc.Broadcaster.BroadcastAuctionStatus(ctx, auctionID, domain.AuctionLive)
+	return nil
 }
 
 func (uc *AuctionUseCase) Pause(ctx context.Context, tenantID, auctionID uuid.UUID) error {
-	return uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionPaused)
+	if err := uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionPaused); err != nil {
+		return err
+	}
+	uc.Broadcaster.BroadcastAuctionStatus(ctx, auctionID, domain.AuctionPaused)
+	return nil
 }
 
 func (uc *AuctionUseCase) End(ctx context.Context, tenantID, auctionID uuid.UUID) error {
-	return uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionEnded)
-}
-
-func (uc *AuctionUseCase) PlaceBid(ctx context.Context, in port.PlaceBidTxInput) (*port.PlaceBidTxResult, error) {
-	res, err := uc.Auctions.PlaceBidTx(ctx, in)
-	if err != nil {
-		return nil, err
+	if err := uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionEnded); err != nil {
+		return err
 	}
-	uc.Broadcaster.BroadcastBid(ctx, res.Auction.ID, res.Bid, res.Auction.CurrentPrice, res.Auction.EndTime)
-	return res, nil
+	uc.Broadcaster.BroadcastAuctionStatus(ctx, auctionID, domain.AuctionEnded)
+	return nil
 }
 
 func (uc *AuctionUseCase) SchedulerTick(ctx context.Context, now time.Time) error {
