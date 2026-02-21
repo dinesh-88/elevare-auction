@@ -91,6 +91,30 @@ export interface LotFinancials {
   total_due?: number | null;
 }
 
+export type FeeCalculationType = "PERCENTAGE" | "FIXED";
+export type FeeAppliesTo = "HAMMER" | "PREMIUM" | "SUBTOTAL";
+export type FeeScopeType = "TENANT" | "AUCTION" | "LOT";
+
+export interface FeeComponent {
+  id: string;
+  tenant_id: string;
+  name: string;
+  calculation_type: FeeCalculationType;
+  value: number;
+  applies_to: FeeAppliesTo;
+  taxable: boolean;
+  active: boolean;
+  created_at: string;
+}
+
+export interface FeeAssignment {
+  id: string;
+  scope_type: FeeScopeType;
+  scope_id: string;
+  fee_component_id: string;
+  created_at: string;
+}
+
 export interface TenantPublicConfig {
   name: string;
   branding: {
@@ -207,6 +231,32 @@ function normalizeLotBid(raw: unknown): LotBid {
   };
 }
 
+function normalizeFeeComponent(raw: unknown): FeeComponent {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    tenant_id: String(r.tenant_id ?? r.TenantID ?? ""),
+    name: String(r.name ?? r.Name ?? ""),
+    calculation_type: String(r.calculation_type ?? r.CalculationType ?? "PERCENTAGE") as FeeCalculationType,
+    value: Number(r.value ?? r.Value ?? 0),
+    applies_to: String(r.applies_to ?? r.AppliesTo ?? "HAMMER") as FeeAppliesTo,
+    taxable: Boolean(r.taxable ?? r.Taxable),
+    active: Boolean(r.active ?? r.Active),
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
+function normalizeFeeAssignment(raw: unknown): FeeAssignment {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    scope_type: String(r.scope_type ?? r.ScopeType ?? "TENANT") as FeeScopeType,
+    scope_id: String(r.scope_id ?? r.ScopeID ?? ""),
+    fee_component_id: String(r.fee_component_id ?? r.FeeComponentID ?? ""),
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
@@ -319,6 +369,34 @@ export const api = {
     form.append("file", file);
     return request<{ url: string }>("/admin/uploads/lot-image", { method: "POST", body: form });
   },
+  listFeeComponents: async (activeOnly = true) =>
+    (await request<unknown[]>(`/admin/fees/components?active_only=${activeOnly}`)).map(normalizeFeeComponent),
+  createFeeComponent: async (payload: {
+    name: string;
+    calculation_type: FeeCalculationType;
+    value: number;
+    applies_to: FeeAppliesTo;
+    taxable: boolean;
+  }) => normalizeFeeComponent(await request<unknown>("/admin/fees/components", { method: "POST", body: JSON.stringify(payload) })),
+  updateFeeComponent: async (
+    id: string,
+    payload: {
+      name: string;
+      calculation_type: FeeCalculationType;
+      value: number;
+      applies_to: FeeAppliesTo;
+      taxable: boolean;
+    },
+  ) => normalizeFeeComponent(await request<unknown>(`/admin/fees/components/${id}`, { method: "PATCH", body: JSON.stringify(payload) })),
+  deleteFeeComponent: (id: string) => request<JsonRecord>(`/admin/fees/components/${id}`, { method: "DELETE" }),
+  listFeeAssignments: async (scopeType: FeeScopeType, scopeID: string) =>
+    (await request<unknown[]>(`/admin/fees/assignments?scope_type=${scopeType}&scope_id=${scopeID}`)).map(normalizeFeeAssignment),
+  createFeeAssignment: async (payload: {
+    scope_type: FeeScopeType;
+    scope_id: string;
+    fee_component_id: string;
+  }) => normalizeFeeAssignment(await request<unknown>("/admin/fees/assignments", { method: "POST", body: JSON.stringify(payload) })),
+  deleteFeeAssignment: (id: string) => request<JsonRecord>(`/admin/fees/assignments/${id}`, { method: "DELETE" }),
   platformListTenants: (platformToken: string, status: TenantStatus = "PENDING") =>
     requestWithToken<Array<Record<string, unknown>>>(`/platform/admin/tenants?status=${status}`, platformToken),
   platformApproveTenant: (platformToken: string, tenantId: string) =>

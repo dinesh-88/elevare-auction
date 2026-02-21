@@ -6,6 +6,7 @@ import Auctions from "./pages/admin/Auctions";
 import CreateAuction from "./pages/admin/CreateAuction";
 import Bidders from "./pages/admin/Bidders";
 import Lots from "./pages/admin/Lots";
+import FinancialRules from "./pages/admin/FinancialRules";
 import CreateLot from "./pages/admin/CreateLot";
 import EditLot from "./pages/admin/EditLot";
 import AuctionDetail from "./pages/public/AuctionDetail";
@@ -36,6 +37,8 @@ export default function App() {
         <Route path="auctions/:auctionId/lots" element={<Lots />} />
         <Route path="auctions/:auctionId/lots/create" element={<CreateLot />} />
         <Route path="auctions/:auctionId/lots/:lotId/edit" element={<EditLot />} />
+        <Route path="auctions/:auctionId/financial-rules" element={<FinancialRules />} />
+        <Route path="financial-rules" element={<FinancialRules />} />
         <Route path="create-auction" element={<CreateAuction />} />
         <Route path="bidders" element={<Bidders />} />
       </Route>

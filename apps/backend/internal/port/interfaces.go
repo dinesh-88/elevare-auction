@@ -49,6 +49,18 @@ type LotRepository interface {
 	RunSchedulerTick(ctx context.Context, now time.Time) error
 }
 
+type FeeRepository interface {
+	CreateComponent(ctx context.Context, component *domain.FeeComponent) error
+	UpdateComponent(ctx context.Context, component *domain.FeeComponent) error
+	ListComponents(ctx context.Context, tenantID uuid.UUID, activeOnly bool) ([]domain.FeeComponent, error)
+	GetComponentByID(ctx context.Context, tenantID, componentID uuid.UUID) (*domain.FeeComponent, error)
+	DeactivateComponent(ctx context.Context, tenantID, componentID uuid.UUID) error
+
+	CreateAssignment(ctx context.Context, tenantID uuid.UUID, assignment *domain.FeeAssignment) error
+	ListAssignments(ctx context.Context, tenantID uuid.UUID, scopeType domain.FeeScopeType, scopeID uuid.UUID) ([]domain.FeeAssignment, error)
+	DeleteAssignment(ctx context.Context, tenantID, assignmentID uuid.UUID) error
+}
+
 type PlaceLotBidTxInput struct {
 	TenantID uuid.UUID
 	LotID    uuid.UUID

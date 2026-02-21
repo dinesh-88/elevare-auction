@@ -18,6 +18,7 @@ type Handler struct {
 	Auth       *usecase.AuthUseCase
 	Auction    *usecase.AuctionUseCase
 	Lot        *usecase.LotUseCase
+	Fee        *usecase.FeeUseCase
 	Bidder     *usecase.BidderUseCase
 	Onboarding *usecase.OnboardingUseCase
 	Storage    port.ObjectStorage
@@ -686,6 +687,156 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) ListFeeComponents(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	activeOnly := r.URL.Query().Get("active_only") != "false"
+	items, err := h.Fee.ListComponents(r.Context(), tenant.ID, activeOnly)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *Handler) CreateFeeComponent(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	var req struct {
+		Name            string                    `json:"name"`
+		CalculationType domain.FeeCalculationType `json:"calculation_type"`
+		Value           float64                   `json:"value"`
+		AppliesTo       domain.FeeAppliesTo       `json:"applies_to"`
+		Taxable         bool                      `json:"taxable"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Fee.CreateComponent(r.Context(), usecase.CreateFeeComponentInput{
+		TenantID:        tenant.ID,
+		Name:            req.Name,
+		CalculationType: req.CalculationType,
+		Value:           req.Value,
+		AppliesTo:       req.AppliesTo,
+		Taxable:         req.Taxable,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) UpdateFeeComponent(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	componentID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid fee component id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Name            string                    `json:"name"`
+		CalculationType domain.FeeCalculationType `json:"calculation_type"`
+		Value           float64                   `json:"value"`
+		AppliesTo       domain.FeeAppliesTo       `json:"applies_to"`
+		Taxable         bool                      `json:"taxable"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Fee.UpdateComponent(r.Context(), tenant.ID, componentID, usecase.CreateFeeComponentInput{
+		TenantID:        tenant.ID,
+		Name:            req.Name,
+		CalculationType: req.CalculationType,
+		Value:           req.Value,
+		AppliesTo:       req.AppliesTo,
+		Taxable:         req.Taxable,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) DeleteFeeComponent(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	componentID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid fee component id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Fee.DeactivateComponent(r.Context(), tenant.ID, componentID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "DEACTIVATED"})
+}
+
+func (h *Handler) ListFeeAssignments(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	scopeType := domain.FeeScopeType(r.URL.Query().Get("scope_type"))
+	scopeID, err := uuid.Parse(r.URL.Query().Get("scope_id"))
+	if err != nil {
+		http.Error(w, "invalid scope_id", http.StatusBadRequest)
+		return
+	}
+	items, err := h.Fee.ListAssignments(r.Context(), tenant.ID, scopeType, scopeID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *Handler) CreateFeeAssignment(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	var req struct {
+		ScopeType      domain.FeeScopeType `json:"scope_type"`
+		ScopeID        string              `json:"scope_id"`
+		FeeComponentID string              `json:"fee_component_id"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	scopeID, err := uuid.Parse(req.ScopeID)
+	if err != nil {
+		http.Error(w, "invalid scope_id", http.StatusBadRequest)
+		return
+	}
+	feeComponentID, err := uuid.Parse(req.FeeComponentID)
+	if err != nil {
+		http.Error(w, "invalid fee_component_id", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Fee.CreateAssignment(r.Context(), usecase.CreateFeeAssignmentInput{
+		TenantID:       tenant.ID,
+		ScopeType:      req.ScopeType,
+		ScopeID:        scopeID,
+		FeeComponentID: feeComponentID,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) DeleteFeeAssignment(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	assignmentID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid assignment id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Fee.DeleteAssignment(r.Context(), tenant.ID, assignmentID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "DELETED"})
 }
 
 func toLotPublicResponse(l domain.Lot) lotPublicResponse {

@@ -40,9 +40,6 @@ export default function Header({
           <Link to="/auctions" className="text-neutral-900 no-underline hover:text-neutral-500">
             Auctions
           </Link>
-          <Link to="/signup" className="text-neutral-900 no-underline hover:text-neutral-500">
-            Organization Signup
-          </Link>
           {!isAuthenticated ? (
             <>
               <Link to="/login" className="text-neutral-900 no-underline hover:text-neutral-500">
@@ -79,9 +76,6 @@ export default function Header({
             <nav className="flex flex-col gap-3 p-4">
               <Link to="/auctions" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
                 Auctions
-              </Link>
-              <Link to="/signup" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
-                Organization Signup
               </Link>
               {!isAuthenticated ? (
                 <>

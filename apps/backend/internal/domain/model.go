@@ -171,6 +171,49 @@ type LotFinancialSnapshot struct {
 	TotalDue    int64          `json:"total_due"`
 }
 
+type FeeCalculationType string
+
+const (
+	FeeCalculationPercentage FeeCalculationType = "PERCENTAGE"
+	FeeCalculationFixed      FeeCalculationType = "FIXED"
+)
+
+type FeeAppliesTo string
+
+const (
+	FeeAppliesToHammer   FeeAppliesTo = "HAMMER"
+	FeeAppliesToPremium  FeeAppliesTo = "PREMIUM"
+	FeeAppliesToSubtotal FeeAppliesTo = "SUBTOTAL"
+)
+
+type FeeScopeType string
+
+const (
+	FeeScopeTenant  FeeScopeType = "TENANT"
+	FeeScopeAuction FeeScopeType = "AUCTION"
+	FeeScopeLot     FeeScopeType = "LOT"
+)
+
+type FeeComponent struct {
+	ID              uuid.UUID
+	TenantID        uuid.UUID
+	Name            string
+	CalculationType FeeCalculationType
+	Value           float64
+	AppliesTo       FeeAppliesTo
+	Taxable         bool
+	Active          bool
+	CreatedAt       time.Time
+}
+
+type FeeAssignment struct {
+	ID             uuid.UUID
+	ScopeType      FeeScopeType
+	ScopeID        uuid.UUID
+	FeeComponentID uuid.UUID
+	CreatedAt      time.Time
+}
+
 type LotImage struct {
 	ID       uuid.UUID
 	LotID    uuid.UUID
