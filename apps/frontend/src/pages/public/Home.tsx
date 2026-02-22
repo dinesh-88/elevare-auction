@@ -67,21 +67,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      <section className="mx-auto max-w-[1440px] px-4 py-10 md:px-8 md:py-16">
-        <div className="mb-8">
-          <h2 className="font-heading text-2xl md:text-3xl">Live Auctions</h2>
-          <p className="text-neutral-500">Browse all available lots</p>
-        </div>
-        {isAuthenticated && isAdmin ? <p className="mb-4 text-sm text-neutral-500">Signed in as organizer. Showing all auctions for your organization.</p> : null}
-        {loading ? <p className="text-sm text-neutral-500">Loading auctions...</p> : null}
-        {error ? <p className="error">{error}</p> : null}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 md:gap-8">
-          {auctions.map((a) => (
-            <AuctionCard key={a.id} auction={a} />
-          ))}
-        </div>
-      </section>
     </section>
   );
 }
