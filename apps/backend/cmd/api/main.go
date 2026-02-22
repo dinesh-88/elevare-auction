@@ -31,23 +31,28 @@ func main() {
 	}
 	defer db.Close()
 
-	tenantRepo := &postgres.TenantRepo{DB: db}
+	auditRepo := &postgres.AuditRepo{DB: db}
+	tenantRepo := &postgres.TenantRepo{DB: db, Audit: auditRepo}
 	userRepo := &postgres.UserRepo{DB: db}
-	auctionRepo := &postgres.AuctionRepo{DB: db}
-	lotRepo := &postgres.LotRepo{DB: db}
+	assetRepo := &postgres.AssetRepo{DB: db}
+	auctionRepo := &postgres.AuctionRepo{DB: db, Audit: auditRepo}
+	lotRepo := &postgres.LotRepo{DB: db, Audit: auditRepo}
 	feeRepo := &postgres.FeeRepo{DB: db}
-	invoiceRepo := &postgres.InvoiceRepo{DB: db}
+	invoiceRepo := &postgres.InvoiceRepo{DB: db, Audit: auditRepo}
 
 	hasher := &security.Argon2Hasher{}
 	jwtSvc := &security.JWTService{Secret: []byte(cfg.JWTSecret), TTL: cfg.JWTTTL}
 	hub := wsadapter.NewHub()
 
 	authUC := &usecase.AuthUseCase{Users: userRepo, Hasher: hasher, Tokens: jwtSvc}
-	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Tenants: tenantRepo, Broadcaster: hub}
+	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Tenants: tenantRepo, Broadcaster: hub, Audit: auditRepo}
 	lotUC := &usecase.LotUseCase{Lots: lotRepo, Broadcaster: hub}
-	feeUC := &usecase.FeeUseCase{Fees: feeRepo}
-	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo}
-	bidderUC := &usecase.BidderUseCase{Users: userRepo}
+	feeUC := &usecase.FeeUseCase{Fees: feeRepo, Audit: auditRepo}
+	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo, Audit: auditRepo}
+	bidderUC := &usecase.BidderUseCase{Users: userRepo, Audit: auditRepo}
+	auditUC := &usecase.AuditUseCase{Audit: auditRepo}
+	siteUC := &usecase.SiteUseCase{Tenants: tenantRepo}
+	assetUC := &usecase.AssetUseCase{Assets: assetRepo}
 	onboardingUC := &usecase.OnboardingUseCase{Tenants: tenantRepo, Hasher: hasher}
 
 	var objectStorage port.ObjectStorage
@@ -84,14 +89,18 @@ func main() {
 	}
 
 	h := &httptransport.Handler{
-		Auth:       authUC,
-		Auction:    auctionUC,
-		Lot:        lotUC,
-		Fee:        feeUC,
-		Invoice:    invoiceUC,
-		Bidder:     bidderUC,
-		Onboarding: onboardingUC,
-		Storage:    objectStorage,
+		Auth:         authUC,
+		Auction:      auctionUC,
+		Lot:          lotUC,
+		Fee:          feeUC,
+		Invoice:      invoiceUC,
+		Bidder:       bidderUC,
+		Audit:        auditUC,
+		Site:         siteUC,
+		Asset:        assetUC,
+		Onboarding:   onboardingUC,
+		Storage:      objectStorage,
+		PreviewToken: cfg.SitePreviewToken,
 	}
 	tenantMW := middleware.TenantMiddleware{Tenants: tenantRepo}
 	authMW := middleware.AuthMiddleware{Tokens: jwtSvc}

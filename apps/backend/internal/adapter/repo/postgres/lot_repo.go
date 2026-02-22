@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -17,7 +18,8 @@ import (
 )
 
 type LotRepo struct {
-	DB *pgxpool.Pool
+	DB    *pgxpool.Pool
+	Audit port.AuditRepository
 }
 
 func scanLot(row pgx.Row) (*domain.Lot, error) {
@@ -253,6 +255,20 @@ FOR UPDATE`
 	if _, err := tx.Exec(ctx, upd, lotID, auctionID, now, endedAt); err != nil {
 		return err
 	}
+	if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
+		TenantID:   &tenantID,
+		Action:     "LOT_STARTED",
+		EntityType: "LOT",
+		EntityID:   &lotID,
+		Metadata: mustMarshalJSON(map[string]any{
+			"auction_id": auctionID,
+			"reason":     "MANUAL_START",
+			"started_at": now,
+			"ended_at":   endedAt,
+		}),
+	}); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
@@ -282,7 +298,7 @@ FOR UPDATE`
 		return errors.New("lot already closed")
 	}
 
-	if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now); err != nil {
+	if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now, "MANUAL_END"); err != nil {
 		return err
 	}
 
@@ -309,6 +325,20 @@ FOR UPDATE`
 			}
 			const activateQ = `UPDATE lots SET status = 'LIVE', started_at = $2, ended_at = $3, updated_at = now() WHERE id = $1 AND status = 'PENDING'`
 			if _, err := tx.Exec(ctx, activateQ, nextID, now, endedAt); err != nil {
+				return err
+			}
+			if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
+				TenantID:   &tenantID,
+				Action:     "LOT_STARTED",
+				EntityType: "LOT",
+				EntityID:   &nextID,
+				Metadata: mustMarshalJSON(map[string]any{
+					"auction_id": auctionID,
+					"reason":     "SEQUENTIAL_NEXT",
+					"started_at": now,
+					"ended_at":   endedAt,
+				}),
+			}); err != nil {
 				return err
 			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -352,6 +382,19 @@ WHERE auction_id = $1 AND status IN ('PENDING','PAUSED')`
 		if _, err := tx.Exec(ctx, q, auctionID, now, auctionEnd); err != nil {
 			return err
 		}
+		if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
+			TenantID:   &tenantID,
+			Action:     "LOT_STARTED",
+			EntityType: "AUCTION",
+			EntityID:   &auctionID,
+			Metadata: mustMarshalJSON(map[string]any{
+				"reason":      "AUCTION_TIMED_START",
+				"started_at":  now,
+				"default_end": auctionEnd,
+			}),
+		}); err != nil {
+			return err
+		}
 	} else {
 		const qDeactivate = `UPDATE lots SET status = 'PENDING', started_at = NULL, ended_at = NULL, updated_at = now() WHERE auction_id = $1 AND status <> 'ENDED'`
 		if _, err := tx.Exec(ctx, qDeactivate, auctionID); err != nil {
@@ -374,6 +417,20 @@ WHERE auction_id = $1 AND status IN ('PENDING','PAUSED')`
 		if _, err := tx.Exec(ctx, qActivate, nextID, now, endedAt); err != nil {
 			return err
 		}
+		if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
+			TenantID:   &tenantID,
+			Action:     "LOT_STARTED",
+			EntityType: "LOT",
+			EntityID:   &nextID,
+			Metadata: mustMarshalJSON(map[string]any{
+				"auction_id": auctionID,
+				"reason":     "AUCTION_SEQUENTIAL_START",
+				"started_at": now,
+				"ended_at":   endedAt,
+			}),
+		}); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit(ctx)
@@ -394,6 +451,7 @@ SELECT l.id, l.auction_id, l.lot_number, l.order_index,
        l.hammer_price, l.total_due, l.winner_user_id, l.financial_snapshot,
        l.started_at, l.ended_at, l.created_at, l.updated_at,
        a.status,
+       a.currency,
        a.auto_extend_enabled, a.sniping_window_seconds, a.sniping_extension_seconds
 FROM lots l
 JOIN auctions a ON a.id = l.auction_id
@@ -401,6 +459,7 @@ WHERE l.id = $1 AND a.tenant_id = $2
 FOR UPDATE`
 	var lot domain.Lot
 	var auctionStatus domain.AuctionStatus
+	var currency string
 	var autoExtend bool
 	var snipingWindow, snipingExtension int
 	err = tx.QueryRow(ctx, lockQ, in.LotID, in.TenantID).Scan(
@@ -411,6 +470,7 @@ FOR UPDATE`
 		&lot.HammerPrice, &lot.TotalDue, &lot.WinnerUserID, &lot.FinancialData,
 		&lot.StartedAt, &lot.EndedAt, &lot.CreatedAt, &lot.UpdatedAt,
 		&auctionStatus,
+		&currency,
 		&autoExtend, &snipingWindow, &snipingExtension,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -451,6 +511,21 @@ FOR UPDATE`
 
 	const updLot = `UPDATE lots SET current_price = $2, ended_at = $3, updated_at = now() WHERE id = $1`
 	if _, err := tx.Exec(ctx, updLot, lot.ID, in.Amount, newEndedAt); err != nil {
+		return nil, err
+	}
+	if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
+		TenantID:   &in.TenantID,
+		Action:     "BID_PLACED",
+		EntityType: "LOT",
+		EntityID:   &lot.ID,
+		Metadata: mustMarshalJSON(map[string]any{
+			"lot_id":       lot.ID,
+			"auction_id":   lot.AuctionID,
+			"amount_minor": in.Amount,
+			"currency":     currency,
+			"result":       "ACCEPTED",
+		}),
+	}); err != nil {
 		return nil, err
 	}
 
@@ -494,7 +569,7 @@ WHERE a.status = 'ENDED'
 		if err != nil {
 			return err
 		}
-		if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now); err != nil {
+		if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now, "AUCTION_ENDED_CLOSE"); err != nil {
 			_ = tx.Rollback(ctx)
 			return err
 		}
@@ -536,7 +611,7 @@ WHERE a.auction_mode = 'TIMED'
 		if err != nil {
 			return err
 		}
-		if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now); err != nil {
+		if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now, "AUTO_CLOSE_TIMED"); err != nil {
 			_ = tx.Rollback(ctx)
 			return err
 		}
@@ -546,7 +621,7 @@ WHERE a.auction_mode = 'TIMED'
 	}
 
 	const qSeqAuctions = `
-SELECT a.id, a.lot_duration_seconds
+SELECT a.id, a.tenant_id, a.lot_duration_seconds
 FROM auctions a
 WHERE a.status = 'LIVE'
   AND a.auction_mode = 'SEQUENTIAL'
@@ -557,12 +632,13 @@ WHERE a.status = 'LIVE'
 	}
 	type seqAuction struct {
 		auctionID   uuid.UUID
+		tenantID    uuid.UUID
 		lotDuration int
 	}
 	seqAuctions := make([]seqAuction, 0)
 	for seqRows.Next() {
 		var a seqAuction
-		if err := seqRows.Scan(&a.auctionID, &a.lotDuration); err != nil {
+		if err := seqRows.Scan(&a.auctionID, &a.tenantID, &a.lotDuration); err != nil {
 			seqRows.Close()
 			return err
 		}
@@ -596,7 +672,7 @@ WHERE a.status = 'LIVE'
 			continue
 		}
 
-		if err := r.finalizeLotSettlementTx(ctx, tx, liveLotID, now); err != nil {
+		if err := r.finalizeLotSettlementTx(ctx, tx, liveLotID, now, "AUTO_CLOSE_SEQUENTIAL"); err != nil {
 			_ = tx.Rollback(ctx)
 			return err
 		}
@@ -610,6 +686,23 @@ WHERE a.status = 'LIVE'
 				nextEndedAt = &t
 			}
 			if _, err := tx.Exec(ctx, `UPDATE lots SET status = 'LIVE', started_at = $2, ended_at = $3, updated_at = now() WHERE id = $1 AND status = 'PENDING'`, nextID, now, nextEndedAt); err != nil {
+				_ = tx.Rollback(ctx)
+				return err
+			}
+			aid := a.auctionID
+			tid := a.tenantID
+			if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
+				TenantID:   &tid,
+				Action:     "LOT_STARTED",
+				EntityType: "LOT",
+				EntityID:   &nextID,
+				Metadata: mustMarshalJSON(map[string]any{
+					"auction_id": aid,
+					"reason":     "AUTO_PROGRESS",
+					"started_at": now,
+					"ended_at":   nextEndedAt,
+				}),
+			}); err != nil {
 				_ = tx.Rollback(ctx)
 				return err
 			}
@@ -630,6 +723,7 @@ func (r *LotRepo) finalizeLotSettlementTx(
 	tx pgx.Tx,
 	lotID uuid.UUID,
 	now time.Time,
+	reason string,
 ) error {
 	var currentStatus domain.LotStatus
 	var auctionID, tenantID uuid.UUID
@@ -684,6 +778,20 @@ LIMIT 1`, lotID).Scan(&winnerID, &winningAmount)
 			return err
 		}
 		snapshot = b
+		if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
+			TenantID:   &tenantID,
+			Action:     "FINANCIAL_SNAPSHOT_CREATED",
+			EntityType: "LOT",
+			EntityID:   &lotID,
+			Metadata: mustMarshalJSON(map[string]any{
+				"winning_bid_id":     nil,
+				"winner_user_id":     winnerUserID,
+				"hammer_price_minor": hammerPrice,
+				"total_due_minor":    totalDue,
+			}),
+		}); err != nil {
+			return err
+		}
 
 		if winnerUserID != nil {
 			if err := r.createInvoiceForSettlementTx(ctx, tx, lotID, tenantID, *winnerUserID, computedTotal, snapshot, now); err != nil {
@@ -704,6 +812,20 @@ SET status = 'ENDED',
 WHERE id = $1
   AND status NOT IN ('ENDED','CANCELLED')`
 	if _, err := tx.Exec(ctx, q, lotID, now, hammerPrice, winnerUserID, totalDue, snapshot); err != nil {
+		return err
+	}
+	if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
+		TenantID:   &tenantID,
+		Action:     "LOT_ENDED",
+		EntityType: "LOT",
+		EntityID:   &lotID,
+		Metadata: mustMarshalJSON(map[string]any{
+			"reason":             reason,
+			"winner_user_id":     winnerUserID,
+			"hammer_price_minor": hammerPrice,
+			"total_due_minor":    totalDue,
+		}),
+	}); err != nil {
 		return err
 	}
 	return nil
@@ -927,7 +1049,60 @@ INSERT INTO invoices (
 		invoiceNumber, now, dueDate, currency,
 		totalAmount, snapshotWithCurrency,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return r.appendAuditTx(ctx, tx, port.AuditEntry{
+		TenantID:   &tenantID,
+		Action:     "INVOICE_ISSUED",
+		EntityType: "LOT",
+		EntityID:   &lotID,
+		Metadata: mustMarshalJSON(map[string]any{
+			"winner_user_id":     winnerUserID,
+			"invoice_number":     invoiceNumber,
+			"total_amount_minor": totalAmount,
+			"currency":           currency,
+			"issued_at":          now,
+			"reason":             "AUTO_ON_LOT_END",
+		}),
+	})
+}
+
+func (r *LotRepo) appendAuditTx(ctx context.Context, tx pgx.Tx, entry port.AuditEntry) error {
+	if r.Audit == nil {
+		return nil
+	}
+	base := middleware.AuditContextFromContext(ctx)
+	if entry.TenantID == nil {
+		entry.TenantID = base.TenantID
+	}
+	if entry.ActorUserID == nil {
+		entry.ActorUserID = base.ActorUserID
+	}
+	if entry.ActorRole == "" {
+		entry.ActorRole = base.ActorRole
+	}
+	if entry.RequestID == "" {
+		entry.RequestID = base.RequestID
+	}
+	if entry.IP == "" {
+		entry.IP = base.IP
+	}
+	if entry.UserAgent == "" {
+		entry.UserAgent = base.UserAgent
+	}
+	if len(entry.Metadata) == 0 {
+		entry.Metadata = []byte(`{}`)
+	}
+	return r.Audit.AppendTx(ctx, tx, entry)
+}
+
+func mustMarshalJSON(v map[string]any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return []byte(`{}`)
+	}
+	return b
 }
 
 func (r *LotRepo) ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error) {

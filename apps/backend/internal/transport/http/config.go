@@ -10,6 +10,7 @@ type Config struct {
 	DatabaseURL        string
 	JWTSecret          string
 	PlatformAdminToken string
+	SitePreviewToken   string
 	StorageProvider    string
 	UploadsDir         string
 	S3Bucket           string
@@ -29,6 +30,7 @@ func LoadConfig() Config {
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable"),
 		JWTSecret:          getEnv("JWT_SECRET", "dev-secret-change-me"),
 		PlatformAdminToken: getEnv("PLATFORM_ADMIN_TOKEN", "dev-platform-admin-token"),
+		SitePreviewToken:   getEnv("SITE_PREVIEW_TOKEN", "dev-site-preview-token"),
 		StorageProvider:    getEnv("STORAGE_PROVIDER", "local"),
 		UploadsDir:         getEnv("UPLOADS_DIR", "/tmp/elevare-uploads"),
 		S3Bucket:           getEnv("S3_BUCKET", ""),

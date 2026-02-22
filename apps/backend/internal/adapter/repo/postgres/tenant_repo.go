@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -12,7 +14,8 @@ import (
 )
 
 type TenantRepo struct {
-	DB *pgxpool.Pool
+	DB    *pgxpool.Pool
+	Audit port.AuditRepository
 }
 
 func scanTenant(row pgx.Row) (*domain.Tenant, error) {
@@ -20,6 +23,8 @@ func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 	err := row.Scan(
 		&t.ID, &t.Name, &t.Subdomain, &t.CustomDomain, &t.DefaultCurrency, &t.Status,
 		&t.Country, &t.EstimatedAuctionVolume, &t.Branding,
+		&t.BrandingPublished, &t.ContentPublished, &t.BrandingDraft, &t.ContentDraft,
+		&t.ContentVersion, &t.ContentSchemaVersion,
 		&t.RequireAdminApproval, &t.RequireKYC, &t.CreatedAt,
 	)
 	if err != nil {
@@ -30,7 +35,9 @@ func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 
 func (r *TenantRepo) GetByHost(ctx context.Context, host string) (*domain.Tenant, error) {
 	const q = `
-SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
+SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
+       branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
+       require_admin_approval, require_kyc, created_at
 FROM tenants
 WHERE (subdomain = split_part($1, '.', 1) OR custom_domain = $1)
   AND status = 'ACTIVE'
@@ -47,7 +54,9 @@ LIMIT 1`
 
 func (r *TenantRepo) GetByID(ctx context.Context, tenantID uuid.UUID) (*domain.Tenant, error) {
 	const q = `
-SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
+SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
+       branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
+       require_admin_approval, require_kyc, created_at
 FROM tenants
 WHERE id = $1
 LIMIT 1`
@@ -89,7 +98,9 @@ VALUES ($1,$2,$3,$4,'ADMIN',$5,$6,'NONE',now())`
 
 func (r *TenantRepo) ListByStatus(ctx context.Context, status domain.TenantStatus) ([]domain.Tenant, error) {
 	const q = `
-SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
+SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
+       branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
+       require_admin_approval, require_kyc, created_at
 FROM tenants
 WHERE status = $1
 ORDER BY created_at DESC`
@@ -144,4 +155,82 @@ func (r *TenantRepo) UpdateDefaultCurrency(ctx context.Context, tenantID uuid.UU
 		return errors.New("tenant not found")
 	}
 	return nil
+}
+
+func (r *TenantRepo) UpdateSiteDraft(ctx context.Context, tenantID uuid.UUID, brandingDraft, contentDraft json.RawMessage) error {
+	const q = `
+UPDATE tenants
+SET branding_draft = $2,
+    content_draft = $3,
+    content_schema_version = 1
+WHERE id = $1`
+	ct, err := r.DB.Exec(ctx, q, tenantID, brandingDraft, contentDraft)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("tenant not found")
+	}
+	return nil
+}
+
+func (r *TenantRepo) PublishSiteDraft(ctx context.Context, tenantID uuid.UUID) (int, int, error) {
+	tx, err := r.DB.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	var beforeVersion int
+	if err := tx.QueryRow(ctx, `SELECT content_version FROM tenants WHERE id = $1 FOR UPDATE`, tenantID).Scan(&beforeVersion); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, 0, errors.New("tenant not found")
+		}
+		return 0, 0, err
+	}
+	afterVersion := beforeVersion + 1
+	if _, err := tx.Exec(ctx, `
+UPDATE tenants
+SET branding_published = branding_draft,
+    content_published = content_draft,
+    branding = branding_draft,
+    content_version = $2,
+    content_schema_version = 1
+WHERE id = $1`, tenantID, afterVersion); err != nil {
+		return 0, 0, err
+	}
+	if r.Audit != nil {
+		base := middleware.AuditContextFromContext(ctx)
+		payload := []byte(`{}`)
+		payload = mustJSONMap(map[string]any{
+			"before_version": beforeVersion,
+			"after_version":  afterVersion,
+		})
+		if err := r.Audit.AppendTx(ctx, tx, port.AuditEntry{
+			TenantID:    &tenantID,
+			ActorUserID: base.ActorUserID,
+			ActorRole:   base.ActorRole,
+			Action:      "SITE_PUBLISHED",
+			EntityType:  "TENANT_SITE",
+			EntityID:    &tenantID,
+			RequestID:   base.RequestID,
+			IP:          base.IP,
+			UserAgent:   base.UserAgent,
+			Metadata:    payload,
+		}); err != nil {
+			return 0, 0, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, err
+	}
+	return beforeVersion, afterVersion, nil
+}
+
+func mustJSONMap(v map[string]any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return []byte(`{}`)
+	}
+	return b
 }

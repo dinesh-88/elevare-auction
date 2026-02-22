@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
@@ -15,6 +16,13 @@ type TenantRepository interface {
 	ListByStatus(ctx context.Context, status domain.TenantStatus) ([]domain.Tenant, error)
 	UpdateStatusAndAdminApproval(ctx context.Context, tenantID uuid.UUID, tenantStatus domain.TenantStatus, adminApproval domain.ApprovalStatus) error
 	UpdateDefaultCurrency(ctx context.Context, tenantID uuid.UUID, currency string) error
+	UpdateSiteDraft(ctx context.Context, tenantID uuid.UUID, brandingDraft, contentDraft json.RawMessage) error
+	PublishSiteDraft(ctx context.Context, tenantID uuid.UUID) (beforeVersion int, afterVersion int, err error)
+}
+
+type AssetRepository interface {
+	Create(ctx context.Context, asset *domain.TenantAsset) error
+	ListByKind(ctx context.Context, tenantID uuid.UUID, kind string, limit int) ([]domain.TenantAsset, error)
 }
 
 type UserRepository interface {

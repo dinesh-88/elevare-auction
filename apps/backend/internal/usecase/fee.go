@@ -2,14 +2,17 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 )
 
 type FeeUseCase struct {
-	Fees port.FeeRepository
+	Fees  port.FeeRepository
+	Audit port.AuditRepository
 }
 
 type CreateFeeComponentInput struct {
@@ -103,6 +106,27 @@ func (uc *FeeUseCase) CreateAssignment(ctx context.Context, in CreateFeeAssignme
 	if err := uc.Fees.CreateAssignment(ctx, in.TenantID, assignment); err != nil {
 		return nil, err
 	}
+	if uc.Audit != nil {
+		auditCtx := middleware.AuditContextFromContext(ctx)
+		payload, _ := json.Marshal(map[string]any{
+			"scope_type":       assignment.ScopeType,
+			"scope_id":         assignment.ScopeID,
+			"fee_component_id": assignment.FeeComponentID,
+			"change":           "CREATED",
+		})
+		_ = uc.Audit.Append(ctx, port.AuditEntry{
+			TenantID:    &in.TenantID,
+			ActorUserID: auditCtx.ActorUserID,
+			ActorRole:   auditCtx.ActorRole,
+			Action:      "FEE_ASSIGNMENTS_CHANGED",
+			EntityType:  "FEE_ASSIGNMENT",
+			EntityID:    &assignment.ID,
+			RequestID:   auditCtx.RequestID,
+			IP:          auditCtx.IP,
+			UserAgent:   auditCtx.UserAgent,
+			Metadata:    payload,
+		})
+	}
 	return assignment, nil
 }
 
@@ -117,5 +141,24 @@ func (uc *FeeUseCase) ListAssignments(ctx context.Context, tenantID uuid.UUID, s
 }
 
 func (uc *FeeUseCase) DeleteAssignment(ctx context.Context, tenantID, assignmentID uuid.UUID) error {
-	return uc.Fees.DeleteAssignment(ctx, tenantID, assignmentID)
+	if err := uc.Fees.DeleteAssignment(ctx, tenantID, assignmentID); err != nil {
+		return err
+	}
+	if uc.Audit != nil {
+		auditCtx := middleware.AuditContextFromContext(ctx)
+		payload, _ := json.Marshal(map[string]any{"change": "DELETED"})
+		_ = uc.Audit.Append(ctx, port.AuditEntry{
+			TenantID:    &tenantID,
+			ActorUserID: auditCtx.ActorUserID,
+			ActorRole:   auditCtx.ActorRole,
+			Action:      "FEE_ASSIGNMENTS_CHANGED",
+			EntityType:  "FEE_ASSIGNMENT",
+			EntityID:    &assignmentID,
+			RequestID:   auditCtx.RequestID,
+			IP:          auditCtx.IP,
+			UserAgent:   auditCtx.UserAgent,
+			Metadata:    payload,
+		})
+	}
+	return nil
 }

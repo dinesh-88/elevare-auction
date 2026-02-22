@@ -4,6 +4,7 @@ const links = [
   { to: "/admin", label: "Dashboard" },
   { to: "/admin/auctions", label: "Auctions" },
   { to: "/admin/financial-rules", label: "Financial Rules" },
+  { to: "/admin/site", label: "Site Content" },
   { to: "/admin/settings", label: "Settings" },
   { to: "/admin/create-auction", label: "Create Auction" },
   { to: "/admin/bidders", label: "Bidders" },

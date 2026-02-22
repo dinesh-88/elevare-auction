@@ -154,13 +154,44 @@ export interface TenantPublicConfig {
     secondary_color?: string;
     hero_image?: string;
     footer_text?: string;
+    favicon_url?: string;
+    font_family?: string;
   };
+  content?: Record<string, unknown>;
+  content_version?: number;
+  content_schema_version?: number;
   require_admin_approval: boolean;
   require_kyc: boolean;
 }
 
 export interface TenantSettings {
   default_currency: string;
+}
+
+export interface TenantSitePayload {
+  branding: Record<string, unknown>;
+  content: Record<string, unknown>;
+}
+
+export interface TenantSiteState {
+  branding_published: Record<string, unknown>;
+  content_published: Record<string, unknown>;
+  branding_draft: Record<string, unknown>;
+  content_draft: Record<string, unknown>;
+  content_version: number;
+  content_schema_version: number;
+}
+
+export interface TenantAsset {
+  id: string;
+  tenant_id: string;
+  kind: "logo" | "banner" | "image";
+  url: string;
+  width?: number;
+  height?: number;
+  size_bytes?: number;
+  mime?: string;
+  created_at: string;
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -337,6 +368,33 @@ function normalizeFeeAssignment(raw: unknown): FeeAssignment {
   };
 }
 
+function normalizeSiteState(raw: unknown): TenantSiteState {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    branding_published: ((r.branding_published ?? {}) as Record<string, unknown>) ?? {},
+    content_published: ((r.content_published ?? {}) as Record<string, unknown>) ?? {},
+    branding_draft: ((r.branding_draft ?? {}) as Record<string, unknown>) ?? {},
+    content_draft: ((r.content_draft ?? {}) as Record<string, unknown>) ?? {},
+    content_version: Number(r.content_version ?? 1),
+    content_schema_version: Number(r.content_schema_version ?? 1),
+  };
+}
+
+function normalizeTenantAsset(raw: unknown): TenantAsset {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    tenant_id: String(r.tenant_id ?? r.TenantID ?? ""),
+    kind: String(r.kind ?? r.Kind ?? "image") as TenantAsset["kind"],
+    url: resolveMediaUrl(String(r.url ?? r.URL ?? "")),
+    width: r.width != null ? Number(r.width) : undefined,
+    height: r.height != null ? Number(r.height) : undefined,
+    size_bytes: r.size_bytes != null ? Number(r.size_bytes) : undefined,
+    mime: r.mime != null ? String(r.mime) : undefined,
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
@@ -441,6 +499,11 @@ export const api = {
       }
     }
   },
+  getSite: async () => normalizeSiteState(await request<unknown>("/admin/site")),
+  updateSiteDraft: (payload: TenantSitePayload) =>
+    request<{ status: string }>("/admin/site/draft", { method: "PUT", body: JSON.stringify(payload) }),
+  publishSite: () =>
+    request<{ status: string; before_version: number; after_version: number }>("/admin/site/publish", { method: "POST" }),
   listAuctions: async () => (await request<unknown[]>("/auctions")).map(normalizeAuction),
   getAuction: async (id: string) => normalizeAuction(await request<unknown>(`/auctions/${id}`)),
   listLotsByAuction: async (auctionId: string) => (await request<unknown[]>(`/auctions/${auctionId}/lots`)).map(normalizeLot),
@@ -494,6 +557,18 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return request<{ url: string }>("/admin/uploads/lot-image", { method: "POST", body: form });
+  },
+  uploadAsset: async (kind: "logo" | "banner" | "image", file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return normalizeTenantAsset(await request<unknown>(`/admin/assets/upload?kind=${kind}`, { method: "POST", body: form }));
+  },
+  listAssets: async (kind?: "logo" | "banner" | "image", limit = 100) => {
+    const params = new URLSearchParams();
+    if (kind) params.set("kind", kind);
+    params.set("limit", String(limit));
+    const qs = params.toString();
+    return (await request<unknown[]>(`/admin/assets${qs ? `?${qs}` : ""}`)).map(normalizeTenantAsset);
   },
   listFeeComponents: async (activeOnly = true) =>
     (await request<unknown[]>(`/admin/fees/components?active_only=${activeOnly}`)).map(normalizeFeeComponent),

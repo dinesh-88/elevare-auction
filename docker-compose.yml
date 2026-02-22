@@ -65,8 +65,13 @@ services:
       NEXT_PUBLIC_WS_BASE_URL: ws://localhost:8080
       NEXT_PUBLIC_WS_PORT: 8080
       API_BASE_URL: http://api:8080
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      NEXT_PUBLIC_SITE_PREVIEW_TOKEN: ${SITE_PREVIEW_TOKEN:-dev-site-preview-token}
     volumes:
       - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
     command: sh -lc "npm install && npm run dev"
     ports:
       - "5173:5173"

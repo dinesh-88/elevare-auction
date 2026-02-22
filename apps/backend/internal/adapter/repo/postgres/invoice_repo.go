@@ -8,13 +8,16 @@ import (
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/middleware"
+	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type InvoiceRepo struct {
-	DB *pgxpool.Pool
+	DB    *pgxpool.Pool
+	Audit port.AuditRepository
 }
 
 func scanInvoice(row pgx.Row) (*domain.Invoice, error) {
@@ -170,6 +173,30 @@ INSERT INTO invoices (
   $9,$10,'ISSUED',now()
 )`, invoiceID, lotID, tenantID, *winnerUserID, invoiceNumber, now, dueDate, currency, *totalAmount, snapshotWithCurrency); err != nil {
 		return nil, err
+	}
+	if r.Audit != nil {
+		base := middleware.AuditContextFromContext(ctx)
+		payload, _ := json.Marshal(map[string]any{
+			"invoice_id":         invoiceID,
+			"invoice_number":     invoiceNumber,
+			"total_amount_minor": *totalAmount,
+			"currency":           currency,
+			"reason":             "MANUAL_GENERATE",
+		})
+		if err := r.Audit.AppendTx(ctx, tx, port.AuditEntry{
+			TenantID:    &tenantID,
+			ActorUserID: base.ActorUserID,
+			ActorRole:   base.ActorRole,
+			Action:      "INVOICE_ISSUED",
+			EntityType:  "INVOICE",
+			EntityID:    &invoiceID,
+			RequestID:   base.RequestID,
+			IP:          base.IP,
+			UserAgent:   base.UserAgent,
+			Metadata:    payload,
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	inv, err := scanInvoice(tx.QueryRow(ctx, `

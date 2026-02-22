@@ -74,6 +74,12 @@ type Tenant struct {
 	Country                string
 	EstimatedAuctionVolume *int
 	Branding               json.RawMessage
+	BrandingPublished      json.RawMessage
+	ContentPublished       json.RawMessage
+	BrandingDraft          json.RawMessage
+	ContentDraft           json.RawMessage
+	ContentVersion         int
+	ContentSchemaVersion   int
 	RequireAdminApproval   bool
 	RequireKYC             bool
 	CreatedAt              time.Time
@@ -221,6 +227,18 @@ type LotImage struct {
 	LotID    uuid.UUID
 	URL      string
 	Position int
+}
+
+type TenantAsset struct {
+	ID        uuid.UUID `json:"id"`
+	TenantID  uuid.UUID `json:"tenant_id"`
+	Kind      string    `json:"kind"`
+	URL       string    `json:"url"`
+	Width     *int      `json:"width,omitempty"`
+	Height    *int      `json:"height,omitempty"`
+	SizeBytes *int64    `json:"size_bytes,omitempty"`
+	MIME      string    `json:"mime,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Bid struct {

@@ -33,6 +33,9 @@ var (
 	feePremium    = uuid.MustParse("d1111111-1111-1111-1111-111111111111")
 	feeVAT        = uuid.MustParse("e1111111-1111-1111-1111-111111111111")
 	invoiceOneID  = uuid.MustParse("f1111111-1111-1111-1111-111111111111")
+	assetLogoID   = uuid.MustParse("f2111111-1111-1111-1111-111111111111")
+	assetBannerID = uuid.MustParse("f3111111-1111-1111-1111-111111111111")
+	assetImageID  = uuid.MustParse("f4111111-1111-1111-1111-111111111111")
 )
 
 func main() {
@@ -86,6 +89,9 @@ func main() {
 	if err := seedInvoices(ctx, tx, now); err != nil {
 		log.Fatalf("invoice seed failed: %v", err)
 	}
+	if err := seedAssets(ctx, tx, now); err != nil {
+		log.Fatalf("asset seed failed: %v", err)
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		log.Fatalf("failed to commit seed: %v", err)
@@ -106,25 +112,79 @@ func seedTenant(ctx context.Context, tx pgx.Tx, now time.Time) error {
 		"hero_image":      "https://picsum.photos/seed/elevare-hero/1400/700",
 		"footer_text":     "Elevare Demo Collection",
 	}
+	siteBranding := map[string]any{
+		"logo_url":        "https://picsum.photos/seed/elevare-logo/120/120",
+		"primary_color":   "#1E2A3A",
+		"secondary_color": "#B89A5D",
+		"favicon_url":     "https://picsum.photos/seed/elevare-favicon/64/64",
+		"font_family":     "Playfair Display",
+	}
+	siteContent := map[string]any{
+		"homepage": map[string]any{
+			"hero": map[string]any{
+				"headline":         "Elevare Demo House",
+				"subheadline":      "Curated collections and timed auctions",
+				"banner_image_url": "https://picsum.photos/seed/elevare-hero/1400/700",
+				"cta": map[string]any{
+					"label": "View auctions",
+					"href":  "/auctions",
+				},
+			},
+			"featuredAuction": map[string]any{
+				"mode": "AUTO",
+			},
+			"highlights": []map[string]any{
+				{"title": "Institution-grade", "body": "Audit-safe records and immutable settlements.", "icon": "shield"},
+				{"title": "Global reach", "body": "Run events for private collectors and galleries.", "icon": "globe"},
+				{"title": "Trusted workflow", "body": "Draft, review, and publish with version control.", "icon": "file-check"},
+			},
+		},
+		"footer": map[string]any{
+			"text":          "© 2026 Elevare Demo House",
+			"contact_email": "info@demo.elevare.test",
+			"social_links": map[string]any{
+				"instagram": "https://instagram.com/elevare",
+				"x":         "https://x.com/elevare",
+			},
+		},
+		"about": map[string]any{
+			"markdown": "Elevare Demo House presents catalogued works from private and institutional collections.",
+		},
+		"contact": map[string]any{
+			"address": "21 Regent Street, London",
+			"phone":   "+44 20 7000 0000",
+			"email":   "info@demo.elevare.test",
+		},
+	}
 	brandingJSON, _ := json.Marshal(branding)
+	siteBrandingJSON, _ := json.Marshal(siteBranding)
+	siteContentJSON, _ := json.Marshal(siteContent)
 	_, err := tx.Exec(ctx, `
 INSERT INTO tenants (
   id, name, subdomain, status, country, estimated_auction_volume,
-  branding, require_admin_approval, require_kyc, default_currency, invoice_prefix, invoice_counter, created_at
+  branding, branding_published, branding_draft, content_published, content_draft,
+  content_version, content_schema_version,
+  require_admin_approval, require_kyc, default_currency, invoice_prefix, invoice_counter, created_at
 )
-VALUES ($1,$2,$3,'ACTIVE',$4,$5,$6,false,false,'GBP','INV',1,$7)
+VALUES ($1,$2,$3,'ACTIVE',$4,$5,$6,$7,$8,$9,1,1,false,false,'GBP','INV',1,$10)
 ON CONFLICT (subdomain) DO UPDATE
 SET name = EXCLUDED.name,
     status = 'ACTIVE',
     country = EXCLUDED.country,
     estimated_auction_volume = EXCLUDED.estimated_auction_volume,
     branding = EXCLUDED.branding,
+    branding_published = EXCLUDED.branding_published,
+    branding_draft = EXCLUDED.branding_draft,
+    content_published = EXCLUDED.content_published,
+    content_draft = EXCLUDED.content_draft,
+    content_version = GREATEST(tenants.content_version, 1),
+    content_schema_version = 1,
     require_admin_approval = false,
     require_kyc = false,
     default_currency = EXCLUDED.default_currency,
     invoice_prefix = 'INV',
     invoice_counter = GREATEST(tenants.invoice_counter, 1)
-`, tenantID, "Elevare Demo House", "demo", "US", 200, brandingJSON, now.Add(-72*time.Hour))
+`, tenantID, "Elevare Demo House", "demo", "US", 200, brandingJSON, siteBrandingJSON, siteBrandingJSON, siteContentJSON, siteContentJSON, now.Add(-72*time.Hour))
 	return err
 }
 
@@ -440,4 +500,67 @@ SET winner_user_id = EXCLUDED.winner_user_id,
     status = EXCLUDED.status
 `, invoiceOneID, lotEndedSold, tenantID, bidderOneID, issued, due, snapshot, issued)
 	return err
+}
+
+func seedAssets(ctx context.Context, tx pgx.Tx, now time.Time) error {
+	items := []struct {
+		id        uuid.UUID
+		kind      string
+		url       string
+		width     int
+		height    int
+		sizeBytes int64
+		mime      string
+		createdAt time.Time
+	}{
+		{
+			id:        assetLogoID,
+			kind:      "logo",
+			url:       "https://picsum.photos/seed/elevare-logo/512/512",
+			width:     512,
+			height:    512,
+			sizeBytes: 128000,
+			mime:      "image/png",
+			createdAt: now.Add(-72 * time.Hour),
+		},
+		{
+			id:        assetBannerID,
+			kind:      "banner",
+			url:       "https://picsum.photos/seed/elevare-hero/1600/900",
+			width:     1600,
+			height:    900,
+			sizeBytes: 420000,
+			mime:      "image/jpeg",
+			createdAt: now.Add(-48 * time.Hour),
+		},
+		{
+			id:        assetImageID,
+			kind:      "image",
+			url:       "https://picsum.photos/seed/elevare-gallery-1/1200/900",
+			width:     1200,
+			height:    900,
+			sizeBytes: 310000,
+			mime:      "image/jpeg",
+			createdAt: now.Add(-36 * time.Hour),
+		},
+	}
+
+	for _, item := range items {
+		_, err := tx.Exec(ctx, `
+INSERT INTO tenant_assets (id, tenant_id, kind, url, width, height, size_bytes, mime, created_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+ON CONFLICT (id) DO UPDATE
+SET kind = EXCLUDED.kind,
+    url = EXCLUDED.url,
+    width = EXCLUDED.width,
+    height = EXCLUDED.height,
+    size_bytes = EXCLUDED.size_bytes,
+    mime = EXCLUDED.mime,
+    created_at = EXCLUDED.created_at
+`, item.id, tenantID, item.kind, item.url, item.width, item.height, item.sizeBytes, item.mime, item.createdAt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

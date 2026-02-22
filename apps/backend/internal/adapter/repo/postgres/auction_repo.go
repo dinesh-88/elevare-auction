@@ -2,17 +2,21 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/middleware"
+	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type AuctionRepo struct {
-	DB *pgxpool.Pool
+	DB    *pgxpool.Pool
+	Audit port.AuditRepository
 }
 
 func (r *AuctionRepo) Create(ctx context.Context, auction *domain.Auction) error {
@@ -213,15 +217,88 @@ UPDATE auctions
 SET status = 'LIVE'
 WHERE status = 'SCHEDULED'
   AND start_time <= $1
-  AND end_time > $1`
-	if _, err := r.DB.Exec(ctx, qStart, now); err != nil {
+  AND end_time > $1
+RETURNING id, tenant_id`
+	startedRows, err := r.DB.Query(ctx, qStart, now)
+	if err != nil {
 		return err
 	}
+	started := make([][2]uuid.UUID, 0)
+	for startedRows.Next() {
+		var auctionID, tenantID uuid.UUID
+		if err := startedRows.Scan(&auctionID, &tenantID); err != nil {
+			startedRows.Close()
+			return err
+		}
+		started = append(started, [2]uuid.UUID{auctionID, tenantID})
+	}
+	if err := startedRows.Err(); err != nil {
+		startedRows.Close()
+		return err
+	}
+	startedRows.Close()
+
 	const qEnd = `
 UPDATE auctions
 SET status = 'ENDED'
 WHERE status IN ('LIVE','PAUSED','SCHEDULED')
-  AND end_time <= $1`
-	_, err := r.DB.Exec(ctx, qEnd, now)
-	return err
+  AND end_time <= $1
+RETURNING id, tenant_id`
+	endedRows, err := r.DB.Query(ctx, qEnd, now)
+	if err != nil {
+		return err
+	}
+	ended := make([][2]uuid.UUID, 0)
+	for endedRows.Next() {
+		var auctionID, tenantID uuid.UUID
+		if err := endedRows.Scan(&auctionID, &tenantID); err != nil {
+			endedRows.Close()
+			return err
+		}
+		ended = append(ended, [2]uuid.UUID{auctionID, tenantID})
+	}
+	if err := endedRows.Err(); err != nil {
+		endedRows.Close()
+		return err
+	}
+	endedRows.Close()
+
+	if r.Audit != nil {
+		base := middleware.AuditContextFromContext(ctx)
+		for _, item := range started {
+			tenantID := item[1]
+			auctionID := item[0]
+			payload, _ := json.Marshal(map[string]any{"status": domain.AuctionLive, "reason": "SCHEDULED_AUTO_START"})
+			_ = r.Audit.Append(ctx, port.AuditEntry{
+				TenantID:    &tenantID,
+				ActorUserID: base.ActorUserID,
+				ActorRole:   "SYSTEM",
+				Action:      "AUCTION_STARTED",
+				EntityType:  "AUCTION",
+				EntityID:    &auctionID,
+				RequestID:   base.RequestID,
+				IP:          base.IP,
+				UserAgent:   base.UserAgent,
+				Metadata:    payload,
+			})
+		}
+		for _, item := range ended {
+			tenantID := item[1]
+			auctionID := item[0]
+			payload, _ := json.Marshal(map[string]any{"status": domain.AuctionEnded, "reason": "SCHEDULED_AUTO_END"})
+			_ = r.Audit.Append(ctx, port.AuditEntry{
+				TenantID:    &tenantID,
+				ActorUserID: base.ActorUserID,
+				ActorRole:   "SYSTEM",
+				Action:      "AUCTION_ENDED",
+				EntityType:  "AUCTION",
+				EntityID:    &auctionID,
+				RequestID:   base.RequestID,
+				IP:          base.IP,
+				UserAgent:   base.UserAgent,
+				Metadata:    payload,
+			})
+		}
+	}
+	return nil
 }

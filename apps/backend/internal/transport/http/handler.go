@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,14 +17,18 @@ import (
 )
 
 type Handler struct {
-	Auth       *usecase.AuthUseCase
-	Auction    *usecase.AuctionUseCase
-	Lot        *usecase.LotUseCase
-	Fee        *usecase.FeeUseCase
-	Invoice    *usecase.InvoiceUseCase
-	Bidder     *usecase.BidderUseCase
-	Onboarding *usecase.OnboardingUseCase
-	Storage    port.ObjectStorage
+	Auth         *usecase.AuthUseCase
+	Auction      *usecase.AuctionUseCase
+	Lot          *usecase.LotUseCase
+	Fee          *usecase.FeeUseCase
+	Invoice      *usecase.InvoiceUseCase
+	Bidder       *usecase.BidderUseCase
+	Audit        *usecase.AuditUseCase
+	Site         *usecase.SiteUseCase
+	Asset        *usecase.AssetUseCase
+	Onboarding   *usecase.OnboardingUseCase
+	Storage      port.ObjectStorage
+	PreviewToken string
 }
 
 type lotPublicResponse struct {
@@ -122,9 +127,23 @@ func (h *Handler) PublicConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "tenant missing", http.StatusInternalServerError)
 		return
 	}
+	preview := strings.TrimSpace(r.URL.Query().Get("previewToken"))
+	branding := tenant.BrandingPublished
+	content := tenant.ContentPublished
+	if preview != "" && h.PreviewToken != "" && preview == h.PreviewToken {
+		branding = tenant.BrandingDraft
+		content = tenant.ContentDraft
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	if len(branding) == 0 {
+		branding = tenant.Branding
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name":                   tenant.Name,
-		"branding":               tenant.Branding,
+		"branding":               branding,
+		"content":                content,
+		"content_version":        tenant.ContentVersion,
+		"content_schema_version": tenant.ContentSchemaVersion,
 		"default_currency":       tenant.DefaultCurrency,
 		"require_admin_approval": tenant.RequireAdminApproval,
 		"require_kyc":            tenant.RequireKYC,
@@ -730,6 +749,107 @@ func (h *Handler) UpdateTenantSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"default_currency": currency})
 }
 
+func (h *Handler) GetSite(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	item, err := h.Site.Get(r.Context(), tenant.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"branding_published":     item.BrandingPublished,
+		"content_published":      item.ContentPublished,
+		"branding_draft":         item.BrandingDraft,
+		"content_draft":          item.ContentDraft,
+		"content_version":        item.ContentVersion,
+		"content_schema_version": item.ContentSchemaVersion,
+	})
+}
+
+func (h *Handler) UpdateSiteDraft(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	var req struct {
+		Branding json.RawMessage `json:"branding"`
+		Content  json.RawMessage `json:"content"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	if err := h.Site.UpdateDraft(r.Context(), tenant.ID, usecase.SiteDraftInput{
+		Branding: req.Branding,
+		Content:  req.Content,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "DRAFT_SAVED"})
+}
+
+func (h *Handler) PublishSite(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	beforeVersion, afterVersion, err := h.Site.Publish(r.Context(), tenant.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":         "PUBLISHED",
+		"before_version": beforeVersion,
+		"after_version":  afterVersion,
+	})
+}
+
+func (h *Handler) PresignAsset(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mode":            "DIRECT_SERVER_UPLOAD",
+		"upload_endpoint": "/admin/assets",
+		"max_size_bytes":  10 * 1024 * 1024,
+	})
+}
+
+func (h *Handler) RegisterAsset(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	var req struct {
+		Kind      string `json:"kind"`
+		URL       string `json:"url"`
+		Width     *int   `json:"width"`
+		Height    *int   `json:"height"`
+		SizeBytes *int64 `json:"size_bytes"`
+		MIME      string `json:"mime"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Asset.Register(r.Context(), usecase.RegisterAssetInput{
+		TenantID:  tenant.ID,
+		Kind:      req.Kind,
+		URL:       req.URL,
+		Width:     req.Width,
+		Height:    req.Height,
+		SizeBytes: req.SizeBytes,
+		MIME:      req.MIME,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) ListAssets(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
+	limit := parsePositiveIntOrDefault(r.URL.Query().Get("limit"), 100)
+	items, err := h.Asset.List(r.Context(), tenant.ID, kind, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
@@ -917,6 +1037,34 @@ func (h *Handler) DeleteFeeAssignment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "DELETED"})
 }
 
+func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	limit := parsePositiveIntOrDefault(r.URL.Query().Get("limit"), 200)
+	logs, err := h.Audit.ListByTenant(r.Context(), tenant.ID, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, logs)
+}
+
+func (h *Handler) ListAuditLogsByEntity(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	entityType := strings.TrimSpace(r.URL.Query().Get("type"))
+	entityID, err := uuid.Parse(r.URL.Query().Get("id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	limit := parsePositiveIntOrDefault(r.URL.Query().Get("limit"), 200)
+	logs, err := h.Audit.ListByEntity(r.Context(), tenant.ID, entityType, entityID, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, logs)
+}
+
 func toLotPublicResponse(l domain.Lot) lotPublicResponse {
 	saleResult := ""
 	if l.Status == domain.LotEnded {
@@ -946,4 +1094,15 @@ func toLotPublicResponse(l domain.Lot) lotPublicResponse {
 		CreatedAt:     l.CreatedAt,
 		UpdatedAt:     l.UpdatedAt,
 	}
+}
+
+func parsePositiveIntOrDefault(raw string, fallback int) int {
+	if raw == "" {
+		return fallback
+	}
+	val, err := strconv.Atoi(raw)
+	if err != nil || val <= 0 {
+		return fallback
+	}
+	return val
 }

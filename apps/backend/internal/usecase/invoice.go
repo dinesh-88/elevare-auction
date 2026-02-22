@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 )
 
 type InvoiceUseCase struct {
 	Invoices port.InvoiceRepository
+	Audit    port.AuditRepository
 }
 
 func (uc *InvoiceUseCase) GenerateForLot(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) (*domain.Invoice, error) {
@@ -44,7 +46,32 @@ func (uc *InvoiceUseCase) UpdateStatus(ctx context.Context, tenantID, invoiceID 
 	if status != domain.InvoicePaid && status != domain.InvoiceCancelled && status != domain.InvoiceIssued {
 		return ErrValidation
 	}
-	return uc.Invoices.UpdateStatus(ctx, tenantID, invoiceID, status)
+	if err := uc.Invoices.UpdateStatus(ctx, tenantID, invoiceID, status); err != nil {
+		return err
+	}
+	if uc.Audit != nil {
+		action := "INVOICE_STATUS_UPDATED"
+		if status == domain.InvoicePaid {
+			action = "INVOICE_MARKED_PAID"
+		} else if status == domain.InvoiceCancelled {
+			action = "INVOICE_CANCELLED"
+		}
+		auditCtx := middleware.AuditContextFromContext(ctx)
+		payload, _ := json.Marshal(map[string]any{"status": status})
+		_ = uc.Audit.Append(ctx, port.AuditEntry{
+			TenantID:    &tenantID,
+			ActorUserID: auditCtx.ActorUserID,
+			ActorRole:   auditCtx.ActorRole,
+			Action:      action,
+			EntityType:  "INVOICE",
+			EntityID:    &invoiceID,
+			RequestID:   auditCtx.RequestID,
+			IP:          auditCtx.IP,
+			UserAgent:   auditCtx.UserAgent,
+			Metadata:    payload,
+		})
+	}
+	return nil
 }
 
 func ParseInvoiceSnapshot(raw json.RawMessage) (domain.LotFinancialSnapshot, error) {

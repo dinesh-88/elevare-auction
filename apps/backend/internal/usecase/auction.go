@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 )
@@ -16,6 +17,7 @@ type AuctionUseCase struct {
 	Auctions    port.AuctionRepository
 	Tenants     port.TenantRepository
 	Broadcaster port.Broadcaster
+	Audit       port.AuditRepository
 }
 
 type CreateAuctionInput struct {
@@ -156,6 +158,22 @@ func (uc *AuctionUseCase) Start(ctx context.Context, tenantID, auctionID uuid.UU
 	if err := uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionLive); err != nil {
 		return err
 	}
+	if uc.Audit != nil {
+		auditCtx := middleware.AuditContextFromContext(ctx)
+		payload, _ := json.Marshal(map[string]any{"status": domain.AuctionLive})
+		_ = uc.Audit.Append(ctx, port.AuditEntry{
+			TenantID:    &tenantID,
+			ActorUserID: auditCtx.ActorUserID,
+			ActorRole:   auditCtx.ActorRole,
+			Action:      "AUCTION_STARTED",
+			EntityType:  "AUCTION",
+			EntityID:    &auctionID,
+			RequestID:   auditCtx.RequestID,
+			IP:          auditCtx.IP,
+			UserAgent:   auditCtx.UserAgent,
+			Metadata:    payload,
+		})
+	}
 	uc.Broadcaster.BroadcastAuctionStatus(ctx, auctionID, domain.AuctionLive)
 	return nil
 }
@@ -171,6 +189,22 @@ func (uc *AuctionUseCase) Pause(ctx context.Context, tenantID, auctionID uuid.UU
 func (uc *AuctionUseCase) End(ctx context.Context, tenantID, auctionID uuid.UUID) error {
 	if err := uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionEnded); err != nil {
 		return err
+	}
+	if uc.Audit != nil {
+		auditCtx := middleware.AuditContextFromContext(ctx)
+		payload, _ := json.Marshal(map[string]any{"status": domain.AuctionEnded})
+		_ = uc.Audit.Append(ctx, port.AuditEntry{
+			TenantID:    &tenantID,
+			ActorUserID: auditCtx.ActorUserID,
+			ActorRole:   auditCtx.ActorRole,
+			Action:      "AUCTION_ENDED",
+			EntityType:  "AUCTION",
+			EntityID:    &auctionID,
+			RequestID:   auditCtx.RequestID,
+			IP:          auditCtx.IP,
+			UserAgent:   auditCtx.UserAgent,
+			Metadata:    payload,
+		})
 	}
 	uc.Broadcaster.BroadcastAuctionStatus(ctx, auctionID, domain.AuctionEnded)
 	return nil
