@@ -4,7 +4,6 @@
 
 - `apps/backend`: Go API (Chi + PostgreSQL + pgx + JWT + Argon2id + WebSockets)
 - `apps/web`: Next.js app (App Router, SSR-ready public + admin)
-- `apps/frontend`: legacy Vite app kept temporarily during migration
 - `docker-compose.yml`: local Postgres + backend API + migrations + Next.js web
 
 ## Backend Local Run
