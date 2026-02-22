@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
@@ -17,32 +18,50 @@ type InvoiceUseCase struct {
 }
 
 func (uc *InvoiceUseCase) GenerateForLot(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) (*domain.Invoice, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionInvoiceMarkPaid); err != nil {
+		return nil, ErrForbidden
+	}
 	return uc.Invoices.GenerateForLot(ctx, tenantID, lotID, now)
 }
 
 func (uc *InvoiceUseCase) GetAuthorized(ctx context.Context, tenantID, invoiceID, userID uuid.UUID, role domain.Role) (*domain.Invoice, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	inv, err := uc.Invoices.GetByID(ctx, tenantID, invoiceID)
 	if err != nil {
 		return nil, err
 	}
-	if role == domain.RoleAdmin || inv.WinnerUserID == userID {
+	if domain.HasPermission(role, domain.PermissionInvoiceView) || inv.WinnerUserID == userID {
 		return inv, nil
 	}
 	return nil, ErrForbidden
 }
 
 func (uc *InvoiceUseCase) GetByLotAuthorized(ctx context.Context, tenantID, lotID, userID uuid.UUID, role domain.Role) (*domain.Invoice, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	inv, err := uc.Invoices.GetByLotID(ctx, tenantID, lotID)
 	if err != nil {
 		return nil, err
 	}
-	if role == domain.RoleAdmin || inv.WinnerUserID == userID {
+	if domain.HasPermission(role, domain.PermissionInvoiceView) || inv.WinnerUserID == userID {
 		return inv, nil
 	}
 	return nil, ErrForbidden
 }
 
 func (uc *InvoiceUseCase) UpdateStatus(ctx context.Context, tenantID, invoiceID uuid.UUID, status domain.InvoiceStatus) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionInvoiceMarkPaid); err != nil {
+		return ErrForbidden
+	}
 	if status != domain.InvoicePaid && status != domain.InvoiceCancelled && status != domain.InvoiceIssued {
 		return ErrValidation
 	}

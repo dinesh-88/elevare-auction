@@ -48,11 +48,12 @@ func (uc *AuthUseCase) Register(ctx context.Context, in RegisterInput) (*domain.
 		Email:          in.Email,
 		PasswordHash:   hash,
 		Role:           in.Role,
+		Status:         domain.UserStatusActive,
 		EmailVerified:  false,
 		ApprovalStatus: approval,
 		KYCStatus:      domain.KYCNone,
 	}
-	if err := uc.Users.Create(ctx, user); err != nil {
+	if err := uc.Users.Create(ctx, in.Tenant.ID, user); err != nil {
 		return nil, err
 	}
 	return user, nil
@@ -76,9 +77,19 @@ func (uc *AuthUseCase) Login(ctx context.Context, in LoginInput) (string, *domai
 	if user.ApprovalStatus != domain.ApprovalApproved {
 		return "", nil, errors.New("user not approved")
 	}
+	if user.Status == domain.UserStatusSuspended {
+		return "", nil, errors.New("user is suspended")
+	}
 	token, err := uc.Tokens.Issue(user.ID, user.TenantID, user.Role)
 	if err != nil {
 		return "", nil, err
 	}
 	return token, user, nil
+}
+
+func (uc *AuthUseCase) CurrentUser(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error) {
+	if tenantID == uuid.Nil || userID == uuid.Nil {
+		return nil, ErrValidation
+	}
+	return uc.Users.GetByID(ctx, tenantID, userID)
 }

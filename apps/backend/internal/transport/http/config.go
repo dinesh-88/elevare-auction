@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -21,10 +22,13 @@ type Config struct {
 	S3PublicBaseURL    string
 	S3UsePathStyle     bool
 	JWTTTL             time.Duration
+	AccessTokenCookie  string
+	CSRFCookie         string
+	CookieSecure       bool
 }
 
 func LoadConfig() Config {
-	ttl := 24 * time.Hour
+	ttl := getEnvDuration("JWT_TTL", 30*time.Minute)
 	return Config{
 		Addr:               getEnv("APP_ADDR", ":8080"),
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable"),
@@ -41,6 +45,9 @@ func LoadConfig() Config {
 		S3PublicBaseURL:    getEnv("S3_PUBLIC_BASE_URL", ""),
 		S3UsePathStyle:     getEnvBool("S3_USE_PATH_STYLE", true),
 		JWTTTL:             ttl,
+		AccessTokenCookie:  getEnv("ACCESS_TOKEN_COOKIE_NAME", "access_token"),
+		CSRFCookie:         getEnv("CSRF_COOKIE_NAME", "csrf_token"),
+		CookieSecure:       getEnvBool("COOKIE_SECURE", false),
 	}
 }
 
@@ -64,4 +71,18 @@ func getEnvBool(k string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func getEnvDuration(k string, fallback time.Duration) time.Duration {
+	v := os.Getenv(k)
+	if v == "" {
+		return fallback
+	}
+	if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+		return parsed
+	}
+	if seconds, err := strconv.Atoi(v); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	return fallback
 }

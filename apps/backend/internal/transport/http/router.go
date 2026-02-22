@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	wsadapter "github.com/dinesh-88/elevare-auction/internal/adapter/broadcaster/ws"
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/go-chi/chi/v5"
@@ -22,15 +23,23 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"http://localhost:5173", "http://127.0.0.1:5173"},
+		AllowedOrigins: []string{
+			"http://localhost:5173",
+			"http://127.0.0.1:5173",
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+		},
 		AllowOriginFunc: func(_ *http.Request, origin string) bool {
 			return strings.HasPrefix(origin, "http://") && strings.HasSuffix(origin, ".localhost:5173") ||
-				strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".localhost:5173")
+				strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".localhost:5173") ||
+				strings.HasPrefix(origin, "http://") && strings.HasSuffix(origin, ".localhost:3000") ||
+				strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".localhost:3000")
 		},
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,
 	}))
+	csrfMW := middleware.RequireCSRFCookieHeader(h.CSRFCookie)
 	if serveLocalUploads {
 		uploadsDir = strings.TrimSpace(uploadsDir)
 		if uploadsDir != "" {
@@ -69,10 +78,13 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Post("/register", h.Register)
 			r.Post("/login", h.Login)
 			r.Post("/verify-email", h.VerifyEmail)
+			r.With(authMW.RequireAuth, csrfMW).Post("/logout", h.Logout)
+			r.With(authMW.RequireAuth).Get("/session", h.Session)
 		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.RequireAuth)
+			r.Use(csrfMW)
 			r.Post("/lots/{lotId}/bid", h.PlaceLotBid)
 			r.Get("/lots/{lotId}/financials", h.GetLotFinancials)
 			r.Get("/me/winnings", h.ListMyWinningLots)
@@ -82,46 +94,47 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(authMW.RequireAuth)
-			r.Use(middleware.RequireRole(domain.RoleAdmin))
+			r.Use(middleware.RequireAnyRole(domain.RoleOwner, domain.RoleAdmin, domain.RoleStaff, domain.RoleAccounting))
+			r.Use(csrfMW)
 			r.Get("/auctions", h.ListAdminAuctions)
-			r.Get("/settings", h.GetTenantSettings)
-			r.Patch("/settings", h.UpdateTenantSettings)
-			r.Post("/settings", h.UpdateTenantSettings)
-			r.Get("/site", h.GetSite)
-			r.Put("/site/draft", h.UpdateSiteDraft)
-			r.Post("/site/publish", h.PublishSite)
-			r.Post("/auctions", h.CreateAuction)
-			r.Post("/auctions/{auctionId}/lots", h.CreateLot)
-			r.Post("/auctions/{auctionId}/reorder-lots", h.ReorderLots)
-			r.Patch("/auctions/{id}", h.UpdateAuction)
-			r.Delete("/auctions/{id}", h.DeleteAuction)
-			r.Patch("/auctions/{id}/start", h.StartAuction)
-			r.Patch("/auctions/{id}/pause", h.PauseAuction)
-			r.Patch("/auctions/{id}/end", h.EndAuction)
-			r.Patch("/lots/{lotId}", h.UpdateLot)
-			r.Delete("/lots/{lotId}", h.DeleteLot)
-			r.Post("/lots/{lotId}/start", h.StartLot)
-			r.Post("/lots/{lotId}/end", h.EndLot)
-			r.Post("/lots/{lotId}/invoice/generate", h.GenerateLotInvoice)
-			r.Post("/uploads/auction-image", h.UploadAuctionImage)
-			r.Post("/uploads/lot-image", h.UploadLotImage)
-			r.Post("/assets/presign", h.PresignAsset)
-			r.Post("/assets/upload", h.UploadAsset)
-			r.Post("/assets", h.RegisterAsset)
-			r.Get("/assets", h.ListAssets)
-			r.Get("/fees/components", h.ListFeeComponents)
-			r.Post("/fees/components", h.CreateFeeComponent)
-			r.Patch("/fees/components/{id}", h.UpdateFeeComponent)
-			r.Delete("/fees/components/{id}", h.DeleteFeeComponent)
-			r.Get("/fees/assignments", h.ListFeeAssignments)
-			r.Post("/fees/assignments", h.CreateFeeAssignment)
-			r.Delete("/fees/assignments/{id}", h.DeleteFeeAssignment)
-			r.Patch("/invoices/{invoiceId}/status", h.UpdateInvoiceStatus)
-			r.Get("/audit", h.ListAuditLogs)
-			r.Get("/audit/entity", h.ListAuditLogsByEntity)
-			r.Get("/bidders", h.ListBidders)
-			r.Patch("/bidders/{id}/approve", h.ApproveBidder)
-			r.Patch("/bidders/{id}/reject", h.RejectBidder)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Get("/settings", h.GetTenantSettings)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Patch("/settings", h.UpdateTenantSettings)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Post("/settings", h.UpdateTenantSettings)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Get("/site", h.GetSite)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Put("/site/draft", h.UpdateSiteDraft)
+			r.With(authz.Require(domain.PermissionSitePublish)).Post("/site/publish", h.PublishSite)
+			r.With(authz.Require(domain.PermissionAuctionCreate)).Post("/auctions", h.CreateAuction)
+			r.With(authz.Require(domain.PermissionLotCreate)).Post("/auctions/{auctionId}/lots", h.CreateLot)
+			r.With(authz.Require(domain.PermissionLotReorder)).Post("/auctions/{auctionId}/reorder-lots", h.ReorderLots)
+			r.With(authz.Require(domain.PermissionAuctionUpdate)).Patch("/auctions/{id}", h.UpdateAuction)
+			r.With(authz.Require(domain.PermissionAuctionUpdate)).Delete("/auctions/{id}", h.DeleteAuction)
+			r.With(authz.Require(domain.PermissionAuctionStart)).Patch("/auctions/{id}/start", h.StartAuction)
+			r.With(authz.Require(domain.PermissionAuctionEnd)).Patch("/auctions/{id}/pause", h.PauseAuction)
+			r.With(authz.Require(domain.PermissionAuctionEnd)).Patch("/auctions/{id}/end", h.EndAuction)
+			r.With(authz.Require(domain.PermissionLotUpdate)).Patch("/lots/{lotId}", h.UpdateLot)
+			r.With(authz.Require(domain.PermissionLotUpdate)).Delete("/lots/{lotId}", h.DeleteLot)
+			r.With(authz.Require(domain.PermissionLotStart)).Post("/lots/{lotId}/start", h.StartLot)
+			r.With(authz.Require(domain.PermissionLotEnd)).Post("/lots/{lotId}/end", h.EndLot)
+			r.With(authz.Require(domain.PermissionInvoiceMarkPaid)).Post("/lots/{lotId}/invoice/generate", h.GenerateLotInvoice)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Post("/uploads/auction-image", h.UploadAuctionImage)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Post("/uploads/lot-image", h.UploadLotImage)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Post("/assets/presign", h.PresignAsset)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Post("/assets/upload", h.UploadAsset)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Post("/assets", h.RegisterAsset)
+			r.With(authz.Require(domain.PermissionSiteEdit)).Get("/assets", h.ListAssets)
+			r.With(authz.Require(domain.PermissionFeesManage)).Get("/fees/components", h.ListFeeComponents)
+			r.With(authz.Require(domain.PermissionFeesManage)).Post("/fees/components", h.CreateFeeComponent)
+			r.With(authz.Require(domain.PermissionFeesManage)).Patch("/fees/components/{id}", h.UpdateFeeComponent)
+			r.With(authz.Require(domain.PermissionFeesManage)).Delete("/fees/components/{id}", h.DeleteFeeComponent)
+			r.With(authz.Require(domain.PermissionFeesManage)).Get("/fees/assignments", h.ListFeeAssignments)
+			r.With(authz.Require(domain.PermissionFeesManage)).Post("/fees/assignments", h.CreateFeeAssignment)
+			r.With(authz.Require(domain.PermissionFeesManage)).Delete("/fees/assignments/{id}", h.DeleteFeeAssignment)
+			r.With(authz.Require(domain.PermissionInvoiceMarkPaid)).Patch("/invoices/{invoiceId}/status", h.UpdateInvoiceStatus)
+			r.With(authz.Require(domain.PermissionAuditView)).Get("/audit", h.ListAuditLogs)
+			r.With(authz.Require(domain.PermissionAuditView)).Get("/audit/entity", h.ListAuditLogsByEntity)
+			r.With(authz.Require(domain.PermissionBidderApprove)).Get("/bidders", h.ListBidders)
+			r.With(authz.Require(domain.PermissionBidderApprove)).Patch("/bidders/{id}/approve", h.ApproveBidder)
+			r.With(authz.Require(domain.PermissionBidderSuspend)).Patch("/bidders/{id}/reject", h.RejectBidder)
 		})
 	})
 

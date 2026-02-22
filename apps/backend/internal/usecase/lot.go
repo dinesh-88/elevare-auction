@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
@@ -29,6 +30,9 @@ type CreateLotInput struct {
 }
 
 func (uc *LotUseCase) Create(ctx context.Context, in CreateLotInput) (*domain.Lot, error) {
+	if err := authz.Authorize(ctx, domain.PermissionLotCreate); err != nil {
+		return nil, ErrForbidden
+	}
 	if in.AuctionID == uuid.Nil || in.Title == "" || in.LotNumber == "" || in.MinIncrement <= 0 || in.StartingPrice < 0 {
 		return nil, ErrValidation
 	}
@@ -56,6 +60,12 @@ func (uc *LotUseCase) Create(ctx context.Context, in CreateLotInput) (*domain.Lo
 }
 
 func (uc *LotUseCase) Update(ctx context.Context, tenantID, lotID uuid.UUID, in CreateLotInput) (*domain.Lot, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionLotUpdate); err != nil {
+		return nil, ErrForbidden
+	}
 	if lotID == uuid.Nil || in.Title == "" || in.LotNumber == "" || in.MinIncrement <= 0 || in.StartingPrice < 0 {
 		return nil, ErrValidation
 	}
@@ -80,10 +90,22 @@ func (uc *LotUseCase) Update(ctx context.Context, tenantID, lotID uuid.UUID, in 
 }
 
 func (uc *LotUseCase) Delete(ctx context.Context, tenantID, lotID uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionLotUpdate); err != nil {
+		return ErrForbidden
+	}
 	return uc.Lots.Delete(ctx, tenantID, lotID)
 }
 
 func (uc *LotUseCase) Reorder(ctx context.Context, tenantID, auctionID uuid.UUID, lotIDs []uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionLotReorder); err != nil {
+		return ErrForbidden
+	}
 	if len(lotIDs) == 0 {
 		return ErrValidation
 	}
@@ -91,6 +113,12 @@ func (uc *LotUseCase) Reorder(ctx context.Context, tenantID, auctionID uuid.UUID
 }
 
 func (uc *LotUseCase) Start(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionLotStart); err != nil {
+		return ErrForbidden
+	}
 	if err := uc.Lots.Start(ctx, tenantID, lotID, now); err != nil {
 		return err
 	}
@@ -99,6 +127,12 @@ func (uc *LotUseCase) Start(ctx context.Context, tenantID, lotID uuid.UUID, now 
 }
 
 func (uc *LotUseCase) End(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionLotEnd); err != nil {
+		return ErrForbidden
+	}
 	if err := uc.Lots.End(ctx, tenantID, lotID, now); err != nil {
 		return err
 	}
@@ -107,18 +141,30 @@ func (uc *LotUseCase) End(ctx context.Context, tenantID, lotID uuid.UUID, now ti
 }
 
 func (uc *LotUseCase) OnAuctionStart(ctx context.Context, tenantID, auctionID uuid.UUID, now time.Time) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
 	return uc.Lots.OnAuctionStart(ctx, tenantID, auctionID, now)
 }
 
 func (uc *LotUseCase) ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) ([]domain.Lot, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return uc.Lots.ListByAuction(ctx, tenantID, auctionID)
 }
 
 func (uc *LotUseCase) GetByID(ctx context.Context, tenantID, lotID uuid.UUID) (*domain.Lot, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return uc.Lots.GetByID(ctx, tenantID, lotID)
 }
 
 func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) (*port.PlaceLotBidTxResult, error) {
+	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
+		return nil, err
+	}
 	res, err := uc.Lots.PlaceBidTx(ctx, in)
 	if err != nil {
 		return nil, err
@@ -128,10 +174,16 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 }
 
 func (uc *LotUseCase) ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return uc.Lots.ListBidsByLot(ctx, tenantID, lotID, limit)
 }
 
 func (uc *LotUseCase) ListWonByUser(ctx context.Context, tenantID, userID uuid.UUID, limit int) ([]domain.Lot, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return uc.Lots.ListWonByUser(ctx, tenantID, userID, limit)
 }
 

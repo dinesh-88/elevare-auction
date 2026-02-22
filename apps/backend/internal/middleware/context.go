@@ -75,3 +75,15 @@ func AuditContextFromContext(ctx context.Context) AuditContext {
 	}
 	return out
 }
+
+func UserContextFromContext(ctx context.Context) (*domain.UserContext, bool) {
+	claims, ok := ClaimsFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	return &domain.UserContext{
+		TenantID: claims.TenantID,
+		UserID:   claims.UserID,
+		Role:     claims.Role,
+	}, true
+}

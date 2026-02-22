@@ -9,8 +9,18 @@ import (
 type Role string
 
 const (
-	RoleAdmin  Role = "ADMIN"
-	RoleBidder Role = "BIDDER"
+	RoleOwner      Role = "OWNER"
+	RoleAdmin      Role = "ADMIN"
+	RoleStaff      Role = "STAFF"
+	RoleAccounting Role = "ACCOUNTING"
+	RoleBidder     Role = "BIDDER"
+)
+
+type UserStatus string
+
+const (
+	UserStatusActive    UserStatus = "ACTIVE"
+	UserStatusSuspended UserStatus = "SUSPENDED"
 )
 
 type ApprovalStatus string
@@ -91,6 +101,7 @@ type User struct {
 	Email          string
 	PasswordHash   string
 	Role           Role
+	Status         UserStatus
 	EmailVerified  bool
 	ApprovalStatus ApprovalStatus
 	KYCStatus      KYCStatus

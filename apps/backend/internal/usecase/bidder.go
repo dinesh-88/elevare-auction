@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
@@ -16,10 +17,19 @@ type BidderUseCase struct {
 }
 
 func (uc *BidderUseCase) List(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return uc.Users.GetBidders(ctx, tenantID)
 }
 
 func (uc *BidderUseCase) Approve(ctx context.Context, tenantID, userID uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionBidderApprove); err != nil {
+		return ErrForbidden
+	}
 	if err := uc.Users.UpdateApproval(ctx, tenantID, userID, domain.ApprovalApproved); err != nil {
 		return err
 	}
@@ -43,5 +53,11 @@ func (uc *BidderUseCase) Approve(ctx context.Context, tenantID, userID uuid.UUID
 }
 
 func (uc *BidderUseCase) Reject(ctx context.Context, tenantID, userID uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionBidderSuspend); err != nil {
+		return ErrForbidden
+	}
 	return uc.Users.UpdateApproval(ctx, tenantID, userID, domain.ApprovalRejected)
 }

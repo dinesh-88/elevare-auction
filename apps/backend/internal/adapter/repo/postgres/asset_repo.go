@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/google/uuid"
@@ -12,7 +13,10 @@ type AssetRepo struct {
 	DB *pgxpool.Pool
 }
 
-func (r *AssetRepo) Create(ctx context.Context, asset *domain.TenantAsset) error {
+func (r *AssetRepo) Create(ctx context.Context, tenantID uuid.UUID, asset *domain.TenantAsset) error {
+	if tenantID == uuid.Nil || asset == nil || asset.TenantID != tenantID {
+		return errors.New("tenant mismatch")
+	}
 	const q = `
 INSERT INTO tenant_assets (id, tenant_id, kind, url, width, height, size_bytes, mime, created_at)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())`

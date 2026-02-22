@@ -21,12 +21,13 @@ type TenantRepository interface {
 }
 
 type AssetRepository interface {
-	Create(ctx context.Context, asset *domain.TenantAsset) error
+	Create(ctx context.Context, tenantID uuid.UUID, asset *domain.TenantAsset) error
 	ListByKind(ctx context.Context, tenantID uuid.UUID, kind string, limit int) ([]domain.TenantAsset, error)
 }
 
 type UserRepository interface {
-	Create(ctx context.Context, user *domain.User) error
+	Create(ctx context.Context, tenantID uuid.UUID, user *domain.User) error
+	GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error)
 	GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*domain.User, error)
 	GetBidders(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error)
 	UpdateApproval(ctx context.Context, tenantID, userID uuid.UUID, status domain.ApprovalStatus) error

@@ -166,7 +166,7 @@ INSERT INTO tenants (
   content_version, content_schema_version,
   require_admin_approval, require_kyc, default_currency, invoice_prefix, invoice_counter, created_at
 )
-VALUES ($1,$2,$3,'ACTIVE',$4,$5,$6,$7,$8,$9,1,1,false,false,'GBP','INV',1,$10)
+VALUES ($1,$2,$3,'ACTIVE',$4,$5,$6,$7,$8,$9,$10,1,1,false,false,'GBP','INV',1,$11)
 ON CONFLICT (subdomain) DO UPDATE
 SET name = EXCLUDED.name,
     status = 'ACTIVE',
@@ -202,9 +202,9 @@ func seedUsers(ctx context.Context, tx pgx.Tx, now time.Time, adminHash, bidderH
 	for _, q := range queries {
 		_, err := tx.Exec(ctx, `
 INSERT INTO users (
-  id, tenant_id, email, password_hash, role, email_verified, approval_status, kyc_status, created_at
+  id, tenant_id, email, password_hash, role, status, email_verified, approval_status, kyc_status, created_at
 )
-VALUES ($1,$2,$3,$4,$5,true,'APPROVED','NONE',$6)
+VALUES ($1,$2,$3,$4,$5,'ACTIVE',true,'APPROVED','NONE',$6)
 ON CONFLICT (tenant_id, email) DO UPDATE
 SET password_hash = EXCLUDED.password_hash,
     role = EXCLUDED.role,

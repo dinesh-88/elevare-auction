@@ -2,12 +2,12 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, setAuthTokenGetter, type Role, type User } from "../api/client";
 
 interface AuthContextValue {
-  token: string | null;
   user: User | null;
+  loading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<User>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -34,37 +34,58 @@ function normalizeUser(raw: unknown): User | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setAuthTokenGetter(() => token);
-  }, [token]);
+    setAuthTokenGetter(() => null);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await api.getSession();
+        const normalizedUser = normalizeUser(res.user);
+        if (active) setUser(normalizedUser);
+      } catch {
+        if (active) setUser(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const login = async (email: string, password: string) => {
     const res = await api.login({ email, password });
     const normalizedUser = normalizeUser(res.user);
     if (!normalizedUser) throw new Error("Invalid user payload");
-    setToken(res.token);
     setUser(normalizedUser);
     return normalizedUser;
   };
 
-  const logout = () => {
-    setToken(null);
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Clear local auth state even if logout request fails.
+    }
     setUser(null);
   };
 
   const value = useMemo(
     () => ({
-      token,
       user,
-      isAuthenticated: Boolean(token),
-      isAdmin: user?.role === ("ADMIN" as Role),
+      loading,
+      isAuthenticated: Boolean(user),
+      isAdmin: user?.role !== ("BIDDER" as Role),
       login,
       logout,
     }),
-    [token, user],
+    [user, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

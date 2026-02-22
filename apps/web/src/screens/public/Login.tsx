@@ -17,7 +17,7 @@ export default function Login() {
     setError(null);
     try {
       const currentUser = await login(email, password);
-      navigate(currentUser.role === "ADMIN" ? "/admin" : "/");
+      navigate(currentUser.role !== "BIDDER" ? "/admin" : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

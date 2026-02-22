@@ -101,9 +101,13 @@ func main() {
 		Onboarding:   onboardingUC,
 		Storage:      objectStorage,
 		PreviewToken: cfg.SitePreviewToken,
+		JWTTTL:       cfg.JWTTTL,
+		CookieSecure: cfg.CookieSecure,
+		AccessCookie: cfg.AccessTokenCookie,
+		CSRFCookie:   cfg.CSRFCookie,
 	}
 	tenantMW := middleware.TenantMiddleware{Tenants: tenantRepo}
-	authMW := middleware.AuthMiddleware{Tokens: jwtSvc}
+	authMW := middleware.AuthMiddleware{Tokens: jwtSvc, AccessTokenCookie: cfg.AccessTokenCookie}
 
 	router := httptransport.NewRouter(h, tenantMW, authMW, hub, cfg.PlatformAdminToken, cfg.UploadsDir, serveLocalUploads)
 	httptransport.StartScheduler(ctx, auctionUC, lotUC, 5*time.Second)

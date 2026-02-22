@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
@@ -23,10 +24,22 @@ type SiteDraftInput struct {
 }
 
 func (uc *SiteUseCase) Get(ctx context.Context, tenantID uuid.UUID) (*domain.Tenant, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionSiteEdit); err != nil {
+		return nil, ErrForbidden
+	}
 	return uc.Tenants.GetByID(ctx, tenantID)
 }
 
 func (uc *SiteUseCase) UpdateDraft(ctx context.Context, tenantID uuid.UUID, in SiteDraftInput) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionSiteEdit); err != nil {
+		return ErrForbidden
+	}
 	branding, err := normalizeBranding(in.Branding)
 	if err != nil {
 		return err
@@ -39,6 +52,12 @@ func (uc *SiteUseCase) UpdateDraft(ctx context.Context, tenantID uuid.UUID, in S
 }
 
 func (uc *SiteUseCase) Publish(ctx context.Context, tenantID uuid.UUID) (int, int, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return 0, 0, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionSitePublish); err != nil {
+		return 0, 0, ErrForbidden
+	}
 	return uc.Tenants.PublishSiteDraft(ctx, tenantID)
 }
 

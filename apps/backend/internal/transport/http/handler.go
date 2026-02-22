@@ -29,6 +29,10 @@ type Handler struct {
 	Onboarding   *usecase.OnboardingUseCase
 	Storage      port.ObjectStorage
 	PreviewToken string
+	JWTTTL       time.Duration
+	CookieSecure bool
+	AccessCookie string
+	CSRFCookie   string
 }
 
 type lotPublicResponse struct {
@@ -50,6 +54,18 @@ type lotPublicResponse struct {
 	EndedAt       *time.Time       `json:"ended_at"`
 	CreatedAt     time.Time        `json:"created_at"`
 	UpdatedAt     time.Time        `json:"updated_at"`
+}
+
+type authUserResponse struct {
+	ID             uuid.UUID             `json:"id"`
+	TenantID       uuid.UUID             `json:"tenant_id"`
+	Email          string                `json:"email"`
+	Role           domain.Role           `json:"role"`
+	Status         domain.UserStatus     `json:"status"`
+	EmailVerified  bool                  `json:"email_verified"`
+	ApprovalStatus domain.ApprovalStatus `json:"approval_status"`
+	KYCStatus      domain.KYCStatus      `json:"kyc_status"`
+	CreatedAt      time.Time             `json:"created_at"`
 }
 
 func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
@@ -227,7 +243,7 @@ func (h *Handler) GetLotFinancials(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isAdmin := claims.Role == domain.RoleAdmin
+	isAdmin := domain.HasPermission(claims.Role, domain.PermissionInvoiceView)
 	isWinner := lot.WinnerUserID != nil && claims.UserID == *lot.WinnerUserID
 	if !isAdmin && !isWinner {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -352,7 +368,28 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), status)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"token": token, "user": user})
+	h.setSessionCookies(w, token)
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "user": toAuthUserResponse(user)})
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, _ *http.Request) {
+	h.clearSessionCookies(w)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
+func (h *Handler) Session(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	user, err := h.Auth.CurrentUser(r.Context(), tenant.ID, claims.UserID)
+	if err != nil {
+		http.Error(w, "session not found", http.StatusUnauthorized)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": toAuthUserResponse(user)})
 }
 
 func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
@@ -1105,4 +1142,76 @@ func parsePositiveIntOrDefault(raw string, fallback int) int {
 		return fallback
 	}
 	return val
+}
+
+func toAuthUserResponse(user *domain.User) authUserResponse {
+	return authUserResponse{
+		ID:             user.ID,
+		TenantID:       user.TenantID,
+		Email:          user.Email,
+		Role:           user.Role,
+		Status:         user.Status,
+		EmailVerified:  user.EmailVerified,
+		ApprovalStatus: user.ApprovalStatus,
+		KYCStatus:      user.KYCStatus,
+		CreatedAt:      user.CreatedAt,
+	}
+}
+
+func (h *Handler) accessCookieName() string {
+	name := strings.TrimSpace(h.AccessCookie)
+	if name == "" {
+		return "access_token"
+	}
+	return name
+}
+
+func (h *Handler) csrfCookieName() string {
+	name := strings.TrimSpace(h.CSRFCookie)
+	if name == "" {
+		return "csrf_token"
+	}
+	return name
+}
+
+func (h *Handler) setSessionCookies(w http.ResponseWriter, token string) {
+	ttl := h.JWTTTL
+	if ttl <= 0 {
+		ttl = 30 * time.Minute
+	}
+	csrf := uuid.NewString()
+	maxAge := int(ttl.Seconds())
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     h.accessCookieName(),
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   h.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     h.csrfCookieName(),
+		Value:    csrf,
+		Path:     "/",
+		HttpOnly: false,
+		Secure:   h.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
+	})
+}
+
+func (h *Handler) clearSessionCookies(w http.ResponseWriter) {
+	for _, name := range []string{h.accessCookieName(), h.csrfCookieName()} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			HttpOnly: name == h.accessCookieName(),
+			Secure:   h.CookieSecure,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   -1,
+		})
+	}
 }

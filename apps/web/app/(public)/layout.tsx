@@ -1,6 +1,7 @@
 "use client";
 
 import Header from "../../src/components/Header";
+import { Link } from "../../src/react-router-dom";
 import { useAuth } from "../../src/hooks/useAuth";
 import { useTheme } from "../../src/theme/ThemeProvider";
 
@@ -26,6 +27,14 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       <main>{children}</main>
       <footer className="border-t border-neutral-200 bg-white">
         <div className="mx-auto w-[min(1440px,96vw)] px-4 py-8 md:px-8">
+          <div className="mb-3 flex flex-wrap gap-5 text-sm">
+            <Link to="/about" className="text-neutral-600 no-underline hover:text-brand-primary">
+              About
+            </Link>
+            <Link to="/contact" className="text-neutral-600 no-underline hover:text-brand-primary">
+              Contact
+            </Link>
+          </div>
           {footerText ? <p className="text-sm text-neutral-600">{footerText}</p> : null}
           {footerContactEmail ? (
             <p className="mt-2 text-sm">

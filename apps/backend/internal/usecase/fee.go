@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
@@ -25,6 +26,12 @@ type CreateFeeComponentInput struct {
 }
 
 func (uc *FeeUseCase) CreateComponent(ctx context.Context, in CreateFeeComponentInput) (*domain.FeeComponent, error) {
+	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+		return nil, ErrForbidden
+	}
 	if in.TenantID == uuid.Nil || in.Name == "" || in.Value < 0 {
 		return nil, ErrValidation
 	}
@@ -51,6 +58,12 @@ func (uc *FeeUseCase) CreateComponent(ctx context.Context, in CreateFeeComponent
 }
 
 func (uc *FeeUseCase) UpdateComponent(ctx context.Context, tenantID, componentID uuid.UUID, in CreateFeeComponentInput) (*domain.FeeComponent, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+		return nil, ErrForbidden
+	}
 	current, err := uc.Fees.GetComponentByID(ctx, tenantID, componentID)
 	if err != nil {
 		return nil, err
@@ -76,10 +89,19 @@ func (uc *FeeUseCase) UpdateComponent(ctx context.Context, tenantID, componentID
 }
 
 func (uc *FeeUseCase) ListComponents(ctx context.Context, tenantID uuid.UUID, activeOnly bool) ([]domain.FeeComponent, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return uc.Fees.ListComponents(ctx, tenantID, activeOnly)
 }
 
 func (uc *FeeUseCase) DeactivateComponent(ctx context.Context, tenantID, componentID uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+		return ErrForbidden
+	}
 	return uc.Fees.DeactivateComponent(ctx, tenantID, componentID)
 }
 
@@ -91,6 +113,12 @@ type CreateFeeAssignmentInput struct {
 }
 
 func (uc *FeeUseCase) CreateAssignment(ctx context.Context, in CreateFeeAssignmentInput) (*domain.FeeAssignment, error) {
+	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+		return nil, ErrForbidden
+	}
 	if in.TenantID == uuid.Nil || in.ScopeID == uuid.Nil || in.FeeComponentID == uuid.Nil {
 		return nil, ErrValidation
 	}
@@ -131,6 +159,9 @@ func (uc *FeeUseCase) CreateAssignment(ctx context.Context, in CreateFeeAssignme
 }
 
 func (uc *FeeUseCase) ListAssignments(ctx context.Context, tenantID uuid.UUID, scopeType domain.FeeScopeType, scopeID uuid.UUID) ([]domain.FeeAssignment, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	if scopeID == uuid.Nil {
 		return nil, ErrValidation
 	}
@@ -141,6 +172,12 @@ func (uc *FeeUseCase) ListAssignments(ctx context.Context, tenantID uuid.UUID, s
 }
 
 func (uc *FeeUseCase) DeleteAssignment(ctx context.Context, tenantID, assignmentID uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+		return ErrForbidden
+	}
 	if err := uc.Fees.DeleteAssignment(ctx, tenantID, assignmentID); err != nil {
 		return err
 	}

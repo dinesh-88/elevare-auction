@@ -1,4 +1,4 @@
-export type Role = "ADMIN" | "BIDDER";
+export type Role = "OWNER" | "ADMIN" | "STAFF" | "ACCOUNTING" | "BIDDER";
 export type TenantStatus = "PENDING" | "ACTIVE" | "REJECTED";
 
 export interface User {
@@ -402,8 +402,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const method = (init?.method ?? "GET").toUpperCase();
+  if ((method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") && !headers.has("X-CSRF-Token")) {
+    const csrfToken = readCookie("csrf_token");
+    if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
+  }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "include" });
   const text = await res.text();
   let body: unknown = null;
   if (text) {
@@ -430,7 +435,7 @@ async function requestWithToken<T>(path: string, bearerToken: string, init?: Req
   }
   headers.set("Authorization", `Bearer ${bearerToken}`);
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "include" });
   const text = await res.text();
   let body: unknown = null;
   if (text) {
@@ -454,7 +459,12 @@ async function requestBinary(path: string, init?: RequestInit): Promise<Blob> {
   const headers = new Headers(init?.headers);
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const method = (init?.method ?? "GET").toUpperCase();
+  if ((method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") && !headers.has("X-CSRF-Token")) {
+    const csrfToken = readCookie("csrf_token");
+    if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
+  }
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "include" });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || "Request failed");
@@ -519,7 +529,9 @@ export const api = {
   register: (payload: { email: string; password: string }) =>
     request<JsonRecord>("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   login: (payload: { email: string; password: string }) =>
-    request<{ token: string; user: User }>("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+    request<{ token?: string; user: User }>("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  getSession: () => request<{ user: User }>("/auth/session"),
+  logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
   verifyEmail: (userId: string) =>
     request<JsonRecord>("/auth/verify-email", { method: "POST", body: JSON.stringify({ user_id: userId }) }),
   placeBid: async (..._args: unknown[]) => {
@@ -605,3 +617,15 @@ export const api = {
   platformRejectTenant: (platformToken: string, tenantId: string) =>
     requestWithToken<JsonRecord>(`/platform/admin/tenants/${tenantId}/reject`, platformToken, { method: "PATCH" }),
 };
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}

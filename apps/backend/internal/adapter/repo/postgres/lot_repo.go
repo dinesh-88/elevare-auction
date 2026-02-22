@@ -493,6 +493,21 @@ FOR UPDATE`
 	if in.Amount < minBid {
 		return nil, errors.New("bid amount below minimum increment")
 	}
+	const bidThrottleWindow = time.Second
+	const lastBidQ = `
+SELECT created_at
+FROM lot_bids
+WHERE lot_id = $1 AND user_id = $2
+ORDER BY created_at DESC
+LIMIT 1`
+	var lastBidAt time.Time
+	if err := tx.QueryRow(ctx, lastBidQ, lot.ID, in.UserID).Scan(&lastBidAt); err == nil {
+		if in.Now.Sub(lastBidAt) < bidThrottleWindow {
+			return nil, errors.New("bidding too quickly, please wait a second")
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
 
 	bidID := uuid.New()
 	const insBid = `INSERT INTO lot_bids (id, lot_id, user_id, amount, created_at) VALUES ($1,$2,$3,$4,$5)`
@@ -992,7 +1007,7 @@ func (r *LotRepo) createInvoiceForSettlementTx(
 	now time.Time,
 ) error {
 	var existing uuid.UUID
-	if err := tx.QueryRow(ctx, `SELECT id FROM invoices WHERE lot_id = $1`, lotID).Scan(&existing); err == nil {
+	if err := tx.QueryRow(ctx, `SELECT id FROM invoices WHERE lot_id = $1 AND tenant_id = $2`, lotID, tenantID).Scan(&existing); err == nil {
 		return nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return err
@@ -1019,7 +1034,8 @@ SELECT a.currency
 FROM lots l
 JOIN auctions a ON a.id = l.auction_id
 WHERE l.id = $1
-`, lotID).Scan(&currency); err != nil {
+  AND a.tenant_id = $2
+`, lotID, tenantID).Scan(&currency); err != nil {
 		return err
 	}
 	if currency == "" {

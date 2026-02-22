@@ -6,10 +6,11 @@ import AdminSidebar from "../../src/components/AdminSidebar";
 import { useAuth } from "../../src/hooks/useAuth";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { loading, isAuthenticated, isAdmin } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
+    if (loading) return;
     if (!isAuthenticated) {
       router.replace("/login");
       return;
@@ -17,9 +18,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!isAdmin) {
       router.replace("/");
     }
-  }, [isAdmin, isAuthenticated, router]);
+  }, [loading, isAdmin, isAuthenticated, router]);
 
-  if (!isAuthenticated || !isAdmin) {
+  if (loading || !isAuthenticated || !isAdmin) {
     return null;
   }
 

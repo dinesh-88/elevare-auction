@@ -245,6 +245,7 @@ export default function Site() {
     setError(null);
     setMessage(null);
     try {
+      await api.updateSiteDraft(toSitePayload(branding, content));
       const result = await api.publishSite();
       setContentVersion(result.after_version);
       setMessage(`Published. Version ${result.after_version}.`);

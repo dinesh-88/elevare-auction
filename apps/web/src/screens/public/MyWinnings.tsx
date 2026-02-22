@@ -7,21 +7,22 @@ import { useTheme } from "../../theme/ThemeProvider";
 import { currencySymbol } from "../../utils/currency";
 
 export default function MyWinnings() {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { loading: authLoading, isAuthenticated, isAdmin } = useAuth();
   const { config } = useTheme();
   const [lots, setLots] = useState<Lot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated || isAdmin) return;
+    if (authLoading || !isAuthenticated || isAdmin) return;
     api
       .listMyWinningLots()
       .then(setLots)
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load winning lots"))
       .finally(() => setLoading(false));
-  }, [isAuthenticated, isAdmin]);
+  }, [authLoading, isAuthenticated, isAdmin]);
 
+  if (authLoading) return null;
   if (!isAuthenticated || isAdmin) return <Navigate to="/" replace />;
   const symbol = currencySymbol(config?.default_currency);
 

@@ -26,6 +26,9 @@ type RegisterAssetInput struct {
 }
 
 func (uc *AssetUseCase) Register(ctx context.Context, in RegisterAssetInput) (*domain.TenantAsset, error) {
+	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
+		return nil, err
+	}
 	kind := strings.ToLower(strings.TrimSpace(in.Kind))
 	switch kind {
 	case "logo", "banner", "image":
@@ -48,13 +51,16 @@ func (uc *AssetUseCase) Register(ctx context.Context, in RegisterAssetInput) (*d
 		SizeBytes: in.SizeBytes,
 		MIME:      strings.TrimSpace(in.MIME),
 	}
-	if err := uc.Assets.Create(ctx, item); err != nil {
+	if err := uc.Assets.Create(ctx, in.TenantID, item); err != nil {
 		return nil, err
 	}
 	return item, nil
 }
 
 func (uc *AssetUseCase) List(ctx context.Context, tenantID uuid.UUID, kind string, limit int) ([]domain.TenantAsset, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	kind = strings.ToLower(strings.TrimSpace(kind))
 	if kind != "" && kind != "logo" && kind != "banner" && kind != "image" {
 		return nil, ErrValidation

@@ -65,6 +65,7 @@ func (uc *OnboardingUseCase) PublicSignup(ctx context.Context, in TenantSignupIn
 		Email:          email,
 		PasswordHash:   hash,
 		Role:           domain.RoleAdmin,
+		Status:         domain.UserStatusActive,
 		EmailVerified:  false,
 		ApprovalStatus: domain.ApprovalPending,
 		KYCStatus:      domain.KYCNone,

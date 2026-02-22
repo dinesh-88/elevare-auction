@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
@@ -14,6 +15,12 @@ type AuditUseCase struct {
 }
 
 func (uc *AuditUseCase) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit int) ([]domain.AuditLog, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuditView); err != nil {
+		return nil, ErrForbidden
+	}
 	if tenantID == uuid.Nil {
 		return nil, ErrValidation
 	}
@@ -21,6 +28,12 @@ func (uc *AuditUseCase) ListByTenant(ctx context.Context, tenantID uuid.UUID, li
 }
 
 func (uc *AuditUseCase) ListByEntity(ctx context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit int) ([]domain.AuditLog, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuditView); err != nil {
+		return nil, ErrForbidden
+	}
 	if tenantID == uuid.Nil || entityID == uuid.Nil {
 		return nil, ErrValidation
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
@@ -41,18 +42,33 @@ type CreateAuctionInput struct {
 }
 
 func (uc *AuctionUseCase) ListPublic(ctx context.Context, tenantID uuid.UUID, now time.Time) ([]domain.Auction, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return uc.Auctions.ListPublic(ctx, tenantID, now)
 }
 
 func (uc *AuctionUseCase) ListAdmin(ctx context.Context, tenantID uuid.UUID) ([]domain.Auction, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return uc.Auctions.ListAdmin(ctx, tenantID)
 }
 
 func (uc *AuctionUseCase) Get(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.Auction, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return uc.Auctions.GetByID(ctx, tenantID, auctionID)
 }
 
 func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*domain.Auction, error) {
+	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionCreate); err != nil {
+		return nil, ErrForbidden
+	}
 	if in.Title == "" || !in.EndTime.After(in.StartTime) {
 		return nil, ErrValidation
 	}
@@ -105,6 +121,12 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 }
 
 func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auctionID uuid.UUID) (*domain.Auction, error) {
+	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionUpdate); err != nil {
+		return nil, ErrForbidden
+	}
 	if in.Title == "" || !in.EndTime.After(in.StartTime) {
 		return nil, ErrValidation
 	}
@@ -151,10 +173,22 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 }
 
 func (uc *AuctionUseCase) Delete(ctx context.Context, tenantID, auctionID uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionUpdate); err != nil {
+		return ErrForbidden
+	}
 	return uc.Auctions.Delete(ctx, tenantID, auctionID)
 }
 
 func (uc *AuctionUseCase) Start(ctx context.Context, tenantID, auctionID uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionStart); err != nil {
+		return ErrForbidden
+	}
 	if err := uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionLive); err != nil {
 		return err
 	}
@@ -179,6 +213,12 @@ func (uc *AuctionUseCase) Start(ctx context.Context, tenantID, auctionID uuid.UU
 }
 
 func (uc *AuctionUseCase) Pause(ctx context.Context, tenantID, auctionID uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionEnd); err != nil {
+		return ErrForbidden
+	}
 	if err := uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionPaused); err != nil {
 		return err
 	}
@@ -187,6 +227,12 @@ func (uc *AuctionUseCase) Pause(ctx context.Context, tenantID, auctionID uuid.UU
 }
 
 func (uc *AuctionUseCase) End(ctx context.Context, tenantID, auctionID uuid.UUID) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionEnd); err != nil {
+		return ErrForbidden
+	}
 	if err := uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionEnded); err != nil {
 		return err
 	}

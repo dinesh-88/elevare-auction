@@ -90,7 +90,7 @@ func (r *InvoiceRepo) GenerateForLot(ctx context.Context, tenantID, lotID uuid.U
 	defer tx.Rollback(ctx)
 
 	var existingID uuid.UUID
-	if err := tx.QueryRow(ctx, `SELECT id FROM invoices WHERE lot_id = $1`, lotID).Scan(&existingID); err == nil {
+	if err := tx.QueryRow(ctx, `SELECT id FROM invoices WHERE lot_id = $1 AND tenant_id = $2`, lotID, tenantID).Scan(&existingID); err == nil {
 		inv, err := scanInvoice(tx.QueryRow(ctx, `
 SELECT i.id, i.lot_id, i.tenant_id, i.winner_user_id,
        i.invoice_number, i.issued_at, i.due_date, i.currency,

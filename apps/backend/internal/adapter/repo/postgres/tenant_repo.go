@@ -85,8 +85,8 @@ INSERT INTO tenants (
 	}
 
 	const insUser = `
-INSERT INTO users (id, tenant_id, email, password_hash, role, email_verified, approval_status, kyc_status, created_at)
-VALUES ($1,$2,$3,$4,'ADMIN',$5,$6,'NONE',now())`
+INSERT INTO users (id, tenant_id, email, password_hash, role, status, email_verified, approval_status, kyc_status, created_at)
+VALUES ($1,$2,$3,$4,'ADMIN','ACTIVE',$5,$6,'NONE',now())`
 	if _, err := tx.Exec(ctx, insUser,
 		in.AdminUserID, in.TenantID, in.AdminEmail, in.AdminPasswordHash, in.AdminEmailVerified, in.AdminApprovalStatus,
 	); err != nil {

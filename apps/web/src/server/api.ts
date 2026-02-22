@@ -14,14 +14,19 @@ async function fetchJSON<T>(path: string): Promise<T> {
   const h = await headers();
   const host = h.get("host") ?? "";
   const protocol = h.get("x-forwarded-proto") ?? "http";
+  const cookie = h.get("cookie") ?? "";
   const url = `${resolveApiBase()}${path}`;
+  const requestHeaders: HeadersInit = {
+    Host: host,
+    "X-Forwarded-Proto": protocol,
+    Accept: "application/json",
+  };
+  if (cookie) {
+    requestHeaders.Cookie = cookie;
+  }
   const response = await fetch(url, {
     cache: "no-store",
-    headers: {
-      Host: host,
-      "X-Forwarded-Proto": protocol,
-      Accept: "application/json",
-    },
+    headers: requestHeaders,
   });
   if (!response.ok) {
     throw new Error(`${response.status}: failed to fetch ${path}`);
