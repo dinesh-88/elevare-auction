@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
@@ -124,6 +125,7 @@ func (h *Handler) PublicConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name":                   tenant.Name,
 		"branding":               tenant.Branding,
+		"default_currency":       tenant.DefaultCurrency,
 		"require_admin_approval": tenant.RequireAdminApproval,
 		"require_kyc":            tenant.RequireKYC,
 	})
@@ -337,6 +339,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	var req struct {
+		Currency                string               `json:"currency"`
 		Title                   string               `json:"title"`
 		Description             string               `json:"description"`
 		Metadata                json.RawMessage      `json:"metadata"`
@@ -359,6 +362,7 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := h.Auction.Create(r.Context(), usecase.CreateAuctionInput{
 		TenantID:                tenant.ID,
+		Currency:                req.Currency,
 		Title:                   req.Title,
 		Description:             req.Description,
 		Metadata:                req.Metadata,
@@ -551,6 +555,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		Currency                string               `json:"currency"`
 		Title                   string               `json:"title"`
 		Description             string               `json:"description"`
 		Metadata                json.RawMessage      `json:"metadata"`
@@ -573,6 +578,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := h.Auction.Update(r.Context(), usecase.CreateAuctionInput{
 		TenantID:                tenant.ID,
+		Currency:                req.Currency,
 		Title:                   req.Title,
 		Description:             req.Description,
 		Metadata:                req.Metadata,
@@ -675,6 +681,53 @@ func (h *Handler) ApproveBidder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "APPROVED"})
+}
+
+func (h *Handler) RejectBidder(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Bidder.Reject(r.Context(), tenant.ID, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "REJECTED"})
+}
+
+func (h *Handler) GetTenantSettings(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	current, err := h.Onboarding.Tenants.GetByID(r.Context(), tenant.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"default_currency": current.DefaultCurrency,
+	})
+}
+
+func (h *Handler) UpdateTenantSettings(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	var req struct {
+		DefaultCurrency string `json:"default_currency"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	currency := strings.ToUpper(strings.TrimSpace(req.DefaultCurrency))
+	if len(currency) != 3 {
+		http.Error(w, "invalid currency", http.StatusBadRequest)
+		return
+	}
+	if err := h.Onboarding.Tenants.UpdateDefaultCurrency(r.Context(), tenant.ID, currency); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"default_currency": currency})
 }
 
 func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {

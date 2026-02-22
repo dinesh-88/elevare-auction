@@ -18,16 +18,16 @@ type AuctionRepo struct {
 func (r *AuctionRepo) Create(ctx context.Context, auction *domain.Auction) error {
 	const q = `
 INSERT INTO auctions (
-  id, tenant_id, title, description, metadata,
+  id, tenant_id, currency, title, description, metadata,
   start_time, end_time, status, allow_manual_start, allow_manual_pause, allow_manual_end,
   auto_extend_enabled, auction_mode, auto_progress_enabled, lot_duration_seconds, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
 ) VALUES (
-  $1,$2,$3,$4,$5,
-  $6,$7,$8,$9,$10,$11,
-  $12,$13,$14,$15,$16,$17,$18,now()
+  $1,$2,$3,$4,$5,$6,
+  $7,$8,$9,$10,$11,$12,
+  $13,$14,$15,$16,$17,$18,$19,now()
 )`
 	_, err := r.DB.Exec(ctx, q,
-		auction.ID, auction.TenantID, auction.Title, auction.Description, auction.Metadata,
+		auction.ID, auction.TenantID, auction.Currency, auction.Title, auction.Description, auction.Metadata,
 		auction.StartTime, auction.EndTime, auction.Status,
 		auction.AllowManualStart, auction.AllowManualPause, auction.AllowManualEnd,
 		auction.AutoExtendEnabled, auction.AuctionMode, auction.AutoProgressEnabled, auction.LotDurationSeconds,
@@ -39,7 +39,7 @@ INSERT INTO auctions (
 func scanAuction(row pgx.Row) (*domain.Auction, error) {
 	var a domain.Auction
 	err := row.Scan(
-		&a.ID, &a.TenantID, &a.Title, &a.Description, &a.Metadata,
+		&a.ID, &a.TenantID, &a.Currency, &a.Title, &a.Description, &a.Metadata,
 		&a.StartingPrice, &a.CurrentPrice, &a.ReservePrice, &a.MinIncrement,
 		&a.StartTime, &a.EndTime, &a.Status,
 		&a.AllowManualStart, &a.AllowManualPause, &a.AllowManualEnd,
@@ -66,7 +66,7 @@ LEFT JOIN LATERAL (
 
 func (r *AuctionRepo) ListPublic(ctx context.Context, tenantID uuid.UUID, now time.Time) ([]domain.Auction, error) {
 	q := `
-SELECT a.id, a.tenant_id, a.title, a.description, a.metadata,
+SELECT a.id, a.tenant_id, a.currency, a.title, a.description, a.metadata,
        COALESCE(la.min_starting_price, 0) AS starting_price,
        COALESCE(la.max_current_price, 0) AS current_price,
        la.max_reserve_price AS reserve_price,
@@ -95,7 +95,7 @@ ORDER BY a.start_time ASC`
 
 func (r *AuctionRepo) ListAdmin(ctx context.Context, tenantID uuid.UUID) ([]domain.Auction, error) {
 	q := `
-SELECT a.id, a.tenant_id, a.title, a.description, a.metadata,
+SELECT a.id, a.tenant_id, a.currency, a.title, a.description, a.metadata,
        COALESCE(la.min_starting_price, 0) AS starting_price,
        COALESCE(la.max_current_price, 0) AS current_price,
        la.max_reserve_price AS reserve_price,
@@ -124,7 +124,7 @@ ORDER BY a.created_at DESC`
 
 func (r *AuctionRepo) GetByID(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.Auction, error) {
 	q := `
-SELECT a.id, a.tenant_id, a.title, a.description, a.metadata,
+SELECT a.id, a.tenant_id, a.currency, a.title, a.description, a.metadata,
        COALESCE(la.min_starting_price, 0) AS starting_price,
        COALESCE(la.max_current_price, 0) AS current_price,
        la.max_reserve_price AS reserve_price,
@@ -144,25 +144,26 @@ WHERE a.tenant_id = $1 AND a.id = $2`
 func (r *AuctionRepo) Update(ctx context.Context, auction *domain.Auction) error {
 	const q = `
 UPDATE auctions
-SET title = $3,
-    description = $4,
-    metadata = $5,
-    start_time = $6,
-    end_time = $7,
-    allow_manual_start = $8,
-    allow_manual_pause = $9,
-    allow_manual_end = $10,
-    auto_extend_enabled = $11,
-    auction_mode = $12,
-    auto_progress_enabled = $13,
-    lot_duration_seconds = $14,
-    sniping_window_seconds = $15,
-    sniping_extension_seconds = $16,
-    bid_visibility = $17
+SET currency = $3,
+    title = $4,
+    description = $5,
+    metadata = $6,
+    start_time = $7,
+    end_time = $8,
+    allow_manual_start = $9,
+    allow_manual_pause = $10,
+    allow_manual_end = $11,
+    auto_extend_enabled = $12,
+    auction_mode = $13,
+    auto_progress_enabled = $14,
+    lot_duration_seconds = $15,
+    sniping_window_seconds = $16,
+    sniping_extension_seconds = $17,
+    bid_visibility = $18
 WHERE tenant_id = $1 AND id = $2`
 	ct, err := r.DB.Exec(ctx, q,
 		auction.TenantID, auction.ID,
-		auction.Title, auction.Description,
+		auction.Currency, auction.Title, auction.Description,
 		auction.Metadata,
 		auction.StartTime, auction.EndTime,
 		auction.AllowManualStart, auction.AllowManualPause, auction.AllowManualEnd,

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -111,13 +112,14 @@ WHERE i.id = $1`, existingID))
 	var winnerUserID *uuid.UUID
 	var totalAmount *int64
 	var snapshot []byte
+	var currency string
 	if err := tx.QueryRow(ctx, `
-SELECT l.status, l.winner_user_id, l.total_due, l.financial_snapshot
+SELECT l.status, l.winner_user_id, l.total_due, l.financial_snapshot, a.currency
 FROM lots l
 JOIN auctions a ON a.id = l.auction_id
 WHERE l.id = $1
   AND a.tenant_id = $2
-FOR UPDATE`, lotID, tenantID).Scan(&status, &winnerUserID, &totalAmount, &snapshot); err != nil {
+FOR UPDATE`, lotID, tenantID).Scan(&status, &winnerUserID, &totalAmount, &snapshot, &currency); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.New("lot not found")
 		}
@@ -128,6 +130,17 @@ FOR UPDATE`, lotID, tenantID).Scan(&status, &winnerUserID, &totalAmount, &snapsh
 	}
 	if winnerUserID == nil || totalAmount == nil || len(snapshot) == 0 {
 		return nil, errors.New("lot has no winner settlement snapshot")
+	}
+	if currency == "" {
+		currency = "USD"
+	}
+	snapshotWithCurrency := append([]byte(nil), snapshot...)
+	var snapMap map[string]any
+	if err := json.Unmarshal(snapshotWithCurrency, &snapMap); err == nil {
+		snapMap["currency"] = currency
+		if b, err := json.Marshal(snapMap); err == nil {
+			snapshotWithCurrency = b
+		}
 	}
 
 	var prefix string
@@ -153,9 +166,9 @@ INSERT INTO invoices (
   total_amount, snapshot, status, created_at
 ) VALUES (
   $1,$2,$3,$4,
-  $5,$6,$7,'USD',
-  $8,$9,'ISSUED',now()
-)`, invoiceID, lotID, tenantID, *winnerUserID, invoiceNumber, now, dueDate, *totalAmount, snapshot); err != nil {
+  $5,$6,$7,$8,
+  $9,$10,'ISSUED',now()
+)`, invoiceID, lotID, tenantID, *winnerUserID, invoiceNumber, now, dueDate, currency, *totalAmount, snapshotWithCurrency); err != nil {
 		return nil, err
 	}
 

@@ -3,8 +3,9 @@
 ## Structure
 
 - `apps/backend`: Go API (Chi + PostgreSQL + pgx + JWT + Argon2id + WebSockets)
-- `apps/frontend`: React + Vite + TypeScript app (public + admin)
-- `docker-compose.yml`: local Postgres + backend API + migrations
+- `apps/web`: Next.js app (App Router, SSR-ready public + admin)
+- `apps/frontend`: legacy Vite app kept temporarily during migration
+- `docker-compose.yml`: local Postgres + backend API + migrations + Next.js web
 
 ## Backend Local Run
 
@@ -54,20 +55,21 @@ S3_PUBLIC_BASE_URL=https://your-bucket.s3.amazonaws.com
 S3_USE_PATH_STYLE=false
 ```
 
-## Frontend Local Run
+## Web (Next.js) Local Run
 
 ```bash
-cd apps/frontend
+cd apps/web
 npm install
 npm run dev
 ```
 
-Frontend env (`apps/frontend/.env`):
+Web env (`apps/web/.env.local`):
 
-- `VITE_API_BASE_URL=http://localhost:8080`
-- `VITE_WS_BASE_URL=ws://localhost:8080`
+- `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080`
+- `NEXT_PUBLIC_WS_BASE_URL=ws://localhost:8080`
+- `API_BASE_URL=http://localhost:8080`
 
-Frontend onboarding routes:
+Web onboarding routes:
 
 - Public tenant signup UI: `http://localhost:5173/signup`
 - Platform review UI: `http://localhost:5173/platform/review`
@@ -81,6 +83,7 @@ docker compose up --build
 Services:
 
 - API: `http://localhost:8080`
+- Web: `http://localhost:5173`
 - Swagger UI: `http://localhost:8080/swagger/index.html`
 - Postgres: `localhost:5432`
 - DB name: `elevare-auction`
@@ -102,6 +105,16 @@ docker compose down -v
 ```bash
 migrate -path apps/backend/migrations -database "$DATABASE_URL" up
 ```
+
+## Seed Demo Data
+
+From `apps/backend`:
+
+```bash
+DATABASE_URL="postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable" go run ./cmd/seed
+```
+
+Creates a demo tenant, admin/bidders, auctions/lots/bids, fee rules, and a sample invoice with image URLs.
 
 ## Tenant Onboarding Flow (Self-Serve)
 

@@ -10,9 +10,11 @@ import (
 
 type TenantRepository interface {
 	GetByHost(ctx context.Context, host string) (*domain.Tenant, error)
+	GetByID(ctx context.Context, tenantID uuid.UUID) (*domain.Tenant, error)
 	CreatePendingTenantWithAdmin(ctx context.Context, in CreatePendingTenantWithAdminInput) error
 	ListByStatus(ctx context.Context, status domain.TenantStatus) ([]domain.Tenant, error)
 	UpdateStatusAndAdminApproval(ctx context.Context, tenantID uuid.UUID, tenantStatus domain.TenantStatus, adminApproval domain.ApprovalStatus) error
+	UpdateDefaultCurrency(ctx context.Context, tenantID uuid.UUID, currency string) error
 }
 
 type UserRepository interface {

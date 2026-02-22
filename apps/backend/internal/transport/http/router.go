@@ -21,7 +21,11 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173"},
+		AllowedOrigins: []string{"http://localhost:5173", "http://127.0.0.1:5173"},
+		AllowOriginFunc: func(_ *http.Request, origin string) bool {
+			return strings.HasPrefix(origin, "http://") && strings.HasSuffix(origin, ".localhost:5173") ||
+				strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".localhost:5173")
+		},
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
@@ -79,6 +83,9 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Use(authMW.RequireAuth)
 			r.Use(middleware.RequireRole(domain.RoleAdmin))
 			r.Get("/auctions", h.ListAdminAuctions)
+			r.Get("/settings", h.GetTenantSettings)
+			r.Patch("/settings", h.UpdateTenantSettings)
+			r.Post("/settings", h.UpdateTenantSettings)
 			r.Post("/auctions", h.CreateAuction)
 			r.Post("/auctions/{auctionId}/lots", h.CreateLot)
 			r.Post("/auctions/{auctionId}/reorder-lots", h.ReorderLots)
@@ -104,6 +111,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Patch("/invoices/{invoiceId}/status", h.UpdateInvoiceStatus)
 			r.Get("/bidders", h.ListBidders)
 			r.Patch("/bidders/{id}/approve", h.ApproveBidder)
+			r.Patch("/bidders/{id}/reject", h.RejectBidder)
 		})
 	})
 

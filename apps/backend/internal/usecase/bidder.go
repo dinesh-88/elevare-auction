@@ -19,3 +19,7 @@ func (uc *BidderUseCase) List(ctx context.Context, tenantID uuid.UUID) ([]domain
 func (uc *BidderUseCase) Approve(ctx context.Context, tenantID, userID uuid.UUID) error {
 	return uc.Users.UpdateApproval(ctx, tenantID, userID, domain.ApprovalApproved)
 }
+
+func (uc *BidderUseCase) Reject(ctx context.Context, tenantID, userID uuid.UUID) error {
+	return uc.Users.UpdateApproval(ctx, tenantID, userID, domain.ApprovalRejected)
+}

@@ -69,6 +69,7 @@ type Tenant struct {
 	Name                   string
 	Subdomain              string
 	CustomDomain           *string
+	DefaultCurrency        string
 	Status                 TenantStatus
 	Country                string
 	EstimatedAuctionVolume *int
@@ -93,6 +94,7 @@ type User struct {
 type Auction struct {
 	ID                      uuid.UUID
 	TenantID                uuid.UUID
+	Currency                string
 	Title                   string
 	Description             string
 	Metadata                json.RawMessage

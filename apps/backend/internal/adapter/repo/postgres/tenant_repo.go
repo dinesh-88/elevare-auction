@@ -18,7 +18,7 @@ type TenantRepo struct {
 func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 	var t domain.Tenant
 	err := row.Scan(
-		&t.ID, &t.Name, &t.Subdomain, &t.CustomDomain, &t.Status,
+		&t.ID, &t.Name, &t.Subdomain, &t.CustomDomain, &t.DefaultCurrency, &t.Status,
 		&t.Country, &t.EstimatedAuctionVolume, &t.Branding,
 		&t.RequireAdminApproval, &t.RequireKYC, &t.CreatedAt,
 	)
@@ -30,7 +30,7 @@ func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 
 func (r *TenantRepo) GetByHost(ctx context.Context, host string) (*domain.Tenant, error) {
 	const q = `
-SELECT id, name, subdomain, custom_domain, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
+SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
 FROM tenants
 WHERE (subdomain = split_part($1, '.', 1) OR custom_domain = $1)
   AND status = 'ACTIVE'
@@ -45,6 +45,19 @@ LIMIT 1`
 	return t, nil
 }
 
+func (r *TenantRepo) GetByID(ctx context.Context, tenantID uuid.UUID) (*domain.Tenant, error) {
+	const q = `
+SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
+FROM tenants
+WHERE id = $1
+LIMIT 1`
+	t, err := scanTenant(r.DB.QueryRow(ctx, q, tenantID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errors.New("tenant not found")
+	}
+	return t, err
+}
+
 func (r *TenantRepo) CreatePendingTenantWithAdmin(ctx context.Context, in port.CreatePendingTenantWithAdminInput) error {
 	tx, err := r.DB.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -54,8 +67,8 @@ func (r *TenantRepo) CreatePendingTenantWithAdmin(ctx context.Context, in port.C
 
 	const insTenant = `
 INSERT INTO tenants (
-  id, name, subdomain, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
-) VALUES ($1,$2,$3,'PENDING',$4,$5,'{}'::jsonb,$6,$7,now())`
+  id, name, subdomain, default_currency, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
+) VALUES ($1,$2,$3,'USD','PENDING',$4,$5,'{}'::jsonb,$6,$7,now())`
 	if _, err := tx.Exec(ctx, insTenant,
 		in.TenantID, in.TenantName, in.Subdomain, in.Country, in.EstimatedAuctionVolume, in.RequireAdminApproval, in.RequireKYC,
 	); err != nil {
@@ -76,7 +89,7 @@ VALUES ($1,$2,$3,$4,'ADMIN',$5,$6,'NONE',now())`
 
 func (r *TenantRepo) ListByStatus(ctx context.Context, status domain.TenantStatus) ([]domain.Tenant, error) {
 	const q = `
-SELECT id, name, subdomain, custom_domain, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
+SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
 FROM tenants
 WHERE status = $1
 ORDER BY created_at DESC`
@@ -119,4 +132,16 @@ func (r *TenantRepo) UpdateStatusAndAdminApproval(ctx context.Context, tenantID 
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (r *TenantRepo) UpdateDefaultCurrency(ctx context.Context, tenantID uuid.UUID, currency string) error {
+	const q = `UPDATE tenants SET default_currency = $2 WHERE id = $1`
+	ct, err := r.DB.Exec(ctx, q, tenantID, currency)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("tenant not found")
+	}
+	return nil
 }

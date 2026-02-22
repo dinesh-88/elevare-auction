@@ -52,5 +52,25 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  web:
+    image: node:20-alpine
+    container_name: elevare-web
+    working_dir: /app
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+      NEXT_PUBLIC_API_PORT: 8080
+      NEXT_PUBLIC_WS_BASE_URL: ws://localhost:8080
+      NEXT_PUBLIC_WS_PORT: 8080
+      API_BASE_URL: http://api:8080
+    volumes:
+      - ./apps/web:/app
+    command: sh -lc "npm install && npm run dev"
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+
 volumes:
   postgres_data:

@@ -891,6 +891,26 @@ RETURNING invoice_prefix, invoice_counter
 	}
 	invoiceNumber := fmt.Sprintf("%s-%04d-%06d", prefix, now.Year(), counter)
 	dueDate := now.AddDate(0, 0, 7)
+	var currency string
+	if err := tx.QueryRow(ctx, `
+SELECT a.currency
+FROM lots l
+JOIN auctions a ON a.id = l.auction_id
+WHERE l.id = $1
+`, lotID).Scan(&currency); err != nil {
+		return err
+	}
+	if currency == "" {
+		currency = "USD"
+	}
+	snapshotWithCurrency := append([]byte(nil), snapshot...)
+	var snapMap map[string]any
+	if err := json.Unmarshal(snapshotWithCurrency, &snapMap); err == nil {
+		snapMap["currency"] = currency
+		if b, err := json.Marshal(snapMap); err == nil {
+			snapshotWithCurrency = b
+		}
+	}
 
 	const q = `
 INSERT INTO invoices (
@@ -904,8 +924,8 @@ INSERT INTO invoices (
 )`
 	_, err := tx.Exec(ctx, q,
 		uuid.New(), lotID, tenantID, winnerUserID,
-		invoiceNumber, now, dueDate, "USD",
-		totalAmount, snapshot,
+		invoiceNumber, now, dueDate, currency,
+		totalAmount, snapshotWithCurrency,
 	)
 	return err
 }

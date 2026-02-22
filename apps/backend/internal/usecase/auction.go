@@ -3,6 +3,8 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
@@ -12,11 +14,13 @@ import (
 
 type AuctionUseCase struct {
 	Auctions    port.AuctionRepository
+	Tenants     port.TenantRepository
 	Broadcaster port.Broadcaster
 }
 
 type CreateAuctionInput struct {
 	TenantID                uuid.UUID
+	Currency                string
 	Title                   string
 	Description             string
 	Metadata                json.RawMessage
@@ -50,6 +54,17 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 	if in.Title == "" || !in.EndTime.After(in.StartTime) {
 		return nil, ErrValidation
 	}
+	currency := strings.ToUpper(strings.TrimSpace(in.Currency))
+	if currency == "" {
+		tenant, err := uc.Tenants.GetByID(ctx, in.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		currency = strings.ToUpper(strings.TrimSpace(tenant.DefaultCurrency))
+	}
+	if len(currency) != 3 {
+		return nil, ErrValidation
+	}
 	status := domain.AuctionScheduled
 	if in.AllowManualStart {
 		status = domain.AuctionDraft
@@ -57,6 +72,7 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 	auction := &domain.Auction{
 		ID:                      uuid.New(),
 		TenantID:                in.TenantID,
+		Currency:                currency,
 		Title:                   in.Title,
 		Description:             in.Description,
 		Metadata:                in.Metadata,
@@ -94,6 +110,17 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 	if err != nil {
 		return nil, err
 	}
+	currency := strings.ToUpper(strings.TrimSpace(in.Currency))
+	if currency == "" {
+		currency = current.Currency
+	}
+	if len(currency) != 3 {
+		return nil, ErrValidation
+	}
+	if current.Status == domain.AuctionLive && currency != current.Currency {
+		return nil, errors.New("currency cannot be changed while auction is live")
+	}
+	current.Currency = currency
 	current.Title = in.Title
 	current.Description = in.Description
 	current.Metadata = in.Metadata

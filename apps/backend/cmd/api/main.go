@@ -43,7 +43,7 @@ func main() {
 	hub := wsadapter.NewHub()
 
 	authUC := &usecase.AuthUseCase{Users: userRepo, Hasher: hasher, Tokens: jwtSvc}
-	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Broadcaster: hub}
+	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Tenants: tenantRepo, Broadcaster: hub}
 	lotUC := &usecase.LotUseCase{Lots: lotRepo, Broadcaster: hub}
 	feeUC := &usecase.FeeUseCase{Fees: feeRepo}
 	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo}
