@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { MoreHorizontal } from "lucide-react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { api, type Auction } from "../../api/client";
 import AuctionForm, { fromAuction, toPayload, type AuctionFormState } from "../../components/admin/AuctionForm";
@@ -12,6 +14,7 @@ export default function Auctions() {
   const [form, setForm] = useState<AuctionFormState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [openMenu, setOpenMenu] = useState<{ auctionID: string; x: number; y: number } | null>(null);
 
   const selectedAuction = useMemo(() => auctions.find((a) => a.id === selectedId) ?? null, [auctions, selectedId]);
 
@@ -34,6 +37,30 @@ export default function Auctions() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-auction-menu]") || target.closest("[data-auction-menu-trigger]")) return;
+      setOpenMenu(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenMenu(null);
+    };
+    const onViewportChange = () => setOpenMenu(null);
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onViewportChange, true);
+    window.addEventListener("resize", onViewportChange);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onViewportChange, true);
+      window.removeEventListener("resize", onViewportChange);
+    };
+  }, [openMenu]);
 
   const setStatus = async (action: "start" | "pause" | "end", id: string) => {
     try {
@@ -126,12 +153,6 @@ export default function Auctions() {
                   <Link className="btn-brand" to={`/admin/auctions/${a.id}/lots`}>
                     Lots
                   </Link>
-                  <Link className="btn-link-brand" to={`/admin/auctions/${a.id}/financial-rules`}>
-                    Financial Rules
-                  </Link>
-                  <ElevareButton variant="secondary" onClick={() => startEdit(a)}>
-                    Edit
-                  </ElevareButton>
                   <ElevareButton onClick={() => setStatus("start", a.id)}>
                     Start
                   </ElevareButton>
@@ -141,9 +162,28 @@ export default function Auctions() {
                   <ElevareButton variant="secondary" onClick={() => setStatus("end", a.id)}>
                     End
                   </ElevareButton>
-                  <ElevareButton variant="secondary" onClick={() => removeAuction(a.id)}>
-                    Delete
-                  </ElevareButton>
+                  <div>
+                    <button
+                      type="button"
+                      data-auction-menu-trigger="true"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 text-neutral-700 transition hover:bg-neutral-100"
+                      onClick={(event) => {
+                        if (openMenu?.auctionID === a.id) {
+                          setOpenMenu(null);
+                          return;
+                        }
+                        const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                        setOpenMenu({
+                          auctionID: a.id,
+                          x: Math.max(8, Math.min(rect.right - 176, window.innerWidth - 184)),
+                          y: Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 220)),
+                        });
+                      }}
+                      aria-label="More actions"
+                    >
+                      <MoreHorizontal size={16} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -176,6 +216,59 @@ export default function Auctions() {
           </div>
         </div>
       ) : null}
+      {openMenu
+        ? createPortal(
+            <div
+              data-auction-menu="true"
+              className="fixed z-[1000] w-44 rounded-md border border-neutral-200 bg-white p-1 shadow-lg"
+              style={{ left: openMenu.x, top: openMenu.y }}
+            >
+              <Link
+                className="block rounded px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
+                to={`/admin/auctions/${openMenu.auctionID}/settlement`}
+                onClick={() => setOpenMenu(null)}
+              >
+                Settlement
+              </Link>
+              <Link
+                className="block rounded px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
+                to={`/admin/auctions/${openMenu.auctionID}/financial-rules`}
+                onClick={() => setOpenMenu(null)}
+              >
+                Financial Rules
+              </Link>
+              <Link
+                className="block rounded px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
+                to={`/admin/auctions/${openMenu.auctionID}/settings`}
+                onClick={() => setOpenMenu(null)}
+              >
+                Settings
+              </Link>
+              <button
+                type="button"
+                className="block w-full rounded px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100"
+                onClick={() => {
+                  const target = auctions.find((item) => item.id === openMenu.auctionID);
+                  if (target) startEdit(target);
+                  setOpenMenu(null);
+                }}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                onClick={() => {
+                  void removeAuction(openMenu.auctionID);
+                  setOpenMenu(null);
+                }}
+              >
+                Delete
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
     </section>
   );
 }

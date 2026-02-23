@@ -14,6 +14,7 @@ import (
 type LotUseCase struct {
 	Lots        port.LotRepository
 	Broadcaster port.Broadcaster
+	Notifier    *NotificationService
 }
 
 type CreateLotInput struct {
@@ -133,8 +134,28 @@ func (uc *LotUseCase) End(ctx context.Context, tenantID, lotID uuid.UUID, now ti
 	if err := authz.Authorize(ctx, domain.PermissionLotEnd); err != nil {
 		return ErrForbidden
 	}
-	if err := uc.Lots.End(ctx, tenantID, lotID, now); err != nil {
+	settlement, err := uc.Lots.End(ctx, tenantID, lotID, now)
+	if err != nil {
 		return err
+	}
+	if uc.Notifier != nil && settlement != nil && settlement.WinnerUserID != nil && settlement.HammerPrice != nil {
+		link := "/lots/" + settlement.LotID.String()
+		err := uc.Notifier.Emit(ctx, domain.NotificationEvent{
+			TenantID:         tenantID,
+			EventType:        domain.NotificationEventLotWon,
+			RecipientUserIDs: []uuid.UUID{*settlement.WinnerUserID},
+			Payload: map[string]any{
+				"auction_title": settlement.AuctionTitle,
+				"lot_title":     settlement.LotTitle,
+				"lot_id":        settlement.LotID.String(),
+				"hammer":        *settlement.HammerPrice,
+				"link":          link,
+				"dedupe_ref":    "lot_won:" + settlement.LotID.String(),
+			},
+		})
+		if err != nil {
+			return err
+		}
 	}
 	uc.Broadcaster.BroadcastLotStatus(ctx, lotID, domain.LotEnded)
 	return nil
@@ -169,7 +190,29 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 	if err != nil {
 		return nil, err
 	}
+	if uc.Notifier != nil && res.PreviousHighestBidder != nil && *res.PreviousHighestBidder != in.UserID {
+		link := "/lots/" + res.Lot.ID.String()
+		if err := uc.Notifier.Emit(ctx, domain.NotificationEvent{
+			TenantID:         in.TenantID,
+			EventType:        domain.NotificationEventOutbidded,
+			RecipientUserIDs: []uuid.UUID{*res.PreviousHighestBidder},
+			Payload: map[string]any{
+				"auction_title": res.AuctionTitle,
+				"lot_title":     res.Lot.Title,
+				"lot_id":        res.Lot.ID.String(),
+				"amount":        res.Bid.Amount,
+				"bid_id":        res.Bid.ID.String(),
+				"link":          link,
+				"dedupe_ref":    "outbid:" + res.Bid.ID.String() + ":" + res.PreviousHighestBidder.String(),
+			},
+		}); err != nil {
+			return nil, err
+		}
+	}
 	uc.Broadcaster.BroadcastLotBid(ctx, res.Lot.ID, res.Bid, res.Lot.CurrentPrice, res.Lot.EndedAt)
+	if res.WasExtended && res.ExtensionEndTime != nil {
+		uc.Broadcaster.BroadcastLotExtended(ctx, res.Lot.ID, *res.ExtensionEndTime)
+	}
 	return res, nil
 }
 

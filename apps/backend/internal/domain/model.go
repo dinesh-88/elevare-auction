@@ -258,6 +258,7 @@ type Bid struct {
 	LotID     *uuid.UUID
 	UserID    uuid.UUID
 	Amount    int64
+	MaxBid    *int64
 	CreatedAt time.Time
 }
 
@@ -269,9 +270,18 @@ const (
 	InvoiceCancelled InvoiceStatus = "CANCELLED"
 )
 
+type InvoicePaymentStatus string
+
+const (
+	InvoicePaymentUnpaid    InvoicePaymentStatus = "UNPAID"
+	InvoicePaymentPaid      InvoicePaymentStatus = "PAID"
+	InvoicePaymentCancelled InvoicePaymentStatus = "CANCELLED"
+)
+
 type Invoice struct {
 	ID            uuid.UUID
 	LotID         uuid.UUID
+	AuctionID     uuid.UUID
 	TenantID      uuid.UUID
 	WinnerUserID  uuid.UUID
 	InvoiceNumber string
@@ -279,6 +289,15 @@ type Invoice struct {
 	DueDate       *time.Time
 	Currency      string
 	TotalAmount   int64
+	HammerMinor   int64
+	FeesMinor     int64
+	TaxMinor      int64
+	TotalDueMinor int64
+	PaymentStatus InvoicePaymentStatus
+	PaidAt        *time.Time
+	CancelledAt   *time.Time
+	PaymentRef    *string
+	CancelReason  *string
 	Snapshot      json.RawMessage
 	Status        InvoiceStatus
 	CreatedAt     time.Time
@@ -286,4 +305,37 @@ type Invoice struct {
 	LotNumber    string
 	LotTitle     string
 	AuctionTitle string
+}
+
+type AuctionSettlementSummary struct {
+	AuctionID        uuid.UUID
+	Currency         string
+	InvoiceCount     int64
+	PaidCount        int64
+	UnpaidCount      int64
+	CancelledCount   int64
+	TotalHammerMinor int64
+	TotalFeesMinor   int64
+	TotalTaxMinor    int64
+	TotalDueMinor    int64
+	TotalPaidMinor   int64
+	OutstandingMinor int64
+}
+
+type SettlementInvoiceRow struct {
+	ID               uuid.UUID
+	InvoiceNumber    string
+	BidderName       string
+	BidderEmail      string
+	LotSummary       string
+	HammerMinor      int64
+	FeesMinor        int64
+	TaxMinor         int64
+	TotalDueMinor    int64
+	Currency         string
+	PaymentStatus    InvoicePaymentStatus
+	IssuedAt         time.Time
+	PaidAt           *time.Time
+	PaymentReference *string
+	CancelReason     *string
 }

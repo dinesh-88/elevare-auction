@@ -24,6 +24,7 @@ type Handler struct {
 	Invoice      *usecase.InvoiceUseCase
 	Bidder       *usecase.BidderUseCase
 	Audit        *usecase.AuditUseCase
+	Notification *usecase.NotificationUseCase
 	Site         *usecase.SiteUseCase
 	Asset        *usecase.AssetUseCase
 	Onboarding   *usecase.OnboardingUseCase
@@ -37,15 +38,20 @@ type Handler struct {
 
 type lotPublicResponse struct {
 	ID            uuid.UUID        `json:"id"`
+	LotID         uuid.UUID        `json:"lot_id"`
 	AuctionID     uuid.UUID        `json:"auction_id"`
 	LotNumber     string           `json:"lot_number"`
 	OrderIndex    int              `json:"order_index"`
 	Title         string           `json:"title"`
 	Description   string           `json:"description"`
 	StartingPrice int64            `json:"starting_price"`
+	StartingMinor int64            `json:"starting_price_minor"`
 	CurrentPrice  int64            `json:"current_price"`
+	CurrentMinor  int64            `json:"current_price_minor"`
+	MinimumNext   int64            `json:"minimum_next_bid_minor"`
 	ReservePrice  *int64           `json:"reserve_price"`
 	MinIncrement  int64            `json:"min_increment"`
+	Increment     int64            `json:"increment_minor"`
 	Metadata      json.RawMessage  `json:"metadata"`
 	Status        domain.LotStatus `json:"status"`
 	HammerPrice   *int64           `json:"hammer_price"`
@@ -66,6 +72,13 @@ type authUserResponse struct {
 	ApprovalStatus domain.ApprovalStatus `json:"approval_status"`
 	KYCStatus      domain.KYCStatus      `json:"kyc_status"`
 	CreatedAt      time.Time             `json:"created_at"`
+}
+
+type bidHistoryPublicResponse struct {
+	ID            uuid.UUID `json:"id"`
+	AmountMinor   int64     `json:"amount_minor"`
+	CreatedAt     time.Time `json:"created_at"`
+	BidderDisplay string    `json:"bidder_display"`
 }
 
 func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
@@ -283,7 +296,28 @@ func (h *Handler) ListLotBids(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, bids)
+	writeJSON(w, http.StatusOK, toPublicBidHistory(bids))
+}
+
+func toPublicBidHistory(bids []domain.Bid) []bidHistoryPublicResponse {
+	out := make([]bidHistoryPublicResponse, 0, len(bids))
+	aliasByUser := make(map[uuid.UUID]string, len(bids))
+	aliasSeq := 1
+	for _, bid := range bids {
+		alias, ok := aliasByUser[bid.UserID]
+		if !ok {
+			alias = "Bidder " + strconv.Itoa(aliasSeq)
+			aliasSeq++
+			aliasByUser[bid.UserID] = alias
+		}
+		out = append(out, bidHistoryPublicResponse{
+			ID:            bid.ID,
+			AmountMinor:   bid.Amount,
+			CreatedAt:     bid.CreatedAt,
+			BidderDisplay: alias,
+		})
+	}
+	return out
 }
 
 func (h *Handler) ListMyWinningLots(w http.ResponseWriter, r *http.Request) {
@@ -904,24 +938,40 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Amount int64 `json:"amount"`
+		Amount         *int64 `json:"amount"`
+		BidAmountMinor *int64 `json:"bid_amount_minor"`
+		MaxBidMinor    *int64 `json:"max_bid_minor"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
+	bidAmount := req.BidAmountMinor
+	if bidAmount == nil {
+		bidAmount = req.Amount
+	}
 	res, err := h.Lot.PlaceBid(r.Context(), port.PlaceLotBidTxInput{
 		TenantID: tenant.ID,
 		LotID:    lotID,
 		UserID:   claims.UserID,
-		Amount:   req.Amount,
+		Amount:   bidAmount,
+		MaxBid:   req.MaxBidMinor,
 		Now:      time.Now().UTC(),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusCreated, res)
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"lot_id":        res.Lot.ID,
+		"current_price": res.Lot.CurrentPrice,
+		"ended_at":      res.Lot.EndedAt,
+		"bid": map[string]any{
+			"id":           res.Bid.ID,
+			"amount_minor": res.Bid.Amount,
+			"created_at":   res.Bid.CreatedAt,
+		},
+	})
 }
 
 func (h *Handler) ListFeeComponents(w http.ResponseWriter, r *http.Request) {
@@ -1113,15 +1163,20 @@ func toLotPublicResponse(l domain.Lot) lotPublicResponse {
 	}
 	return lotPublicResponse{
 		ID:            l.ID,
+		LotID:         l.ID,
 		AuctionID:     l.AuctionID,
 		LotNumber:     l.LotNumber,
 		OrderIndex:    l.OrderIndex,
 		Title:         l.Title,
 		Description:   l.Description,
 		StartingPrice: l.StartingPrice,
+		StartingMinor: l.StartingPrice,
 		CurrentPrice:  l.CurrentPrice,
+		CurrentMinor:  l.CurrentPrice,
+		MinimumNext:   l.CurrentPrice + l.MinIncrement,
 		ReservePrice:  l.ReservePrice,
 		MinIncrement:  l.MinIncrement,
+		Increment:     l.MinIncrement,
 		Metadata:      l.Metadata,
 		Status:        l.Status,
 		HammerPrice:   l.HammerPrice,

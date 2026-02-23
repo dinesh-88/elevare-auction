@@ -9,7 +9,7 @@ export default async function Page({ params }: { params: Promise<{ lotId: string
   let initialLot: Lot | null = null;
   let initialAuction: { id: string; status: "DRAFT" | "SCHEDULED" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED"; currency: string } | null = null;
   let initialRelatedLots: Lot[] = [];
-  let initialBids: Array<{ bid_id: string; amount: number; created_at: string }> = [];
+  let initialBids: Array<{ bid_id: string; amount_minor: number; created_at: string; bidder_display: string }> = [];
 
   try {
     const rawLot = await fetchLot(lotId);
@@ -24,8 +24,9 @@ export default async function Page({ params }: { params: Promise<{ lotId: string
     initialRelatedLots = rawLots.map(normalizeLot).filter((item) => item.id !== initialLot?.id);
     initialBids = rawBids.map(normalizeLotBid).map((bid) => ({
       bid_id: bid.id,
-      amount: bid.amount,
+      amount_minor: bid.amount_minor,
       created_at: bid.created_at,
+      bidder_display: bid.bidder_display,
     }));
   } catch {
     initialLot = null;

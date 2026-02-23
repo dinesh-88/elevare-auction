@@ -52,6 +52,21 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  worker:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: elevare-worker
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    command: ["/app/worker"]
+    restart: unless-stopped
+
   web:
     image: node:20-alpine
     container_name: elevare-web

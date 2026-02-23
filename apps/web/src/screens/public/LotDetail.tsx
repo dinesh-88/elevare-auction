@@ -15,8 +15,9 @@ import { currencySymbol } from "../../utils/currency";
 
 interface LotBidHistory {
   bid_id: string;
-  amount: number;
+  amount_minor: number;
   created_at: string;
+  bidder_display: string;
 }
 
 export default function LotDetail({
@@ -45,6 +46,8 @@ export default function LotDetail({
   const [financials, setFinancials] = useState<LotFinancials | null>(null);
   const [canViewFinancials, setCanViewFinancials] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bidMessage, setBidMessage] = useState<string | null>(null);
+  const [extendedBadge, setExtendedBadge] = useState(false);
 
   const load = useCallback(async () => {
     if (!routeLotID) return;
@@ -60,8 +63,9 @@ export default function LotDetail({
       setHistory(
         bids.map((b) => ({
           bid_id: b.id,
-          amount: b.amount,
+          amount_minor: b.amount_minor,
           created_at: b.created_at,
+          bidder_display: b.bidder_display,
         })),
       );
     } catch (err) {
@@ -119,7 +123,7 @@ export default function LotDetail({
       );
       setHistory((prev) => {
         if (prev.some((b) => b.bid_id === event.bid_id)) return prev;
-        return [{ bid_id: event.bid_id, amount: event.amount, created_at: event.created_at }, ...prev];
+        return [{ bid_id: event.bid_id, amount_minor: event.amount, created_at: event.created_at, bidder_display: "Bidder" }, ...prev];
       });
     },
     (event) => {
@@ -134,6 +138,11 @@ export default function LotDetail({
         void load();
       }
     },
+    (event) => {
+      setLot((prev) => (prev ? { ...prev, ended_at: event.new_end_time } : prev));
+      setExtendedBadge(true);
+      window.setTimeout(() => setExtendedBadge(false), 5000);
+    },
     true,
   );
 
@@ -146,14 +155,25 @@ export default function LotDetail({
     Boolean(lot?.auction_id),
   );
 
-  const placeBid = async (nextAmount: number) => {
+  const placeQuickBid = async (nextAmount: number) => {
     if (!routeLotID) return;
     try {
-      setError(null);
-      await api.placeLotBid(routeLotID, nextAmount);
+      await api.placeLotBid(routeLotID, { bid_amount_minor: nextAmount, max_bid_minor: null });
+      setBidMessage("Bid placed successfully");
+      window.setTimeout(() => setBidMessage(null), 2500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to place bid");
-      throw err;
+      throw new Error(err instanceof Error ? err.message : "Failed to place bid");
+    }
+  };
+
+  const placeMaxBid = async (maxBidMinor: number) => {
+    if (!routeLotID) return;
+    try {
+      await api.placeLotBid(routeLotID, { bid_amount_minor: null, max_bid_minor: maxBidMinor });
+      setBidMessage("Bid placed successfully");
+      window.setTimeout(() => setBidMessage(null), 2500);
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : "Failed to place bid");
     }
   };
 
@@ -195,8 +215,8 @@ export default function LotDetail({
       : [];
   const formattedHistory = history.map((b) => ({
     id: b.bid_id,
-    amount: b.amount,
-    bidder: "Bidder",
+    amount: b.amount_minor,
+    bidder: b.bidder_display || "Bidder",
     timestamp: new Date(b.created_at),
   }));
   const meta = lot.metadata ?? {};
@@ -224,6 +244,7 @@ export default function LotDetail({
   const hammerPrice = lot.hammer_price ?? null;
   const isWinner = Boolean(user && financials?.winner_user && user.id === financials.winner_user);
   const symbol = currencySymbol(auctionCurrency);
+  const minimumNextBid = lot.minimum_next_bid_minor ?? lot.current_price + lot.min_increment;
 
   return (
     <section className="mx-auto max-w-[1440px] space-y-10 px-4 py-6 md:space-y-12 md:px-8 md:py-12">
@@ -268,12 +289,18 @@ export default function LotDetail({
               <div className="border-t border-neutral-200 pt-6">
                 <p className="mb-1 text-sm text-neutral-500">Ends In</p>
                 <div className="text-xl"><Countdown endTime={lot.ended_at} /></div>
+                {extendedBadge ? <p className="mt-2 text-sm font-medium text-amber-600">Auction Extended</p> : null}
               </div>
             ) : null}
 
             <div className="border-t border-neutral-200 pt-6">
               {isAuthenticated && !isAdmin && lot.status === "LIVE" && auctionStatus === "LIVE" ? (
-                <BidInput currentBid={lot.current_price} currency={symbol} minIncrement={lot.min_increment} onPlaceBid={placeBid} />
+                <>
+                  <p className="mb-1 text-sm text-neutral-500">
+                    Minimum Next Bid: {symbol}{minimumNextBid.toLocaleString()}
+                  </p>
+                  <BidInput minimumNextBid={minimumNextBid} currency={symbol} onQuickBid={placeQuickBid} onMaxBid={placeMaxBid} />
+                </>
               ) : isAuthenticated && !isAdmin && auctionStatus !== "LIVE" ? (
                 <p className="text-sm text-neutral-500">Bidding will open when the auction goes live.</p>
               ) : isAuthenticated && !isAdmin && lot.status !== "LIVE" ? (
@@ -283,6 +310,7 @@ export default function LotDetail({
               ) : (
                 <p className="text-sm">Sign in to place a bid.</p>
               )}
+              {bidMessage ? <p className="mt-2 text-sm text-green-700">{bidMessage}</p> : null}
             </div>
 
             <div className="border-t border-neutral-200 pt-6">

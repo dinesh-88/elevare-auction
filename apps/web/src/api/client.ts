@@ -14,10 +14,9 @@ export interface User {
 
 export interface LotBid {
   id: string;
-  lot_id: string;
-  user_id: string;
-  amount: number;
+  amount_minor: number;
   created_at: string;
+  bidder_display: string;
 }
 
 export interface Auction {
@@ -49,6 +48,7 @@ export interface Auction {
 
 export interface Lot {
   id: string;
+  lot_id?: string;
   auction_id: string;
   lot_number: string;
   order_index: number;
@@ -56,8 +56,11 @@ export interface Lot {
   description: string;
   starting_price: number;
   current_price: number;
+  current_price_minor?: number;
+  minimum_next_bid_minor?: number;
   reserve_price?: number | null;
   min_increment: number;
+  increment_minor?: number;
   metadata?: {
     image?: string;
     images?: string[];
@@ -103,6 +106,15 @@ export interface Invoice {
   due_date?: string | null;
   currency: string;
   total_amount: number;
+  hammer_price_minor?: number;
+  fees_total_minor?: number;
+  tax_total_minor?: number;
+  total_due_minor?: number;
+  payment_status?: "UNPAID" | "PAID" | "CANCELLED";
+  paid_at?: string | null;
+  cancelled_at?: string | null;
+  payment_reference?: string | null;
+  cancel_reason?: string | null;
   snapshot: {
     currency?: string;
     hammer_price: number;
@@ -119,6 +131,78 @@ export interface Invoice {
   lot_number?: string;
   lot_title?: string;
   auction_title?: string;
+}
+
+export interface AuctionSettlementSummary {
+  auction_id: string;
+  currency: string;
+  invoice_count: number;
+  paid_count: number;
+  unpaid_count: number;
+  cancelled_count: number;
+  total_hammer_minor: number;
+  total_fees_minor: number;
+  total_tax_minor: number;
+  total_due_minor: number;
+  total_paid_minor: number;
+  outstanding_minor: number;
+}
+
+export interface SettlementInvoiceRow {
+  id: string;
+  invoice_number: string;
+  bidder_name: string;
+  bidder_email: string;
+  lot_summary: string;
+  hammer_minor: number;
+  fees_minor: number;
+  tax_minor: number;
+  total_due_minor: number;
+  currency: string;
+  payment_status: "UNPAID" | "PAID" | "CANCELLED";
+  issued_at: string;
+  paid_at?: string | null;
+  payment_reference?: string | null;
+  cancel_reason?: string | null;
+}
+
+function normalizeSettlementSummary(raw: unknown): AuctionSettlementSummary {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    auction_id: String(r.auction_id ?? r.AuctionID ?? ""),
+    currency: String(r.currency ?? r.Currency ?? "USD"),
+    invoice_count: Number(r.invoice_count ?? r.InvoiceCount ?? 0),
+    paid_count: Number(r.paid_count ?? r.PaidCount ?? 0),
+    unpaid_count: Number(r.unpaid_count ?? r.UnpaidCount ?? 0),
+    cancelled_count: Number(r.cancelled_count ?? r.CancelledCount ?? 0),
+    total_hammer_minor: Number(r.total_hammer_minor ?? r.TotalHammerMinor ?? 0),
+    total_fees_minor: Number(r.total_fees_minor ?? r.TotalFeesMinor ?? 0),
+    total_tax_minor: Number(r.total_tax_minor ?? r.TotalTaxMinor ?? 0),
+    total_due_minor: Number(r.total_due_minor ?? r.TotalDueMinor ?? 0),
+    total_paid_minor: Number(r.total_paid_minor ?? r.TotalPaidMinor ?? 0),
+    outstanding_minor: Number(r.outstanding_minor ?? r.OutstandingMinor ?? 0),
+  };
+}
+
+function normalizeSettlementInvoiceRow(raw: unknown): SettlementInvoiceRow {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    invoice_number: String(r.invoice_number ?? r.InvoiceNumber ?? ""),
+    bidder_name: String(r.bidder_name ?? r.BidderName ?? ""),
+    bidder_email: String(r.bidder_email ?? r.BidderEmail ?? ""),
+    lot_summary: String(r.lot_summary ?? r.LotSummary ?? ""),
+    hammer_minor: Number(r.hammer_minor ?? r.HammerMinor ?? 0),
+    fees_minor: Number(r.fees_minor ?? r.FeesMinor ?? 0),
+    tax_minor: Number(r.tax_minor ?? r.TaxMinor ?? 0),
+    total_due_minor: Number(r.total_due_minor ?? r.TotalDueMinor ?? 0),
+    currency: String(r.currency ?? r.Currency ?? "USD"),
+    payment_status: String(r.payment_status ?? r.PaymentStatus ?? "UNPAID") as SettlementInvoiceRow["payment_status"],
+    issued_at: String(r.issued_at ?? r.IssuedAt ?? ""),
+    paid_at: (r.paid_at ?? r.PaidAt ?? null) as string | null,
+    payment_reference: (r.payment_reference ?? r.PaymentReference ?? null) as string | null,
+    cancel_reason: (r.cancel_reason ?? r.CancelReason ?? null) as string | null,
+  };
 }
 
 export type FeeCalculationType = "PERCENTAGE" | "FIXED";
@@ -297,6 +381,7 @@ export function normalizeLot(raw: unknown): Lot {
   }
   return {
     id: String(r.id ?? r.ID ?? ""),
+    lot_id: String(r.lot_id ?? r.lotID ?? r.id ?? r.ID ?? ""),
     auction_id: String(r.auction_id ?? r.AuctionID ?? ""),
     lot_number: String(r.lot_number ?? r.LotNumber ?? ""),
     order_index: Number(r.order_index ?? r.OrderIndex ?? 0),
@@ -304,8 +389,13 @@ export function normalizeLot(raw: unknown): Lot {
     description: String(r.description ?? r.Description ?? ""),
     starting_price: Number(r.starting_price ?? r.StartingPrice ?? 0),
     current_price: Number(r.current_price ?? r.CurrentPrice ?? 0),
+    current_price_minor: Number(r.current_price_minor ?? r.CurrentMinor ?? r.current_price ?? r.CurrentPrice ?? 0),
+    minimum_next_bid_minor: Number(
+      r.minimum_next_bid_minor ?? r.MinimumNext ?? Number(r.current_price ?? r.CurrentPrice ?? 0) + Number(r.min_increment ?? r.MinIncrement ?? 0),
+    ),
     reserve_price: (r.reserve_price ?? r.ReservePrice ?? null) as number | null,
     min_increment: Number(r.min_increment ?? r.MinIncrement ?? 0),
+    increment_minor: Number(r.increment_minor ?? r.Increment ?? r.min_increment ?? r.MinIncrement ?? 0),
     metadata: normalizedMetadata,
     status: String(r.status ?? r.Status ?? "PENDING") as Lot["status"],
     hammer_price: (r.hammer_price ?? r.HammerPrice ?? null) as number | null,
@@ -321,10 +411,9 @@ export function normalizeLotBid(raw: unknown): LotBid {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
     id: String(r.id ?? r.ID ?? ""),
-    lot_id: String(r.lot_id ?? r.LotID ?? (r.lotId as string | undefined) ?? ""),
-    user_id: String(r.user_id ?? r.UserID ?? ""),
-    amount: Number(r.amount ?? r.Amount ?? 0),
+    amount_minor: Number(r.amount_minor ?? r.AmountMinor ?? r.amount ?? r.Amount ?? 0),
     created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+    bidder_display: String(r.bidder_display ?? r.BidderDisplay ?? "Bidder"),
   };
 }
 
@@ -520,6 +609,38 @@ export const api = {
   getLot: async (lotId: string) => normalizeLot(await request<unknown>(`/lots/${lotId}`)),
   getLotFinancials: (lotId: string) => request<LotFinancials>(`/lots/${lotId}/financials`),
   getInvoice: (invoiceId: string) => request<Invoice>(`/invoices/${invoiceId}`),
+  getAuctionSettlementSummary: async (auctionId: string) =>
+    normalizeSettlementSummary(await request<unknown>(`/admin/auctions/${auctionId}/settlement-summary`)),
+  listAuctionInvoices: (auctionId: string, params?: { status?: "UNPAID" | "PAID" | "CANCELLED"; search?: string; limit?: number; offset?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    if (params?.search) search.set("search", params.search);
+    search.set("limit", String(params?.limit ?? 50));
+    search.set("offset", String(params?.offset ?? 0));
+    return request<{ items: unknown[]; total: number; limit: number; offset: number }>(`/admin/auctions/${auctionId}/invoices?${search.toString()}`).then(
+      (res) => ({
+        ...res,
+        items: (res.items ?? []).map(normalizeSettlementInvoiceRow),
+      }),
+    );
+  },
+  markInvoicePaid: (invoiceId: string, paymentReference?: string) =>
+    request<Invoice>(`/admin/invoices/${invoiceId}/mark-paid`, {
+      method: "POST",
+      body: JSON.stringify({ payment_reference: paymentReference || undefined }),
+    }),
+  cancelInvoice: (invoiceId: string, reason: string) =>
+    request<Invoice>(`/admin/invoices/${invoiceId}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  downloadSettlementCSV: (auctionId: string, params?: { status?: "UNPAID" | "PAID" | "CANCELLED"; search?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    if (params?.search) search.set("search", params.search);
+    const qs = search.toString();
+    return requestBinary(`/admin/auctions/${auctionId}/export-settlement-csv${qs ? `?${qs}` : ""}`);
+  },
   updateInvoiceStatus: (invoiceId: string, status: "ISSUED" | "PAID" | "CANCELLED") =>
     request<JsonRecord>(`/admin/invoices/${invoiceId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   generateLotInvoice: (lotId: string) => request<Invoice>(`/admin/lots/${lotId}/invoice/generate`, { method: "POST" }),
@@ -537,8 +658,10 @@ export const api = {
   placeBid: async (..._args: unknown[]) => {
     throw new Error("Auction-level bidding has been removed. Use lot bidding.");
   },
-  placeLotBid: (lotId: string, amount: number) =>
-    request<JsonRecord>(`/lots/${lotId}/bid`, { method: "POST", body: JSON.stringify({ amount }) }),
+  placeLotBid: (
+    lotId: string,
+    payload: { bid_amount_minor?: number | null; max_bid_minor?: number | null; amount?: number | null },
+  ) => request<JsonRecord>(`/lots/${lotId}/bid`, { method: "POST", body: JSON.stringify(payload) }),
   createAuction: async (payload: JsonRecord) =>
     normalizeAuction(await request<unknown>("/admin/auctions", { method: "POST", body: JSON.stringify(payload) })),
   listAdminAuctions: async () => (await request<unknown[]>("/admin/auctions")).map(normalizeAuction),

@@ -39,6 +39,9 @@ func main() {
 	lotRepo := &postgres.LotRepo{DB: db, Audit: auditRepo}
 	feeRepo := &postgres.FeeRepo{DB: db}
 	invoiceRepo := &postgres.InvoiceRepo{DB: db, Audit: auditRepo}
+	notificationRepo := &postgres.NotificationRepo{DB: db}
+	notificationJobsRepo := &postgres.NotificationJobsRepo{DB: db}
+	notificationPrefsRepo := &postgres.NotificationPreferenceRepo{DB: db}
 
 	hasher := &security.Argon2Hasher{}
 	jwtSvc := &security.JWTService{Secret: []byte(cfg.JWTSecret), TTL: cfg.JWTTTL}
@@ -46,9 +49,20 @@ func main() {
 
 	authUC := &usecase.AuthUseCase{Users: userRepo, Hasher: hasher, Tokens: jwtSvc}
 	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Tenants: tenantRepo, Broadcaster: hub, Audit: auditRepo}
-	lotUC := &usecase.LotUseCase{Lots: lotRepo, Broadcaster: hub}
+	notificationService := &usecase.NotificationService{
+		Notifications: notificationRepo,
+		Jobs:          notificationJobsRepo,
+		Preferences:   notificationPrefsRepo,
+		Audit:         auditRepo,
+		Broadcaster:   hub,
+	}
+	notificationUC := &usecase.NotificationUseCase{
+		Notifications: notificationRepo,
+		Preferences:   notificationPrefsRepo,
+	}
+	lotUC := &usecase.LotUseCase{Lots: lotRepo, Broadcaster: hub, Notifier: notificationService}
 	feeUC := &usecase.FeeUseCase{Fees: feeRepo, Audit: auditRepo}
-	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo, Audit: auditRepo}
+	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo, Audit: auditRepo, Notifier: notificationService}
 	bidderUC := &usecase.BidderUseCase{Users: userRepo, Audit: auditRepo}
 	auditUC := &usecase.AuditUseCase{Audit: auditRepo}
 	siteUC := &usecase.SiteUseCase{Tenants: tenantRepo}
@@ -96,6 +110,7 @@ func main() {
 		Invoice:      invoiceUC,
 		Bidder:       bidderUC,
 		Audit:        auditUC,
+		Notification: notificationUC,
 		Site:         siteUC,
 		Asset:        assetUC,
 		Onboarding:   onboardingUC,

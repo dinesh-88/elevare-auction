@@ -68,8 +68,8 @@ func (f *fakeLotRepo) GetByID(ctx context.Context, tenantID, lotID uuid.UUID) (*
 func (f *fakeLotRepo) Start(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error {
 	return nil
 }
-func (f *fakeLotRepo) End(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error {
-	return nil
+func (f *fakeLotRepo) End(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) (*port.LotSettlementResult, error) {
+	return nil, nil
 }
 func (f *fakeLotRepo) OnAuctionStart(ctx context.Context, tenantID, auctionID uuid.UUID, now time.Time) error {
 	return nil
@@ -100,6 +100,21 @@ func (f *fakeInvoiceRepo) GenerateForLot(ctx context.Context, tenantID, lotID uu
 	return nil, nil
 }
 func (f *fakeInvoiceRepo) UpdateStatus(ctx context.Context, tenantID, invoiceID uuid.UUID, status domain.InvoiceStatus) error {
+	return nil
+}
+func (f *fakeInvoiceRepo) GetAuctionSettlementSummary(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.AuctionSettlementSummary, bool, bool, error) {
+	return &domain.AuctionSettlementSummary{AuctionID: auctionID}, true, false, nil
+}
+func (f *fakeInvoiceRepo) ListAuctionInvoices(ctx context.Context, tenantID, auctionID uuid.UUID, filter port.ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error) {
+	return nil, 0, nil
+}
+func (f *fakeInvoiceRepo) MarkPaid(ctx context.Context, tenantID, invoiceID uuid.UUID, paymentReference *string, now time.Time) (*domain.Invoice, error) {
+	return &domain.Invoice{ID: invoiceID, TenantID: tenantID}, nil
+}
+func (f *fakeInvoiceRepo) Cancel(ctx context.Context, tenantID, invoiceID uuid.UUID, reason string, now time.Time) (*domain.Invoice, error) {
+	return &domain.Invoice{ID: invoiceID, TenantID: tenantID}, nil
+}
+func (f *fakeInvoiceRepo) StreamAuctionInvoices(ctx context.Context, tenantID, auctionID uuid.UUID, filter port.StreamAuctionInvoicesFilter, fn func(domain.SettlementInvoiceRow) error) error {
 	return nil
 }
 

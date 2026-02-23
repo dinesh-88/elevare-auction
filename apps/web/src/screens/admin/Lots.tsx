@@ -114,6 +114,7 @@ export default function Lots() {
         </div>
         <div className="flex items-center gap-2">
           <Link className="btn-link-brand" to="/admin/auctions">← Back to Auctions</Link>
+          <Link className="btn-link-brand" to={`/admin/auctions/${auctionId}/settlement`}>Settlement</Link>
           <Link className="btn-brand" to={`/admin/auctions/${auctionId}/lots/create`}>
             Create Lot
           </Link>

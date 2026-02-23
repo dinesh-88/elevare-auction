@@ -272,10 +272,10 @@ FOR UPDATE`
 	return tx.Commit(ctx)
 }
 
-func (r *LotRepo) End(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) error {
+func (r *LotRepo) End(ctx context.Context, tenantID, lotID uuid.UUID, now time.Time) (*port.LotSettlementResult, error) {
 	tx, err := r.DB.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -290,16 +290,17 @@ FOR UPDATE`
 	var mode domain.AuctionMode
 	if err := tx.QueryRow(ctx, lockQ, lotID, tenantID).Scan(&auctionID, &lotStatus, &mode); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return errors.New("lot not found")
+			return nil, errors.New("lot not found")
 		}
-		return err
+		return nil, err
 	}
 	if lotStatus == domain.LotEnded || lotStatus == domain.LotCancelled {
-		return errors.New("lot already closed")
+		return nil, errors.New("lot already closed")
 	}
 
-	if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now, "MANUAL_END"); err != nil {
-		return err
+	settlement, err := r.finalizeLotSettlementTx(ctx, tx, lotID, now, "MANUAL_END")
+	if err != nil {
+		return nil, err
 	}
 
 	if mode == domain.AuctionModeSequential {
@@ -316,7 +317,7 @@ FOR UPDATE`
 			const auctionCfgQ = `SELECT lot_duration_seconds FROM auctions WHERE id = $1`
 			var lotDuration int
 			if err := tx.QueryRow(ctx, auctionCfgQ, auctionID).Scan(&lotDuration); err != nil {
-				return err
+				return nil, err
 			}
 			var endedAt *time.Time
 			if lotDuration > 0 {
@@ -325,7 +326,7 @@ FOR UPDATE`
 			}
 			const activateQ = `UPDATE lots SET status = 'LIVE', started_at = $2, ended_at = $3, updated_at = now() WHERE id = $1 AND status = 'PENDING'`
 			if _, err := tx.Exec(ctx, activateQ, nextID, now, endedAt); err != nil {
-				return err
+				return nil, err
 			}
 			if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
 				TenantID:   &tenantID,
@@ -339,13 +340,16 @@ FOR UPDATE`
 					"ended_at":   endedAt,
 				}),
 			}); err != nil {
-				return err
+				return nil, err
 			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
-			return err
+			return nil, err
 		}
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return settlement, nil
 }
 
 func (r *LotRepo) OnAuctionStart(ctx context.Context, tenantID, auctionID uuid.UUID, now time.Time) error {
@@ -451,6 +455,7 @@ SELECT l.id, l.auction_id, l.lot_number, l.order_index,
        l.hammer_price, l.total_due, l.winner_user_id, l.financial_snapshot,
        l.started_at, l.ended_at, l.created_at, l.updated_at,
        a.status,
+       a.title,
        a.currency,
        a.auto_extend_enabled, a.sniping_window_seconds, a.sniping_extension_seconds
 FROM lots l
@@ -459,6 +464,7 @@ WHERE l.id = $1 AND a.tenant_id = $2
 FOR UPDATE`
 	var lot domain.Lot
 	var auctionStatus domain.AuctionStatus
+	var auctionTitle string
 	var currency string
 	var autoExtend bool
 	var snipingWindow, snipingExtension int
@@ -470,6 +476,7 @@ FOR UPDATE`
 		&lot.HammerPrice, &lot.TotalDue, &lot.WinnerUserID, &lot.FinancialData,
 		&lot.StartedAt, &lot.EndedAt, &lot.CreatedAt, &lot.UpdatedAt,
 		&auctionStatus,
+		&auctionTitle,
 		&currency,
 		&autoExtend, &snipingWindow, &snipingExtension,
 	)
@@ -489,8 +496,20 @@ FOR UPDATE`
 	if lot.EndedAt != nil && !in.Now.Before(*lot.EndedAt) {
 		return nil, errors.New("lot already ended")
 	}
+	if (in.Amount == nil && in.MaxBid == nil) || (in.Amount != nil && in.MaxBid != nil) {
+		return nil, errors.New("provide either bid_amount_minor or max_bid_minor")
+	}
+	if in.Amount != nil && *in.Amount <= 0 {
+		return nil, errors.New("bid amount below minimum increment")
+	}
+	if in.MaxBid != nil && *in.MaxBid <= 0 {
+		return nil, errors.New("bid amount below minimum increment")
+	}
 	minBid := lot.CurrentPrice + lot.MinIncrement
-	if in.Amount < minBid {
+	if in.Amount != nil && *in.Amount < minBid {
+		return nil, errors.New("bid amount below minimum increment")
+	}
+	if in.MaxBid != nil && *in.MaxBid < minBid {
 		return nil, errors.New("bid amount below minimum increment")
 	}
 	const bidThrottleWindow = time.Second
@@ -509,23 +528,133 @@ LIMIT 1`
 		return nil, err
 	}
 
-	bidID := uuid.New()
-	const insBid = `INSERT INTO lot_bids (id, lot_id, user_id, amount, created_at) VALUES ($1,$2,$3,$4,$5)`
-	if _, err := tx.Exec(ctx, insBid, bidID, lot.ID, in.UserID, in.Amount, in.Now); err != nil {
-		return nil, err
+	type leaderBid struct {
+		ID        uuid.UUID
+		UserID    uuid.UUID
+		Amount    int64
+		MaxBid    int64
+		CreatedAt time.Time
+	}
+	var incumbent *leaderBid
+	{
+		var row leaderBid
+		err := tx.QueryRow(ctx, `
+SELECT id, user_id, amount, COALESCE(max_bid_minor, amount), created_at
+FROM lot_bids
+WHERE lot_id = $1
+ORDER BY COALESCE(max_bid_minor, amount) DESC, created_at ASC, id ASC
+LIMIT 1`, lot.ID).Scan(&row.ID, &row.UserID, &row.Amount, &row.MaxBid, &row.CreatedAt)
+		if err == nil {
+			incumbent = &row
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
 	}
 
+	insertBid := func(userID uuid.UUID, amount, maxBid int64, createdAt time.Time) (domain.Bid, error) {
+		bidID := uuid.New()
+		const insBid = `INSERT INTO lot_bids (id, lot_id, user_id, amount, max_bid_minor, created_at) VALUES ($1,$2,$3,$4,$5,$6)`
+		if _, err := tx.Exec(ctx, insBid, bidID, lot.ID, userID, amount, maxBid, createdAt); err != nil {
+			return domain.Bid{}, err
+		}
+		lotID := lot.ID
+		maxValue := maxBid
+		return domain.Bid{ID: bidID, LotID: &lotID, UserID: userID, Amount: amount, MaxBid: &maxValue, CreatedAt: createdAt}, nil
+	}
+
+	reqMax := int64(0)
+	if in.Amount != nil {
+		reqMax = *in.Amount
+	} else {
+		reqMax = *in.MaxBid
+	}
+
+	var acceptedBid domain.Bid
+	finalCurrentPrice := lot.CurrentPrice
+	var finalLeaderUserID uuid.UUID
+	var previousHighestBidder *uuid.UUID
+
+	switch {
+	case incumbent == nil:
+		initialAmount := minBid
+		if in.Amount != nil {
+			initialAmount = *in.Amount
+		}
+		bid, err := insertBid(in.UserID, initialAmount, reqMax, in.Now)
+		if err != nil {
+			return nil, err
+		}
+		acceptedBid = bid
+		finalCurrentPrice = initialAmount
+		finalLeaderUserID = in.UserID
+	case incumbent.UserID == in.UserID:
+		if reqMax <= incumbent.MaxBid {
+			return nil, errors.New("bid amount below minimum increment")
+		}
+		amount := lot.CurrentPrice
+		if in.Amount != nil {
+			amount = *in.Amount
+		}
+		bid, err := insertBid(in.UserID, amount, reqMax, in.Now)
+		if err != nil {
+			return nil, err
+		}
+		acceptedBid = bid
+		finalCurrentPrice = amount
+		finalLeaderUserID = in.UserID
+	default:
+		incumbentMax := incumbent.MaxBid
+		if reqMax > incumbentMax {
+			winningAmount := incumbentMax + lot.MinIncrement
+			if winningAmount > reqMax {
+				winningAmount = reqMax
+			}
+			if winningAmount < minBid {
+				winningAmount = minBid
+			}
+			bid, err := insertBid(in.UserID, winningAmount, reqMax, in.Now)
+			if err != nil {
+				return nil, err
+			}
+			acceptedBid = bid
+			finalCurrentPrice = winningAmount
+			finalLeaderUserID = in.UserID
+			prev := incumbent.UserID
+			previousHighestBidder = &prev
+		} else {
+			challengerAmount := minBid
+			if in.Amount != nil && *in.Amount > challengerAmount {
+				challengerAmount = *in.Amount
+			}
+			if _, err := insertBid(in.UserID, challengerAmount, reqMax, in.Now); err != nil {
+				return nil, err
+			}
+			autoAmount := reqMax + lot.MinIncrement
+			if autoAmount > incumbentMax {
+				autoAmount = incumbentMax
+			}
+			bid, err := insertBid(incumbent.UserID, autoAmount, incumbentMax, in.Now.Add(time.Millisecond))
+			if err != nil {
+				return nil, err
+			}
+			acceptedBid = bid
+			finalCurrentPrice = autoAmount
+			finalLeaderUserID = incumbent.UserID
+		}
+	}
+
+	oldEndedAt := lot.EndedAt
 	newEndedAt := lot.EndedAt
 	if autoExtend && lot.EndedAt != nil {
 		windowStart := lot.EndedAt.Add(-time.Duration(snipingWindow) * time.Second)
-		if in.Now.After(windowStart) {
+		if !in.Now.Before(windowStart) {
 			t := lot.EndedAt.Add(time.Duration(snipingExtension) * time.Second)
 			newEndedAt = &t
 		}
 	}
 
 	const updLot = `UPDATE lots SET current_price = $2, ended_at = $3, updated_at = now() WHERE id = $1`
-	if _, err := tx.Exec(ctx, updLot, lot.ID, in.Amount, newEndedAt); err != nil {
+	if _, err := tx.Exec(ctx, updLot, lot.ID, finalCurrentPrice, newEndedAt); err != nil {
 		return nil, err
 	}
 	if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
@@ -536,22 +665,47 @@ LIMIT 1`
 		Metadata: mustMarshalJSON(map[string]any{
 			"lot_id":       lot.ID,
 			"auction_id":   lot.AuctionID,
-			"amount_minor": in.Amount,
+			"amount_minor": finalCurrentPrice,
+			"winner_user":  finalLeaderUserID,
 			"currency":     currency,
 			"result":       "ACCEPTED",
 		}),
 	}); err != nil {
 		return nil, err
 	}
+	wasExtended := false
+	if oldEndedAt != nil && newEndedAt != nil && newEndedAt.After(*oldEndedAt) {
+		wasExtended = true
+		if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
+			TenantID:   &in.TenantID,
+			Action:     "LOT_EXTENDED",
+			EntityType: "LOT",
+			EntityID:   &lot.ID,
+			Metadata: mustMarshalJSON(map[string]any{
+				"lot_id":       lot.ID,
+				"auction_id":   lot.AuctionID,
+				"previous_end": *oldEndedAt,
+				"new_end":      *newEndedAt,
+			}),
+		}); err != nil {
+			return nil, err
+		}
+	}
 
-	lot.CurrentPrice = in.Amount
+	lot.CurrentPrice = finalCurrentPrice
 	lot.EndedAt = newEndedAt
-	bid := domain.Bid{ID: bidID, LotID: &lot.ID, UserID: in.UserID, Amount: in.Amount, CreatedAt: in.Now}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return &port.PlaceLotBidTxResult{Lot: lot, Bid: bid}, nil
+	return &port.PlaceLotBidTxResult{
+		Lot:                   lot,
+		Bid:                   acceptedBid,
+		AuctionTitle:          auctionTitle,
+		PreviousHighestBidder: previousHighestBidder,
+		WasExtended:           wasExtended,
+		ExtensionEndTime:      newEndedAt,
+	}, nil
 }
 
 func (r *LotRepo) RunSchedulerTick(ctx context.Context, now time.Time) error {
@@ -584,7 +738,7 @@ WHERE a.status = 'ENDED'
 		if err != nil {
 			return err
 		}
-		if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now, "AUCTION_ENDED_CLOSE"); err != nil {
+		if _, err := r.finalizeLotSettlementTx(ctx, tx, lotID, now, "AUCTION_ENDED_CLOSE"); err != nil {
 			_ = tx.Rollback(ctx)
 			return err
 		}
@@ -626,7 +780,7 @@ WHERE a.auction_mode = 'TIMED'
 		if err != nil {
 			return err
 		}
-		if err := r.finalizeLotSettlementTx(ctx, tx, lotID, now, "AUTO_CLOSE_TIMED"); err != nil {
+		if _, err := r.finalizeLotSettlementTx(ctx, tx, lotID, now, "AUTO_CLOSE_TIMED"); err != nil {
 			_ = tx.Rollback(ctx)
 			return err
 		}
@@ -687,7 +841,7 @@ WHERE a.status = 'LIVE'
 			continue
 		}
 
-		if err := r.finalizeLotSettlementTx(ctx, tx, liveLotID, now, "AUTO_CLOSE_SEQUENTIAL"); err != nil {
+		if _, err := r.finalizeLotSettlementTx(ctx, tx, liveLotID, now, "AUTO_CLOSE_SEQUENTIAL"); err != nil {
 			_ = tx.Rollback(ctx)
 			return err
 		}
@@ -739,22 +893,23 @@ func (r *LotRepo) finalizeLotSettlementTx(
 	lotID uuid.UUID,
 	now time.Time,
 	reason string,
-) error {
+) (*port.LotSettlementResult, error) {
 	var currentStatus domain.LotStatus
 	var auctionID, tenantID uuid.UUID
+	var auctionTitle, lotTitle string
 	if err := tx.QueryRow(ctx, `
-SELECT l.status, l.auction_id, a.tenant_id
+SELECT l.status, l.auction_id, a.tenant_id, a.title, l.title
 FROM lots l
 JOIN auctions a ON a.id = l.auction_id
 WHERE l.id = $1
-FOR UPDATE`, lotID).Scan(&currentStatus, &auctionID, &tenantID); err != nil {
+FOR UPDATE`, lotID).Scan(&currentStatus, &auctionID, &tenantID, &auctionTitle, &lotTitle); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return errors.New("lot not found")
+			return nil, errors.New("lot not found")
 		}
-		return err
+		return nil, err
 	}
 	if currentStatus == domain.LotEnded || currentStatus == domain.LotCancelled {
-		return nil
+		return nil, nil
 	}
 
 	var winnerUserID *uuid.UUID
@@ -771,7 +926,7 @@ LIMIT 1`, lotID).Scan(&winnerID, &winningAmount)
 		winnerUserID = &winnerID
 		hammerPrice = &winningAmount
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return err
+		return nil, err
 	}
 
 	var totalDue *int64
@@ -779,7 +934,7 @@ LIMIT 1`, lotID).Scan(&winnerID, &winningAmount)
 	if hammerPrice != nil {
 		fees, err := r.resolveFeeComponentsTx(ctx, tx, lotID, auctionID, tenantID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		components, computedTotal := calculateFinancials(*hammerPrice, fees)
 		totalDue = &computedTotal
@@ -790,7 +945,7 @@ LIMIT 1`, lotID).Scan(&winnerID, &winningAmount)
 		}
 		b, err := json.Marshal(payload)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		snapshot = b
 		if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
@@ -805,12 +960,12 @@ LIMIT 1`, lotID).Scan(&winnerID, &winningAmount)
 				"total_due_minor":    totalDue,
 			}),
 		}); err != nil {
-			return err
+			return nil, err
 		}
 
 		if winnerUserID != nil {
-			if err := r.createInvoiceForSettlementTx(ctx, tx, lotID, tenantID, *winnerUserID, computedTotal, snapshot, now); err != nil {
-				return err
+			if err := r.createInvoiceForSettlementTx(ctx, tx, lotID, auctionID, tenantID, *winnerUserID, computedTotal, snapshot, now); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -827,7 +982,7 @@ SET status = 'ENDED',
 WHERE id = $1
   AND status NOT IN ('ENDED','CANCELLED')`
 	if _, err := tx.Exec(ctx, q, lotID, now, hammerPrice, winnerUserID, totalDue, snapshot); err != nil {
-		return err
+		return nil, err
 	}
 	if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
 		TenantID:   &tenantID,
@@ -841,9 +996,16 @@ WHERE id = $1
 			"total_due_minor":    totalDue,
 		}),
 	}); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return &port.LotSettlementResult{
+		LotID:        lotID,
+		AuctionID:    auctionID,
+		AuctionTitle: auctionTitle,
+		LotTitle:     lotTitle,
+		WinnerUserID: winnerUserID,
+		HammerPrice:  hammerPrice,
+	}, nil
 }
 
 type rawFeeRule struct {
@@ -1000,6 +1162,7 @@ func (r *LotRepo) createInvoiceForSettlementTx(
 	ctx context.Context,
 	tx pgx.Tx,
 	lotID uuid.UUID,
+	auctionID uuid.UUID,
 	tenantID uuid.UUID,
 	winnerUserID uuid.UUID,
 	totalAmount int64,
@@ -1050,20 +1213,24 @@ WHERE l.id = $1
 		}
 	}
 
+	hammerMinor, feesMinor, taxMinor, totalDueMinor := snapshotTotals(snapshotWithCurrency, totalAmount)
 	const q = `
 INSERT INTO invoices (
-  id, lot_id, tenant_id, winner_user_id,
+  id, lot_id, auction_id, tenant_id, winner_user_id,
   invoice_number, issued_at, due_date, currency,
-  total_amount, snapshot, status, created_at
+  total_amount, hammer_price_minor, fees_total_minor, tax_total_minor, total_due_minor,
+  payment_status, snapshot, status, created_at
 ) VALUES (
-  $1,$2,$3,$4,
-  $5,$6,$7,$8,
-  $9,$10,'ISSUED',now()
+  $1,$2,$3,$4,$5,
+  $6,$7,$8,$9,
+  $10,$11,$12,$13,$14,
+  'UNPAID',$15,'ISSUED',now()
 )`
 	_, err := tx.Exec(ctx, q,
-		uuid.New(), lotID, tenantID, winnerUserID,
+		uuid.New(), lotID, auctionID, tenantID, winnerUserID,
 		invoiceNumber, now, dueDate, currency,
-		totalAmount, snapshotWithCurrency,
+		totalDueMinor, hammerMinor, feesMinor, taxMinor, totalDueMinor,
+		snapshotWithCurrency,
 	)
 	if err != nil {
 		return err
@@ -1076,7 +1243,7 @@ INSERT INTO invoices (
 		Metadata: mustMarshalJSON(map[string]any{
 			"winner_user_id":     winnerUserID,
 			"invoice_number":     invoiceNumber,
-			"total_amount_minor": totalAmount,
+			"total_amount_minor": totalDueMinor,
 			"currency":           currency,
 			"issued_at":          now,
 			"reason":             "AUTO_ON_LOT_END",

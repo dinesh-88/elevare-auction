@@ -90,6 +90,28 @@ func (h *Hub) BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.B
 	}
 }
 
+func (h *Hub) BroadcastLotExtended(ctx context.Context, lotID uuid.UUID, newEndTime time.Time) {
+	h.mu.RLock()
+	room := h.lotRooms[lotID]
+	conns := make([]*websocket.Conn, 0, len(room))
+	for c := range room {
+		conns = append(conns, c)
+	}
+	h.mu.RUnlock()
+	if len(conns) == 0 {
+		return
+	}
+	payload := map[string]any{
+		"type":         "LOT_EXTENDED",
+		"lot_id":       lotID,
+		"new_end_time": newEndTime,
+	}
+	b, _ := json.Marshal(payload)
+	for _, c := range conns {
+		_ = c.Write(ctx, websocket.MessageText, b)
+	}
+}
+
 func (h *Hub) BroadcastLotStatus(ctx context.Context, lotID uuid.UUID, status domain.LotStatus) {
 	h.mu.RLock()
 	room := h.lotRooms[lotID]
@@ -158,4 +180,8 @@ func (h *Hub) BroadcastBid(ctx context.Context, auctionID uuid.UUID, bid domain.
 	for _, c := range conns {
 		_ = c.Write(ctx, websocket.MessageText, b)
 	}
+}
+
+// BroadcastUserNotification is currently a no-op because user-scoped WS rooms are not yet implemented.
+func (h *Hub) BroadcastUserNotification(ctx context.Context, tenantID, userID uuid.UUID, notification domain.Notification) {
 }

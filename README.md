@@ -28,6 +28,8 @@ Environment variables:
 - `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`
 - `S3_PUBLIC_BASE_URL` (recommended public/CDN base URL)
 - `S3_USE_PATH_STYLE` (`true`/`false`, default `true`)
+- `RESEND_API_KEY` (required for notification email worker)
+- `RESEND_FROM_EMAIL` (required for notification email worker)
 
 Cloudflare R2 example:
 
@@ -82,6 +84,7 @@ docker compose up --build
 Services:
 
 - API: `http://localhost:8080`
+- Worker: notification delivery processor (`/app/worker`)
 - Web: `http://localhost:5173`
 - Swagger UI: `http://localhost:8080/swagger/index.html`
 - Postgres: `localhost:5432`
