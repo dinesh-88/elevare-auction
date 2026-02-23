@@ -3,7 +3,9 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
+	"strings"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/port"
@@ -107,6 +109,85 @@ LIMIT $4`, tenantID, entityType, entityID, limit)
 		out = append(out, *item)
 	}
 	return out, rows.Err()
+}
+
+func (r *AuditRepo) ListByEntityPage(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	entityType string,
+	entityID uuid.UUID,
+	query port.AuditListQuery,
+) (port.AuditListPage, error) {
+	limit := query.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	var (
+		sqlBuilder strings.Builder
+		args       []any
+	)
+	sqlBuilder.WriteString(`
+SELECT id, tenant_id, actor_user_id, actor_role,
+       action, entity_type, entity_id,
+       request_id, host(ip), user_agent, metadata, created_at
+FROM audit_logs
+WHERE tenant_id = $1
+  AND entity_type = $2
+  AND entity_id = $3`)
+	args = append(args, tenantID, entityType, entityID)
+
+	if query.EventType != "" {
+		args = append(args, query.EventType)
+		sqlBuilder.WriteString(fmt.Sprintf("\n  AND action = $%d", len(args)))
+	}
+	if query.ActorUserID != nil {
+		args = append(args, *query.ActorUserID)
+		sqlBuilder.WriteString(fmt.Sprintf("\n  AND actor_user_id = $%d", len(args)))
+	}
+	if query.From != nil {
+		args = append(args, *query.From)
+		sqlBuilder.WriteString(fmt.Sprintf("\n  AND created_at >= $%d", len(args)))
+	}
+	if query.To != nil {
+		args = append(args, *query.To)
+		sqlBuilder.WriteString(fmt.Sprintf("\n  AND created_at <= $%d", len(args)))
+	}
+	if query.CursorCreatedAt != nil && query.CursorID != nil {
+		args = append(args, *query.CursorCreatedAt, *query.CursorID)
+		sqlBuilder.WriteString(fmt.Sprintf("\n  AND (created_at, id) < ($%d, $%d)", len(args)-1, len(args)))
+	}
+
+	args = append(args, limit+1)
+	sqlBuilder.WriteString(fmt.Sprintf("\nORDER BY created_at DESC, id DESC\nLIMIT $%d", len(args)))
+
+	rows, err := r.DB.Query(ctx, sqlBuilder.String(), args...)
+	if err != nil {
+		return port.AuditListPage{}, err
+	}
+	defer rows.Close()
+
+	out := make([]domain.AuditLog, 0, limit+1)
+	for rows.Next() {
+		item, err := scanAuditLog(rows)
+		if err != nil {
+			return port.AuditListPage{}, err
+		}
+		out = append(out, *item)
+	}
+	if err := rows.Err(); err != nil {
+		return port.AuditListPage{}, err
+	}
+
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+
+	return port.AuditListPage{
+		Items:   out,
+		HasMore: hasMore,
+	}, nil
 }
 
 func insertAuditSQL() string {

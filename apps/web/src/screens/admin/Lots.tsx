@@ -176,6 +176,12 @@ export default function Lots() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 border-t border-neutral-100 pt-3">
+                  <Link
+                    to={`/admin/lots/${lot.id}`}
+                    className="inline-flex h-9 items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 transition hover:bg-neutral-100"
+                  >
+                    Open
+                  </Link>
                   <IconButton onClick={() => move(idx, -1)} aria-label="Move up" title="Move up" tooltip="Move up">
                     <ArrowUp size={16} strokeWidth={2.2} />
                   </IconButton>

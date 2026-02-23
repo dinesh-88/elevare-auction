@@ -486,24 +486,17 @@ FOR UPDATE`
 	if err != nil {
 		return nil, err
 	}
-
 	if auctionStatus != domain.AuctionLive {
 		return nil, errors.New("auction is not live")
 	}
 	if lot.Status != domain.LotLive {
 		return nil, errors.New("lot is not live")
 	}
-	if lot.EndedAt != nil && !in.Now.Before(*lot.EndedAt) {
+	if lot.EndedAt == nil || !in.Now.Before(*lot.EndedAt) {
 		return nil, errors.New("lot already ended")
 	}
 	if (in.Amount == nil && in.MaxBid == nil) || (in.Amount != nil && in.MaxBid != nil) {
 		return nil, errors.New("provide either bid_amount_minor or max_bid_minor")
-	}
-	if in.Amount != nil && *in.Amount <= 0 {
-		return nil, errors.New("bid amount below minimum increment")
-	}
-	if in.MaxBid != nil && *in.MaxBid <= 0 {
-		return nil, errors.New("bid amount below minimum increment")
 	}
 	minBid := lot.CurrentPrice + lot.MinIncrement
 	if in.Amount != nil && *in.Amount < minBid {
@@ -512,151 +505,76 @@ FOR UPDATE`
 	if in.MaxBid != nil && *in.MaxBid < minBid {
 		return nil, errors.New("bid amount below minimum increment")
 	}
-	const bidThrottleWindow = time.Second
+
 	const lastBidQ = `
 SELECT created_at
 FROM lot_bids
-WHERE lot_id = $1 AND user_id = $2
+WHERE tenant_id = $1 AND lot_id = $2 AND user_id = $3
 ORDER BY created_at DESC
 LIMIT 1`
 	var lastBidAt time.Time
-	if err := tx.QueryRow(ctx, lastBidQ, lot.ID, in.UserID).Scan(&lastBidAt); err == nil {
-		if in.Now.Sub(lastBidAt) < bidThrottleWindow {
+	if err := tx.QueryRow(ctx, lastBidQ, in.TenantID, lot.ID, in.UserID).Scan(&lastBidAt); err == nil {
+		if in.Now.Sub(lastBidAt) < time.Second {
 			return nil, errors.New("bidding too quickly, please wait a second")
 		}
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
 
-	type leaderBid struct {
-		ID        uuid.UUID
-		UserID    uuid.UUID
-		Amount    int64
-		MaxBid    int64
-		CreatedAt time.Time
-	}
-	var incumbent *leaderBid
-	{
-		var row leaderBid
-		err := tx.QueryRow(ctx, `
-SELECT id, user_id, amount, COALESCE(max_bid_minor, amount), created_at
-FROM lot_bids
-WHERE lot_id = $1
-ORDER BY COALESCE(max_bid_minor, amount) DESC, created_at ASC, id ASC
-LIMIT 1`, lot.ID).Scan(&row.ID, &row.UserID, &row.Amount, &row.MaxBid, &row.CreatedAt)
-		if err == nil {
-			incumbent = &row
-		} else if !errors.Is(err, pgx.ErrNoRows) {
-			return nil, err
-		}
+	previousLeader, err := fetchLotBidLeaderTx(ctx, tx, in.TenantID, lot.ID)
+	if err != nil {
+		return nil, err
 	}
 
-	insertBid := func(userID uuid.UUID, amount, maxBid int64, createdAt time.Time) (domain.Bid, error) {
-		bidID := uuid.New()
-		const insBid = `INSERT INTO lot_bids (id, lot_id, user_id, amount, max_bid_minor, created_at) VALUES ($1,$2,$3,$4,$5,$6)`
-		if _, err := tx.Exec(ctx, insBid, bidID, lot.ID, userID, amount, maxBid, createdAt); err != nil {
-			return domain.Bid{}, err
-		}
-		lotID := lot.ID
-		maxValue := maxBid
-		return domain.Bid{ID: bidID, LotID: &lotID, UserID: userID, Amount: amount, MaxBid: &maxValue, CreatedAt: createdAt}, nil
-	}
-
-	reqMax := int64(0)
+	seedAmount := minBid
+	seedMax := minBid
 	if in.Amount != nil {
-		reqMax = *in.Amount
-	} else {
-		reqMax = *in.MaxBid
+		seedAmount = *in.Amount
+		seedMax = *in.Amount
+	}
+	if in.MaxBid != nil {
+		seedMax = *in.MaxBid
+	}
+	seedMaxForInsert := (*int64)(nil)
+	if in.MaxBid != nil {
+		seedMaxForInsert = &seedMax
+	}
+	seedBid, err := insertLotBidTx(ctx, tx, in.TenantID, lot.ID, in.UserID, seedAmount, seedMaxForInsert, in.Now)
+	if err != nil {
+		return nil, err
 	}
 
-	var acceptedBid domain.Bid
-	finalCurrentPrice := lot.CurrentPrice
-	var finalLeaderUserID uuid.UUID
-	var previousHighestBidder *uuid.UUID
+	participants, err := fetchLotBidParticipantsTx(ctx, tx, in.TenantID, lot.ID)
+	if err != nil {
+		return nil, err
+	}
+	outcome := resolveProxyOutcome(participants, lot.MinIncrement, minBid, seedAmount)
 
-	switch {
-	case incumbent == nil:
-		initialAmount := minBid
-		if in.Amount != nil {
-			initialAmount = *in.Amount
-		}
-		bid, err := insertBid(in.UserID, initialAmount, reqMax, in.Now)
+	acceptedBid := seedBid
+	if outcome.VisiblePrice > seedBid.Amount {
+		autoAt := in.Now.Add(time.Millisecond)
+		winnerMax := outcome.WinnerMax
+		autoBid, err := insertLotBidTx(ctx, tx, in.TenantID, lot.ID, outcome.WinnerUserID, outcome.VisiblePrice, &winnerMax, autoAt)
 		if err != nil {
 			return nil, err
 		}
-		acceptedBid = bid
-		finalCurrentPrice = initialAmount
-		finalLeaderUserID = in.UserID
-	case incumbent.UserID == in.UserID:
-		if reqMax <= incumbent.MaxBid {
-			return nil, errors.New("bid amount below minimum increment")
-		}
-		amount := lot.CurrentPrice
-		if in.Amount != nil {
-			amount = *in.Amount
-		}
-		bid, err := insertBid(in.UserID, amount, reqMax, in.Now)
-		if err != nil {
-			return nil, err
-		}
-		acceptedBid = bid
-		finalCurrentPrice = amount
-		finalLeaderUserID = in.UserID
-	default:
-		incumbentMax := incumbent.MaxBid
-		if reqMax > incumbentMax {
-			winningAmount := incumbentMax + lot.MinIncrement
-			if winningAmount > reqMax {
-				winningAmount = reqMax
-			}
-			if winningAmount < minBid {
-				winningAmount = minBid
-			}
-			bid, err := insertBid(in.UserID, winningAmount, reqMax, in.Now)
-			if err != nil {
-				return nil, err
-			}
-			acceptedBid = bid
-			finalCurrentPrice = winningAmount
-			finalLeaderUserID = in.UserID
-			prev := incumbent.UserID
-			previousHighestBidder = &prev
-		} else {
-			challengerAmount := minBid
-			if in.Amount != nil && *in.Amount > challengerAmount {
-				challengerAmount = *in.Amount
-			}
-			if _, err := insertBid(in.UserID, challengerAmount, reqMax, in.Now); err != nil {
-				return nil, err
-			}
-			autoAmount := reqMax + lot.MinIncrement
-			if autoAmount > incumbentMax {
-				autoAmount = incumbentMax
-			}
-			bid, err := insertBid(incumbent.UserID, autoAmount, incumbentMax, in.Now.Add(time.Millisecond))
-			if err != nil {
-				return nil, err
-			}
-			acceptedBid = bid
-			finalCurrentPrice = autoAmount
-			finalLeaderUserID = incumbent.UserID
-		}
+		acceptedBid = autoBid
+	}
+
+	previousHighestBidder := (*uuid.UUID)(nil)
+	if previousLeader != nil && previousLeader.UserID != outcome.WinnerUserID {
+		prev := previousLeader.UserID
+		previousHighestBidder = &prev
 	}
 
 	oldEndedAt := lot.EndedAt
-	newEndedAt := lot.EndedAt
-	if autoExtend && lot.EndedAt != nil {
-		windowStart := lot.EndedAt.Add(-time.Duration(snipingWindow) * time.Second)
-		if !in.Now.Before(windowStart) {
-			t := lot.EndedAt.Add(time.Duration(snipingExtension) * time.Second)
-			newEndedAt = &t
-		}
-	}
+	newEndedAt, wasExtended := resolveSoftCloseEndTime(lot.EndedAt, in.Now, autoExtend, snipingWindow, snipingExtension)
 
 	const updLot = `UPDATE lots SET current_price = $2, ended_at = $3, updated_at = now() WHERE id = $1`
-	if _, err := tx.Exec(ctx, updLot, lot.ID, finalCurrentPrice, newEndedAt); err != nil {
+	if _, err := tx.Exec(ctx, updLot, lot.ID, outcome.VisiblePrice, newEndedAt); err != nil {
 		return nil, err
 	}
+
 	if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
 		TenantID:   &in.TenantID,
 		Action:     "BID_PLACED",
@@ -665,17 +583,14 @@ LIMIT 1`, lot.ID).Scan(&row.ID, &row.UserID, &row.Amount, &row.MaxBid, &row.Crea
 		Metadata: mustMarshalJSON(map[string]any{
 			"lot_id":       lot.ID,
 			"auction_id":   lot.AuctionID,
-			"amount_minor": finalCurrentPrice,
-			"winner_user":  finalLeaderUserID,
+			"amount_minor": outcome.VisiblePrice,
 			"currency":     currency,
 			"result":       "ACCEPTED",
 		}),
 	}); err != nil {
 		return nil, err
 	}
-	wasExtended := false
-	if oldEndedAt != nil && newEndedAt != nil && newEndedAt.After(*oldEndedAt) {
-		wasExtended = true
+	if wasExtended {
 		if err := r.appendAuditTx(ctx, tx, port.AuditEntry{
 			TenantID:   &in.TenantID,
 			Action:     "LOT_EXTENDED",
@@ -692,9 +607,8 @@ LIMIT 1`, lot.ID).Scan(&row.ID, &row.UserID, &row.Amount, &row.MaxBid, &row.Crea
 		}
 	}
 
-	lot.CurrentPrice = finalCurrentPrice
+	lot.CurrentPrice = outcome.VisiblePrice
 	lot.EndedAt = newEndedAt
-
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
@@ -706,6 +620,146 @@ LIMIT 1`, lot.ID).Scan(&row.ID, &row.UserID, &row.Amount, &row.MaxBid, &row.Crea
 		WasExtended:           wasExtended,
 		ExtensionEndTime:      newEndedAt,
 	}, nil
+}
+
+type lotBidLeader struct {
+	UserID       uuid.UUID
+	EffectiveMax int64
+	FirstAt      time.Time
+}
+
+type lotBidParticipant struct {
+	UserID       uuid.UUID
+	EffectiveMax int64
+	FirstAt      time.Time
+}
+
+type proxyResolutionOutcome struct {
+	WinnerUserID uuid.UUID
+	WinnerMax    int64
+	VisiblePrice int64
+}
+
+func fetchLotBidLeaderTx(ctx context.Context, tx pgx.Tx, tenantID, lotID uuid.UUID) (*lotBidLeader, error) {
+	const q = `
+SELECT user_id,
+       MAX(COALESCE(max_bid_minor, amount)) AS effective_max,
+       MIN(created_at) AS first_at
+FROM lot_bids
+WHERE tenant_id = $1 AND lot_id = $2
+GROUP BY user_id
+ORDER BY effective_max DESC, first_at ASC, user_id ASC
+LIMIT 1`
+	var out lotBidLeader
+	err := tx.QueryRow(ctx, q, tenantID, lotID).Scan(&out.UserID, &out.EffectiveMax, &out.FirstAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func fetchLotBidParticipantsTx(ctx context.Context, tx pgx.Tx, tenantID, lotID uuid.UUID) ([]lotBidParticipant, error) {
+	const q = `
+SELECT user_id,
+       MAX(COALESCE(max_bid_minor, amount)) AS effective_max,
+       MIN(created_at) AS first_at
+FROM lot_bids
+WHERE tenant_id = $1 AND lot_id = $2
+GROUP BY user_id
+ORDER BY effective_max DESC, first_at ASC, user_id ASC`
+	rows, err := tx.Query(ctx, q, tenantID, lotID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]lotBidParticipant, 0, 4)
+	for rows.Next() {
+		var p lotBidParticipant
+		if err := rows.Scan(&p.UserID, &p.EffectiveMax, &p.FirstAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func insertLotBidTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID, lotID, userID uuid.UUID,
+	amount int64,
+	maxBidMinor *int64,
+	createdAt time.Time,
+) (domain.Bid, error) {
+	bidID := uuid.New()
+	const q = `INSERT INTO lot_bids (id, tenant_id, lot_id, user_id, amount, max_bid_minor, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`
+	if _, err := tx.Exec(ctx, q, bidID, tenantID, lotID, userID, amount, maxBidMinor, createdAt); err != nil {
+		return domain.Bid{}, err
+	}
+	return domain.Bid{
+		ID:        bidID,
+		LotID:     &lotID,
+		UserID:    userID,
+		Amount:    amount,
+		MaxBid:    maxBidMinor,
+		CreatedAt: createdAt,
+	}, nil
+}
+
+func resolveProxyOutcome(
+	participants []lotBidParticipant,
+	incrementMinor int64,
+	minimumNextBid int64,
+	submittedAmount int64,
+) proxyResolutionOutcome {
+	if len(participants) == 0 {
+		return proxyResolutionOutcome{}
+	}
+	highest := participants[0]
+	visible := submittedAmount
+	if len(participants) > 1 {
+		second := participants[1]
+		visible = second.EffectiveMax + incrementMinor
+		if visible > highest.EffectiveMax {
+			visible = highest.EffectiveMax
+		}
+		if visible < submittedAmount {
+			visible = submittedAmount
+		}
+	}
+	if visible < minimumNextBid {
+		visible = minimumNextBid
+	}
+	return proxyResolutionOutcome{
+		WinnerUserID: highest.UserID,
+		WinnerMax:    highest.EffectiveMax,
+		VisiblePrice: visible,
+	}
+}
+
+func resolveSoftCloseEndTime(
+	currentEnd *time.Time,
+	now time.Time,
+	enabled bool,
+	windowSeconds int,
+	extensionSeconds int,
+) (*time.Time, bool) {
+	if !enabled || currentEnd == nil || windowSeconds <= 0 || extensionSeconds <= 0 {
+		return currentEnd, false
+	}
+	windowStart := currentEnd.Add(-time.Duration(windowSeconds) * time.Second)
+	if now.Before(windowStart) {
+		return currentEnd, false
+	}
+	candidate := now.Add(time.Duration(extensionSeconds) * time.Second)
+	if !candidate.After(*currentEnd) {
+		return currentEnd, false
+	}
+	return &candidate, true
 }
 
 func (r *LotRepo) RunSchedulerTick(ctx context.Context, now time.Time) error {
@@ -916,12 +970,12 @@ FOR UPDATE`, lotID).Scan(&currentStatus, &auctionID, &tenantID, &auctionTitle, &
 	var hammerPrice *int64
 	var winnerID uuid.UUID
 	var winningAmount int64
-	err := tx.QueryRow(ctx, `
+err := tx.QueryRow(ctx, `
 SELECT user_id, amount
 FROM lot_bids
-WHERE lot_id = $1
+WHERE lot_id = $1 AND tenant_id = $2
 ORDER BY amount DESC, created_at ASC
-LIMIT 1`, lotID).Scan(&winnerID, &winningAmount)
+LIMIT 1`, lotID, tenantID).Scan(&winnerID, &winningAmount)
 	if err == nil {
 		winnerUserID = &winnerID
 		hammerPrice = &winningAmount
@@ -1293,11 +1347,9 @@ func (r *LotRepo) ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, 
 		limit = 100
 	}
 	const q = `
-SELECT b.id, b.user_id, b.amount, b.created_at
+SELECT b.id, b.user_id, b.amount, b.max_bid_minor, b.created_at
 FROM lot_bids b
-JOIN lots l ON l.id = b.lot_id
-JOIN auctions a ON a.id = l.auction_id
-WHERE a.tenant_id = $1 AND b.lot_id = $2
+WHERE b.tenant_id = $1 AND b.lot_id = $2
 ORDER BY b.created_at DESC
 LIMIT $3`
 	rows, err := r.DB.Query(ctx, q, tenantID, lotID, limit)
@@ -1309,7 +1361,7 @@ LIMIT $3`
 	out := make([]domain.Bid, 0)
 	for rows.Next() {
 		var b domain.Bid
-		if err := rows.Scan(&b.ID, &b.UserID, &b.Amount, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.UserID, &b.Amount, &b.MaxBid, &b.CreatedAt); err != nil {
 			return nil, err
 		}
 		id := lotID

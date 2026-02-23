@@ -1,8 +1,11 @@
 package httptransport
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"hash/crc32"
 	"net/http"
 	"strconv"
 	"strings"
@@ -245,6 +248,10 @@ func (h *Handler) GetLotFinancials(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
+	if claims.Role != domain.RoleBidder {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
 		http.Error(w, "invalid lot id", http.StatusBadRequest)
@@ -301,23 +308,19 @@ func (h *Handler) ListLotBids(w http.ResponseWriter, r *http.Request) {
 
 func toPublicBidHistory(bids []domain.Bid) []bidHistoryPublicResponse {
 	out := make([]bidHistoryPublicResponse, 0, len(bids))
-	aliasByUser := make(map[uuid.UUID]string, len(bids))
-	aliasSeq := 1
 	for _, bid := range bids {
-		alias, ok := aliasByUser[bid.UserID]
-		if !ok {
-			alias = "Bidder " + strconv.Itoa(aliasSeq)
-			aliasSeq++
-			aliasByUser[bid.UserID] = alias
-		}
 		out = append(out, bidHistoryPublicResponse{
 			ID:            bid.ID,
 			AmountMinor:   bid.Amount,
 			CreatedAt:     bid.CreatedAt,
-			BidderDisplay: alias,
+			BidderDisplay: bidderAlias(bid.UserID),
 		})
 	}
 	return out
+}
+
+func bidderAlias(userID uuid.UUID) string {
+	return "Bidder " + strconv.Itoa(int(crc32.ChecksumIEEE(userID[:])%900)+100)
 }
 
 func (h *Handler) ListMyWinningLots(w http.ResponseWriter, r *http.Request) {
@@ -445,6 +448,7 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		SnipingWindowSeconds    int                  `json:"sniping_window_seconds"`
 		SnipingExtensionSeconds int                  `json:"sniping_extension_seconds"`
 		BidVisibility           domain.BidVisibility `json:"bid_visibility"`
+		RequireBidderApproval   bool                 `json:"require_bidder_approval"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
@@ -468,6 +472,7 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		SnipingWindowSeconds:    req.SnipingWindowSeconds,
 		SnipingExtensionSeconds: req.SnipingExtensionSeconds,
 		BidVisibility:           req.BidVisibility,
+		RequireBidderApproval:   req.RequireBidderApproval,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -661,10 +666,20 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		SnipingWindowSeconds    int                  `json:"sniping_window_seconds"`
 		SnipingExtensionSeconds int                  `json:"sniping_extension_seconds"`
 		BidVisibility           domain.BidVisibility `json:"bid_visibility"`
+		RequireBidderApproval   *bool                `json:"require_bidder_approval"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
+	}
+	requireBidderApproval := false
+	if req.RequireBidderApproval != nil {
+		requireBidderApproval = *req.RequireBidderApproval
+	} else {
+		current, getErr := h.Auction.Get(r.Context(), tenant.ID, auctionID)
+		if getErr == nil {
+			requireBidderApproval = current.RequireBidderApproval
+		}
 	}
 	a, err := h.Auction.Update(r.Context(), usecase.CreateAuctionInput{
 		TenantID:                tenant.ID,
@@ -684,6 +699,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		SnipingWindowSeconds:    req.SnipingWindowSeconds,
 		SnipingExtensionSeconds: req.SnipingExtensionSeconds,
 		BidVisibility:           req.BidVisibility,
+		RequireBidderApproval:   requireBidderApproval,
 	}, auctionID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -759,6 +775,74 @@ func (h *Handler) ListBidders(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, users)
 }
 
+func (h *Handler) ListAuctionBidders(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	var statusFilter *domain.ApprovalStatus
+	if raw := strings.TrimSpace(r.URL.Query().Get("status")); raw != "" {
+		status := domain.ApprovalStatus(strings.ToUpper(raw))
+		switch status {
+		case domain.ApprovalPending, domain.ApprovalApproved, domain.ApprovalRejected:
+			statusFilter = &status
+		default:
+			http.Error(w, "invalid status", http.StatusBadRequest)
+			return
+		}
+	}
+	rows, err := h.Bidder.ListAuctionBidders(r.Context(), tenant.ID, auctionID, statusFilter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
+func (h *Handler) ApproveAuctionBidder(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, _ := middleware.ClaimsFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Bidder.ApproveAuctionBidder(r.Context(), tenant.ID, auctionID, userID, claims.UserID, time.Now().UTC())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) RejectAuctionBidder(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, _ := middleware.ClaimsFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Bidder.RejectAuctionBidder(r.Context(), tenant.ID, auctionID, userID, claims.UserID, time.Now().UTC())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (h *Handler) ApproveBidder(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -785,6 +869,92 @@ func (h *Handler) RejectBidder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "REJECTED"})
+}
+
+func (h *Handler) GetBidderProfile(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Bidder.GetProfile(r.Context(), tenant.ID, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) UpdateBidderProfile(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Status        *domain.TenantBidderStatus    `json:"status"`
+		RiskLevel     *domain.TenantBidderRiskLevel `json:"risk_level"`
+		InternalNotes *string                       `json:"internal_notes"`
+		Phone         *string                       `json:"phone"`
+		CompanyName   *string                       `json:"company_name"`
+		AddressLine1  *string                       `json:"address_line1"`
+		AddressLine2  *string                       `json:"address_line2"`
+		City          *string                       `json:"city"`
+		PostalCode    *string                       `json:"postal_code"`
+		Country       *string                       `json:"country"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	input := port.UpdateTenantBidderInput{
+		InternalNotes: req.InternalNotes,
+		Phone:         req.Phone,
+		CompanyName:   req.CompanyName,
+		AddressLine1:  req.AddressLine1,
+		AddressLine2:  req.AddressLine2,
+		City:          req.City,
+		PostalCode:    req.PostalCode,
+		Country:       req.Country,
+	}
+	if req.Status != nil {
+		input.Status = *req.Status
+	}
+	if req.RiskLevel != nil {
+		input.RiskLevel = *req.RiskLevel
+	}
+	item, err := h.Bidder.UpdateProfile(r.Context(), tenant.ID, userID, input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) UpdateAuctionBidderSettings(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		RequireBidderApproval bool `json:"require_bidder_approval"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	if err := h.Auction.UpdateRequireBidderApproval(r.Context(), tenant.ID, auctionID, req.RequireBidderApproval); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"auction_id":              auctionID,
+		"require_bidder_approval": req.RequireBidderApproval,
+	})
 }
 
 func (h *Handler) GetTenantSettings(w http.ResponseWriter, r *http.Request) {
@@ -928,7 +1098,7 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
-	if claims.Role != domain.RoleBidder && claims.Role != domain.RoleAdmin {
+	if claims.Role != domain.RoleBidder {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -959,7 +1129,15 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 		Now:      time.Now().UTC(),
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		switch {
+		case errors.Is(err, usecase.ErrApprovalRequired),
+			errors.Is(err, usecase.ErrPendingApproval),
+			errors.Is(err, usecase.ErrNotApproved),
+			errors.Is(err, usecase.ErrBidderSuspended):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		default:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -971,6 +1149,30 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 			"amount_minor": res.Bid.Amount,
 			"created_at":   res.Bid.CreatedAt,
 		},
+	})
+}
+
+func (h *Handler) RequestToBid(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Bidder.RequestToBid(r.Context(), tenant.ID, auctionID, claims.UserID, time.Now().UTC())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"auction_id": auctionID,
+		"user_id":    claims.UserID,
+		"status":     item.Status,
 	})
 }
 
@@ -1152,6 +1354,106 @@ func (h *Handler) ListAuditLogsByEntity(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, logs)
 }
 
+func (h *Handler) ListLotAuditLogs(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
+	if err != nil {
+		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		return
+	}
+
+	limit := parsePositiveIntOrDefault(r.URL.Query().Get("limit"), 20)
+	if limit > 100 {
+		limit = 100
+	}
+	cursorCreatedAt, cursorID, err := decodeAuditCursor(strings.TrimSpace(r.URL.Query().Get("cursor")))
+	if err != nil {
+		http.Error(w, "invalid cursor", http.StatusBadRequest)
+		return
+	}
+
+	var actorUserID *uuid.UUID
+	if rawActor := strings.TrimSpace(r.URL.Query().Get("actor_user_id")); rawActor != "" {
+		id, parseErr := uuid.Parse(rawActor)
+		if parseErr != nil {
+			http.Error(w, "invalid actor_user_id", http.StatusBadRequest)
+			return
+		}
+		actorUserID = &id
+	}
+
+	from, err := parseISODateTime(strings.TrimSpace(r.URL.Query().Get("from")), false)
+	if err != nil {
+		http.Error(w, "invalid from", http.StatusBadRequest)
+		return
+	}
+	to, err := parseISODateTime(strings.TrimSpace(r.URL.Query().Get("to")), true)
+	if err != nil {
+		http.Error(w, "invalid to", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.Audit.ListByEntityPage(r.Context(), tenant.ID, "LOT", lotID, usecase.AuditListInput{
+		Limit:           limit,
+		CursorCreatedAt: cursorCreatedAt,
+		CursorID:        cursorID,
+		EventType:       strings.TrimSpace(r.URL.Query().Get("event_type")),
+		ActorUserID:     actorUserID,
+		From:            from,
+		To:              to,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, usecase.ErrForbidden):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		case errors.Is(err, usecase.ErrUnauthorized):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+		case errors.Is(err, usecase.ErrValidation):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	items := make([]map[string]any, 0, len(result.Items))
+	for _, row := range result.Items {
+		var actorID *string
+		var entityID *string
+		if row.ActorUserID != nil {
+			id := row.ActorUserID.String()
+			actorID = &id
+		}
+		if row.EntityID != nil {
+			id := row.EntityID.String()
+			entityID = &id
+		}
+		items = append(items, map[string]any{
+			"id":          row.ID,
+			"created_at":  row.CreatedAt,
+			"event_type":  row.Action,
+			"entity_type": row.EntityType,
+			"entity_id":   entityID,
+			"actor": map[string]any{
+				"user_id":      actorID,
+				"display_name": auditActorDisplay(row.ActorRole, row.ActorUserID),
+				"role":         auditActorRole(row.ActorRole, row.ActorUserID),
+			},
+			"summary":  auditSummary(row.Action, row.Metadata),
+			"metadata": parseAuditMetadata(row.Metadata),
+		})
+	}
+
+	var nextCursor any = nil
+	if result.HasMore && len(result.Items) > 0 {
+		nextCursor = encodeAuditCursor(result.Items[len(result.Items)-1].CreatedAt, result.Items[len(result.Items)-1].ID)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":       items,
+		"next_cursor": nextCursor,
+	})
+}
+
 func toLotPublicResponse(l domain.Lot) lotPublicResponse {
 	saleResult := ""
 	if l.Status == domain.LotEnded {
@@ -1197,6 +1499,104 @@ func parsePositiveIntOrDefault(raw string, fallback int) int {
 		return fallback
 	}
 	return val
+}
+
+func encodeAuditCursor(createdAt time.Time, id uuid.UUID) string {
+	payload := fmt.Sprintf("%d|%s", createdAt.UTC().UnixNano(), id.String())
+	return base64.RawURLEncoding.EncodeToString([]byte(payload))
+}
+
+func decodeAuditCursor(raw string) (*time.Time, *uuid.UUID, error) {
+	if raw == "" {
+		return nil, nil, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, nil, err
+	}
+	parts := strings.Split(string(decoded), "|")
+	if len(parts) != 2 {
+		return nil, nil, errors.New("invalid cursor")
+	}
+	unixNano, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return nil, nil, err
+	}
+	id, err := uuid.Parse(parts[1])
+	if err != nil {
+		return nil, nil, err
+	}
+	ts := time.Unix(0, unixNano).UTC()
+	return &ts, &id, nil
+}
+
+func parseISODateTime(raw string, endOfDay bool) (*time.Time, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		tt := t.UTC()
+		return &tt, nil
+	}
+	day, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return nil, err
+	}
+	utc := day.UTC()
+	if endOfDay {
+		adjusted := utc.Add(24*time.Hour - time.Nanosecond)
+		return &adjusted, nil
+	}
+	return &utc, nil
+}
+
+func parseAuditMetadata(raw json.RawMessage) map[string]any {
+	if len(raw) == 0 {
+		return map[string]any{}
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil || out == nil {
+		return map[string]any{}
+	}
+	return out
+}
+
+func auditActorDisplay(actorRole string, actorUserID *uuid.UUID) string {
+	role := auditActorRole(actorRole, actorUserID)
+	if role == "SYSTEM" {
+		return "System"
+	}
+	if role == "BIDDER" && actorUserID != nil {
+		return fmt.Sprintf("Bidder %03d", crc32.ChecksumIEEE([]byte(actorUserID.String()))%1000)
+	}
+	if actorUserID != nil {
+		label := strings.ToUpper(role[:1]) + strings.ToLower(role[1:])
+		return fmt.Sprintf("%s %s", label, actorUserID.String()[:8])
+	}
+	return "System"
+}
+
+func auditActorRole(actorRole string, actorUserID *uuid.UUID) string {
+	role := strings.ToUpper(strings.TrimSpace(actorRole))
+	if role != "" {
+		return role
+	}
+	if actorUserID == nil {
+		return "SYSTEM"
+	}
+	return "SYSTEM"
+}
+
+func auditSummary(eventType string, metadata json.RawMessage) string {
+	typeLabel := strings.TrimSpace(eventType)
+	if typeLabel == "" {
+		return "UNKNOWN"
+	}
+	parsed := parseAuditMetadata(metadata)
+	if amount, ok := parsed["amount_minor"]; ok {
+		return fmt.Sprintf("%s (%v)", typeLabel, amount)
+	}
+	return typeLabel
 }
 
 func toAuthUserResponse(user *domain.User) authUserResponse {

@@ -65,6 +65,15 @@ func (n *noopAuditRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, li
 func (n *noopAuditRepo) ListByEntity(ctx context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit int) ([]domain.AuditLog, error) {
 	return nil, nil
 }
+func (n *noopAuditRepo) ListByEntityPage(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	entityType string,
+	entityID uuid.UUID,
+	query port.AuditListQuery,
+) (port.AuditListPage, error) {
+	return port.AuditListPage{Items: []domain.AuditLog{}, HasMore: false}, nil
+}
 
 func TestInvoiceSettlementSummaryCrossTenantForbiddenBeforeRepo(t *testing.T) {
 	tenantA := uuid.New()

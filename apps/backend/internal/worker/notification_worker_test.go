@@ -93,6 +93,15 @@ func (f *fakeWorkerAuditRepo) ListByTenant(ctx context.Context, tenantID uuid.UU
 func (f *fakeWorkerAuditRepo) ListByEntity(ctx context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit int) ([]domain.AuditLog, error) {
 	return nil, nil
 }
+func (f *fakeWorkerAuditRepo) ListByEntityPage(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	entityType string,
+	entityID uuid.UUID,
+	query port.AuditListQuery,
+) (port.AuditListPage, error) {
+	return port.AuditListPage{Items: []domain.AuditLog{}, HasMore: false}, nil
+}
 
 func TestNotificationWorker_RetryOnFailure(t *testing.T) {
 	tenantID := uuid.New()

@@ -7,6 +7,7 @@ type FormState = {
   auto_extend_enabled: boolean;
   sniping_window_seconds: number;
   sniping_extension_seconds: number;
+  require_bidder_approval: boolean;
 };
 
 export default function AuctionSettings() {
@@ -31,6 +32,7 @@ export default function AuctionSettings() {
           auto_extend_enabled: a.auto_extend_enabled,
           sniping_window_seconds: a.sniping_window_seconds,
           sniping_extension_seconds: a.sniping_extension_seconds,
+          require_bidder_approval: Boolean(a.require_bidder_approval),
         });
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load auction settings"))
@@ -82,6 +84,7 @@ export default function AuctionSettings() {
         auto_extend_enabled: form.auto_extend_enabled,
         sniping_window_seconds: form.sniping_window_seconds,
         sniping_extension_seconds: form.sniping_extension_seconds,
+        require_bidder_approval: form.require_bidder_approval,
       });
       setAuction(updated);
       setMessage("Soft-close settings saved.");
@@ -111,6 +114,18 @@ export default function AuctionSettings() {
       {message ? <p className="success mb-3">{message}</p> : null}
 
       <form className="panel space-y-5" onSubmit={onSave}>
+        <div className="flex items-center justify-between rounded-lg border border-neutral-200 p-4">
+          <div>
+            <h2 className="font-medium text-neutral-900">Require Bidder Approval</h2>
+            <p className="text-sm text-neutral-500">Bidders must be approved for this auction before bidding.</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={form.require_bidder_approval}
+            onChange={(e) => setForm((prev) => (prev ? { ...prev, require_bidder_approval: e.target.checked } : prev))}
+          />
+        </div>
+
         <div className="flex items-center justify-between rounded-lg border border-neutral-200 p-4">
           <div>
             <h2 className="font-medium text-neutral-900">Enable Soft Close</h2>

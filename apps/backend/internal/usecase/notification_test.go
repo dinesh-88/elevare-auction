@@ -110,6 +110,15 @@ func (f *fakeAuditSink) ListByTenant(ctx context.Context, tenantID uuid.UUID, li
 func (f *fakeAuditSink) ListByEntity(ctx context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit int) ([]domain.AuditLog, error) {
 	return nil, errors.New("unused")
 }
+func (f *fakeAuditSink) ListByEntityPage(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	entityType string,
+	entityID uuid.UUID,
+	query port.AuditListQuery,
+) (port.AuditListPage, error) {
+	return port.AuditListPage{Items: []domain.AuditLog{}, HasMore: false}, errors.New("unused")
+}
 
 func TestNotificationEmit_DedupeEnqueueSameEvent(t *testing.T) {
 	notifRepo := &fakeNotificationRepo{}

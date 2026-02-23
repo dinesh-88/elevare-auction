@@ -28,8 +28,8 @@ export default function BidInput({
     setSubmitError(null);
     try {
       await onQuickBid(minimumNextBid);
-    } catch {
-      setSubmitError("Unable to place bid. Please try again.");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Unable to place bid. Please try again.");
     } finally {
       setSubmittingQuick(false);
     }
@@ -48,8 +48,8 @@ export default function BidInput({
       await onMaxBid(parsed);
       setMaxBid("");
       setOpenMax(false);
-    } catch {
-      setSubmitError("Unable to place bid. Please try again.");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Unable to place bid. Please try again.");
     } finally {
       setSubmittingMax(false);
     }

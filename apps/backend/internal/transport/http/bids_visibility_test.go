@@ -19,7 +19,8 @@ import (
 )
 
 type fakeBidLotRepo struct {
-	bids []domain.Bid
+	bids      []domain.Bid
+	placeResp *port.PlaceLotBidTxResult
 }
 
 func (f *fakeBidLotRepo) Create(ctx context.Context, tenantID uuid.UUID, lot *domain.Lot) error {
@@ -48,6 +49,9 @@ func (f *fakeBidLotRepo) OnAuctionStart(ctx context.Context, tenantID, auctionID
 	return nil
 }
 func (f *fakeBidLotRepo) PlaceBidTx(ctx context.Context, in port.PlaceLotBidTxInput) (*port.PlaceLotBidTxResult, error) {
+	if f.placeResp != nil {
+		return f.placeResp, nil
+	}
 	return nil, nil
 }
 func (f *fakeBidLotRepo) ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error) {
@@ -133,5 +137,67 @@ func TestCompetingProxyLikeBidsHaveNoProxyIndication(t *testing.T) {
 		if strings.Contains(display, "proxy") || strings.Contains(display, "auto") {
 			t.Fatal("bidder display should not indicate proxy")
 		}
+	}
+}
+
+func TestPublicBidHistoryUsesStableAliasPerUser(t *testing.T) {
+	userA := uuid.New()
+	userB := uuid.New()
+	base := time.Now().UTC()
+	first := toPublicBidHistory([]domain.Bid{
+		{ID: uuid.New(), UserID: userA, Amount: 1000, CreatedAt: base},
+		{ID: uuid.New(), UserID: userB, Amount: 1100, CreatedAt: base.Add(time.Second)},
+	})
+	second := toPublicBidHistory([]domain.Bid{
+		{ID: uuid.New(), UserID: userB, Amount: 1200, CreatedAt: base.Add(2 * time.Second)},
+		{ID: uuid.New(), UserID: userA, Amount: 1300, CreatedAt: base.Add(3 * time.Second)},
+	})
+	if first[0].BidderDisplay == first[1].BidderDisplay {
+		t.Fatal("expected distinct aliases per user")
+	}
+	if first[0].BidderDisplay != second[1].BidderDisplay {
+		t.Fatal("expected stable alias for user A")
+	}
+	if first[1].BidderDisplay != second[0].BidderDisplay {
+		t.Fatal("expected stable alias for user B")
+	}
+}
+
+func TestPlaceBidResponseDoesNotExposeMaxBidMinor(t *testing.T) {
+	tenantID := uuid.New()
+	lotID := uuid.New()
+	userID := uuid.New()
+	max := int64(1500)
+	repo := &fakeBidLotRepo{
+		placeResp: &port.PlaceLotBidTxResult{
+			Lot: domain.Lot{ID: lotID, CurrentPrice: 1100},
+			Bid: domain.Bid{
+				ID:        uuid.New(),
+				LotID:     &lotID,
+				UserID:    userID,
+				Amount:    1100,
+				MaxBid:    &max,
+				CreatedAt: time.Now().UTC(),
+			},
+		},
+	}
+	h := &Handler{Lot: &usecase.LotUseCase{Lots: repo, Broadcaster: &noopBidBroadcaster{}}}
+
+	body := strings.NewReader(`{"max_bid_minor":1500}`)
+	req := httptest.NewRequest(http.MethodPost, "/lots/"+lotID.String()+"/bid", body)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("lotId", lotID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = middleware.WithTenant(ctx, &domain.Tenant{ID: tenantID})
+	ctx = middleware.WithClaims(ctx, &port.TokenClaims{TenantID: tenantID, UserID: userID, Role: domain.RoleBidder})
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	h.PlaceLotBid(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), "max_bid_minor") || strings.Contains(rr.Body.String(), "MaxBid") {
+		t.Fatalf("place bid response leaked max bid: %s", rr.Body.String())
 	}
 }

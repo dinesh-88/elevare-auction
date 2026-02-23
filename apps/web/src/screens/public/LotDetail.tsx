@@ -47,7 +47,37 @@ export default function LotDetail({
   const [canViewFinancials, setCanViewFinancials] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bidMessage, setBidMessage] = useState<string | null>(null);
+  const [requestToBidStatus, setRequestToBidStatus] = useState<"PENDING" | "APPROVED" | "REJECTED" | null>(null);
   const [extendedBadge, setExtendedBadge] = useState(false);
+
+  const applyBidResponse = (raw: unknown) => {
+    const record = (raw ?? {}) as Record<string, unknown>;
+    const currentPrice = Number(record.current_price ?? 0);
+    const endedAt = (record.ended_at ?? null) as string | null;
+    const bid = (record.bid ?? {}) as Record<string, unknown>;
+    const bidID = String(bid.id ?? "");
+    const amountMinor = Number(bid.amount_minor ?? 0);
+    const createdAt = String(bid.created_at ?? new Date().toISOString());
+
+    if (Number.isFinite(currentPrice) && currentPrice > 0) {
+      setLot((prev) =>
+        prev
+          ? {
+              ...prev,
+              current_price: currentPrice,
+              minimum_next_bid_minor: currentPrice + (prev.increment_minor ?? prev.min_increment),
+              ended_at: endedAt ?? prev.ended_at,
+            }
+          : prev,
+      );
+    }
+    if (bidID) {
+      setHistory((prev) => {
+        if (prev.some((item) => item.bid_id === bidID)) return prev;
+        return [{ bid_id: bidID, amount_minor: amountMinor, created_at: createdAt, bidder_display: "Bidder" }, ...prev];
+      });
+    }
+  };
 
   const load = useCallback(async () => {
     if (!routeLotID) return;
@@ -117,13 +147,22 @@ export default function LotDetail({
           ? {
               ...prev,
               current_price: event.current_price,
+              minimum_next_bid_minor: event.current_price + (prev.increment_minor ?? prev.min_increment),
               ended_at: event.ended_at ?? prev.ended_at,
             }
           : prev,
       );
       setHistory((prev) => {
         if (prev.some((b) => b.bid_id === event.bid_id)) return prev;
-        return [{ bid_id: event.bid_id, amount_minor: event.amount, created_at: event.created_at, bidder_display: "Bidder" }, ...prev];
+        return [
+          {
+            bid_id: event.bid_id,
+            amount_minor: event.amount,
+            created_at: event.created_at,
+            bidder_display: event.bidder_display || "Bidder",
+          },
+          ...prev,
+        ];
       });
     },
     (event) => {
@@ -158,22 +197,44 @@ export default function LotDetail({
   const placeQuickBid = async (nextAmount: number) => {
     if (!routeLotID) return;
     try {
-      await api.placeLotBid(routeLotID, { bid_amount_minor: nextAmount, max_bid_minor: null });
+      const res = await api.placeLotBid(routeLotID, { bid_amount_minor: nextAmount, max_bid_minor: null });
+      applyBidResponse(res);
       setBidMessage("Bid placed successfully");
       window.setTimeout(() => setBidMessage(null), 2500);
     } catch (err) {
-      throw new Error(err instanceof Error ? err.message : "Failed to place bid");
+      const message = err instanceof Error ? err.message : "Failed to place bid";
+      if (message.toLowerCase().includes("approval")) {
+        setRequestToBidStatus("PENDING");
+      }
+      throw new Error(message);
     }
   };
 
   const placeMaxBid = async (maxBidMinor: number) => {
     if (!routeLotID) return;
     try {
-      await api.placeLotBid(routeLotID, { bid_amount_minor: null, max_bid_minor: maxBidMinor });
+      const res = await api.placeLotBid(routeLotID, { bid_amount_minor: null, max_bid_minor: maxBidMinor });
+      applyBidResponse(res);
       setBidMessage("Bid placed successfully");
       window.setTimeout(() => setBidMessage(null), 2500);
     } catch (err) {
-      throw new Error(err instanceof Error ? err.message : "Failed to place bid");
+      const message = err instanceof Error ? err.message : "Failed to place bid";
+      if (message.toLowerCase().includes("approval")) {
+        setRequestToBidStatus("PENDING");
+      }
+      throw new Error(message);
+    }
+  };
+
+  const requestToBid = async () => {
+    if (!lot) return;
+    try {
+      const res = await api.requestToBid(lot.auction_id);
+      setRequestToBidStatus(res.status);
+      setBidMessage(res.status === "APPROVED" ? "You are approved to bid." : "Bid request submitted.");
+      window.setTimeout(() => setBidMessage(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to request approval");
     }
   };
 
@@ -244,7 +305,7 @@ export default function LotDetail({
   const hammerPrice = lot.hammer_price ?? null;
   const isWinner = Boolean(user && financials?.winner_user && user.id === financials.winner_user);
   const symbol = currencySymbol(auctionCurrency);
-  const minimumNextBid = lot.minimum_next_bid_minor ?? lot.current_price + lot.min_increment;
+  const minimumNextBid = lot.current_price + (lot.increment_minor ?? lot.min_increment);
 
   return (
     <section className="mx-auto max-w-[1440px] space-y-10 px-4 py-6 md:space-y-12 md:px-8 md:py-12">
@@ -300,6 +361,13 @@ export default function LotDetail({
                     Minimum Next Bid: {symbol}{minimumNextBid.toLocaleString()}
                   </p>
                   <BidInput minimumNextBid={minimumNextBid} currency={symbol} onQuickBid={placeQuickBid} onMaxBid={placeMaxBid} />
+                  {requestToBidStatus !== "APPROVED" ? (
+                    <div className="mt-3">
+                      <button type="button" className="btn-secondary" onClick={requestToBid}>
+                        {requestToBidStatus === "PENDING" ? "Pending approval" : "Request to bid"}
+                      </button>
+                    </div>
+                  ) : null}
                 </>
               ) : isAuthenticated && !isAdmin && auctionStatus !== "LIVE" ? (
                 <p className="text-sm text-neutral-500">Bidding will open when the auction goes live.</p>

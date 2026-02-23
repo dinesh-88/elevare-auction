@@ -3,6 +3,8 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"hash/crc32"
+	"strconv"
 	"sync"
 	"time"
 
@@ -80,6 +82,7 @@ func (h *Hub) BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.B
 		"lot_id":        lotID,
 		"bid_id":        bid.ID,
 		"amount":        bid.Amount,
+		"bidder_display": lotBidderAlias(bid.UserID),
 		"current_price": currentPrice,
 		"ended_at":      endedAt,
 		"created_at":    bid.CreatedAt,
@@ -88,6 +91,10 @@ func (h *Hub) BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.B
 	for _, c := range conns {
 		_ = c.Write(ctx, websocket.MessageText, b)
 	}
+}
+
+func lotBidderAlias(userID uuid.UUID) string {
+	return "Bidder " + strconv.Itoa(int(crc32.ChecksumIEEE(userID[:])%900)+100)
 }
 
 func (h *Hub) BroadcastLotExtended(ctx context.Context, lotID uuid.UUID, newEndTime time.Time) {

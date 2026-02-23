@@ -43,6 +43,7 @@ type AuctionRepository interface {
 	Update(ctx context.Context, auction *domain.Auction) error
 	Delete(ctx context.Context, tenantID, auctionID uuid.UUID) error
 	UpdateStatus(ctx context.Context, tenantID, auctionID uuid.UUID, status domain.AuctionStatus) error
+	UpdateRequireBidderApproval(ctx context.Context, tenantID, auctionID uuid.UUID, required bool) error
 	RunSchedulerTick(ctx context.Context, now time.Time) error
 }
 
@@ -60,6 +61,29 @@ type LotRepository interface {
 	ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error)
 	ListWonByUser(ctx context.Context, tenantID, userID uuid.UUID, limit int) ([]domain.Lot, error)
 	RunSchedulerTick(ctx context.Context, now time.Time) error
+}
+
+type BidderRepository interface {
+	EnsureTenantBidder(ctx context.Context, tenantID, userID uuid.UUID) (*domain.TenantBidderProfile, error)
+	GetTenantBidder(ctx context.Context, tenantID, userID uuid.UUID) (*domain.TenantBidderProfile, error)
+	UpdateTenantBidder(ctx context.Context, tenantID, userID uuid.UUID, in UpdateTenantBidderInput) (*domain.TenantBidderProfile, error)
+	RequestAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, now time.Time) (*domain.AuctionBidderApproval, bool, error)
+	GetAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID) (*domain.AuctionBidderApproval, error)
+	SetAuctionApproval(ctx context.Context, tenantID, auctionID, userID, decidedBy uuid.UUID, status domain.ApprovalStatus, now time.Time) (*domain.AuctionBidderApproval, error)
+	ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, status *domain.ApprovalStatus) ([]domain.AuctionBidderAdminRow, error)
+}
+
+type UpdateTenantBidderInput struct {
+	Status        domain.TenantBidderStatus
+	RiskLevel     domain.TenantBidderRiskLevel
+	InternalNotes *string
+	Phone         *string
+	CompanyName   *string
+	AddressLine1  *string
+	AddressLine2  *string
+	City          *string
+	PostalCode    *string
+	Country       *string
 }
 
 type FeeRepository interface {

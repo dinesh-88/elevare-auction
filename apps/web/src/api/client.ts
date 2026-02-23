@@ -19,6 +19,34 @@ export interface LotBid {
   bidder_display: string;
 }
 
+export interface NotificationItem {
+  id: string;
+  type: "OUTBIDDED" | "LOT_WON" | "INVOICE_ISSUED";
+  title: string;
+  body: string;
+  link?: string | null;
+  metadata?: Record<string, unknown>;
+  read_at?: string | null;
+  created_at: string;
+}
+
+export interface LotAuditActor {
+  user_id: string | null;
+  display_name: string;
+  role: "SYSTEM" | "ADMIN" | "OWNER" | "BIDDER" | "ACCOUNTING" | "STAFF" | string;
+}
+
+export interface LotAuditItem {
+  id: string;
+  created_at: string;
+  event_type: string;
+  entity_type: string;
+  entity_id: string;
+  actor: LotAuditActor | null;
+  summary: string | null;
+  metadata: Record<string, unknown>;
+}
+
 export interface Auction {
   id: string;
   tenant_id: string;
@@ -43,7 +71,36 @@ export interface Auction {
   sniping_window_seconds: number;
   sniping_extension_seconds: number;
   bid_visibility: "PUBLIC" | "ANONYMOUS" | "SEALED";
+  require_bidder_approval?: boolean;
   created_at: string;
+}
+
+export interface AuctionBidderAdminRow {
+  user_id: string;
+  email: string;
+  approval_status: "PENDING" | "APPROVED" | "REJECTED";
+  tenant_status: "ACTIVE" | "SUSPENDED";
+  risk_level: "LOW" | "NORMAL" | "HIGH";
+  requested_at: string;
+  decided_at?: string | null;
+}
+
+export interface TenantBidderProfile {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  phone?: string | null;
+  company_name?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  status: "ACTIVE" | "SUSPENDED";
+  risk_level: "LOW" | "NORMAL" | "HIGH";
+  internal_notes?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Lot {
@@ -184,6 +241,20 @@ function normalizeSettlementSummary(raw: unknown): AuctionSettlementSummary {
   };
 }
 
+function normalizeNotificationItem(raw: unknown): NotificationItem {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    type: String(r.type ?? r.Type ?? "OUTBIDDED") as NotificationItem["type"],
+    title: String(r.title ?? r.Title ?? ""),
+    body: String(r.body ?? r.Body ?? ""),
+    link: (r.link ?? r.Link ?? null) as string | null,
+    metadata: (r.metadata ?? r.Metadata ?? {}) as Record<string, unknown>,
+    read_at: (r.read_at ?? r.ReadAt ?? null) as string | null,
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
 function normalizeSettlementInvoiceRow(raw: unknown): SettlementInvoiceRow {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
@@ -202,6 +273,27 @@ function normalizeSettlementInvoiceRow(raw: unknown): SettlementInvoiceRow {
     paid_at: (r.paid_at ?? r.PaidAt ?? null) as string | null,
     payment_reference: (r.payment_reference ?? r.PaymentReference ?? null) as string | null,
     cancel_reason: (r.cancel_reason ?? r.CancelReason ?? null) as string | null,
+  };
+}
+
+function normalizeLotAuditItem(raw: unknown): LotAuditItem {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const actorRaw = (r.actor ?? null) as Record<string, unknown> | null;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+    event_type: String(r.event_type ?? r.eventType ?? r.action ?? r.Action ?? ""),
+    entity_type: String(r.entity_type ?? r.entityType ?? r.EntityType ?? "LOT"),
+    entity_id: String(r.entity_id ?? r.entityId ?? r.EntityID ?? ""),
+    actor: actorRaw
+      ? {
+          user_id: actorRaw.user_id ? String(actorRaw.user_id) : null,
+          display_name: String(actorRaw.display_name ?? "System"),
+          role: String(actorRaw.role ?? "SYSTEM"),
+        }
+      : null,
+    summary: r.summary == null ? null : String(r.summary),
+    metadata: (r.metadata && typeof r.metadata === "object" ? r.metadata : {}) as Record<string, unknown>,
   };
 }
 
@@ -363,7 +455,42 @@ export function normalizeAuction(raw: unknown): Auction {
     sniping_window_seconds: Number(r.sniping_window_seconds ?? r.SnipingWindowSeconds ?? 0),
     sniping_extension_seconds: Number(r.sniping_extension_seconds ?? r.SnipingExtensionSeconds ?? 0),
     bid_visibility: String(r.bid_visibility ?? r.BidVisibility ?? "PUBLIC") as Auction["bid_visibility"],
+    require_bidder_approval: Boolean(r.require_bidder_approval ?? r.RequireBidderApproval ?? false),
     created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
+function normalizeAuctionBidderAdminRow(raw: unknown): AuctionBidderAdminRow {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    user_id: String(r.user_id ?? r.UserID ?? ""),
+    email: String(r.email ?? r.Email ?? ""),
+    approval_status: String(r.approval_status ?? r.ApprovalStatus ?? "PENDING") as AuctionBidderAdminRow["approval_status"],
+    tenant_status: String(r.tenant_status ?? r.TenantStatus ?? "ACTIVE") as AuctionBidderAdminRow["tenant_status"],
+    risk_level: String(r.risk_level ?? r.RiskLevel ?? "NORMAL") as AuctionBidderAdminRow["risk_level"],
+    requested_at: String(r.requested_at ?? r.RequestedAt ?? ""),
+    decided_at: (r.decided_at ?? r.DecidedAt ?? null) as string | null,
+  };
+}
+
+function normalizeTenantBidderProfile(raw: unknown): TenantBidderProfile {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    tenant_id: String(r.tenant_id ?? r.TenantID ?? ""),
+    user_id: String(r.user_id ?? r.UserID ?? ""),
+    phone: (r.phone ?? r.Phone ?? null) as string | null,
+    company_name: (r.company_name ?? r.CompanyName ?? null) as string | null,
+    address_line1: (r.address_line1 ?? r.AddressLine1 ?? null) as string | null,
+    address_line2: (r.address_line2 ?? r.AddressLine2 ?? null) as string | null,
+    city: (r.city ?? r.City ?? null) as string | null,
+    postal_code: (r.postal_code ?? r.PostalCode ?? null) as string | null,
+    country: (r.country ?? r.Country ?? null) as string | null,
+    status: String(r.status ?? r.Status ?? "ACTIVE") as TenantBidderProfile["status"],
+    risk_level: String(r.risk_level ?? r.RiskLevel ?? "NORMAL") as TenantBidderProfile["risk_level"],
+    internal_notes: (r.internal_notes ?? r.InternalNotes ?? null) as string | null,
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+    updated_at: String(r.updated_at ?? r.UpdatedAt ?? ""),
   };
 }
 
@@ -609,6 +736,68 @@ export const api = {
   getLot: async (lotId: string) => normalizeLot(await request<unknown>(`/lots/${lotId}`)),
   getLotFinancials: (lotId: string) => request<LotFinancials>(`/lots/${lotId}/financials`),
   getInvoice: (invoiceId: string) => request<Invoice>(`/invoices/${invoiceId}`),
+  listMyNotifications: async (params?: { limit?: number; cursor?: string }) => {
+    const search = new URLSearchParams();
+    search.set("limit", String(params?.limit ?? 20));
+    if (params?.cursor) search.set("cursor", params.cursor);
+    const res = await request<{ items: unknown[]; next_cursor: string }>(`/me/notifications?${search.toString()}`);
+    return {
+      items: (res.items ?? []).map(normalizeNotificationItem),
+      next_cursor: String(res.next_cursor ?? ""),
+    };
+  },
+  listLotAuditLogs: async (
+    lotId: string,
+    params?: {
+      limit?: number;
+      cursor?: string;
+      event_type?: string;
+      actor_user_id?: string;
+      from?: string;
+      to?: string;
+    },
+  ) => {
+    const search = new URLSearchParams();
+    search.set("limit", String(params?.limit ?? 20));
+    if (params?.cursor) search.set("cursor", params.cursor);
+    if (params?.event_type) search.set("event_type", params.event_type);
+    if (params?.actor_user_id) search.set("actor_user_id", params.actor_user_id);
+    if (params?.from) search.set("from", params.from);
+    if (params?.to) search.set("to", params.to);
+
+    const response = await fetch(`${API_BASE}/admin/lots/${lotId}/audit?${search.toString()}`, {
+      credentials: "include",
+      headers: (() => {
+        const headers = new Headers();
+        const token = getToken();
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+        return headers;
+      })(),
+    });
+    const text = await response.text();
+    let body: unknown = null;
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text;
+      }
+    }
+    if (!response.ok) {
+      const bodyRecord = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+      const message = typeof body === "string" ? body : (bodyRecord?.error as string) || text || "Request failed";
+      const err = new Error(message) as Error & { status?: number };
+      err.status = response.status;
+      throw err;
+    }
+    const res = (body ?? {}) as { items?: unknown[]; next_cursor?: string | null };
+    return {
+      items: (res.items ?? []).map(normalizeLotAuditItem),
+      next_cursor: res.next_cursor ? String(res.next_cursor) : null,
+    };
+  },
+  markMyNotificationRead: (notificationId: string) => request<{ status: string }>(`/me/notifications/${notificationId}/read`, { method: "POST" }),
+  markAllMyNotificationsRead: () => request<{ status: string }>("/me/notifications/read-all", { method: "POST" }),
   getAuctionSettlementSummary: async (auctionId: string) =>
     normalizeSettlementSummary(await request<unknown>(`/admin/auctions/${auctionId}/settlement-summary`)),
   listAuctionInvoices: (auctionId: string, params?: { status?: "UNPAID" | "PAID" | "CANCELLED"; search?: string; limit?: number; offset?: number }) => {
@@ -662,6 +851,7 @@ export const api = {
     lotId: string,
     payload: { bid_amount_minor?: number | null; max_bid_minor?: number | null; amount?: number | null },
   ) => request<JsonRecord>(`/lots/${lotId}/bid`, { method: "POST", body: JSON.stringify(payload) }),
+  requestToBid: (auctionId: string) => request<{ auction_id: string; user_id: string; status: "PENDING" | "APPROVED" | "REJECTED" }>(`/auctions/${auctionId}/request-to-bid`, { method: "POST" }),
   createAuction: async (payload: JsonRecord) =>
     normalizeAuction(await request<unknown>("/admin/auctions", { method: "POST", body: JSON.stringify(payload) })),
   listAdminAuctions: async () => (await request<unknown[]>("/admin/auctions")).map(normalizeAuction),
@@ -671,6 +861,37 @@ export const api = {
   startAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}/start`, { method: "PATCH" }),
   pauseAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}/pause`, { method: "PATCH" }),
   endAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}/end`, { method: "PATCH" }),
+  updateAuctionBidderSettings: (auctionId: string, requireBidderApproval: boolean) =>
+    request<{ auction_id: string; require_bidder_approval: boolean }>(`/admin/auctions/${auctionId}/settings`, {
+      method: "PUT",
+      body: JSON.stringify({ require_bidder_approval: requireBidderApproval }),
+    }),
+  listAuctionBidders: async (auctionId: string, status?: "PENDING" | "APPROVED" | "REJECTED") => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    const qs = params.toString();
+    return (await request<unknown[]>(`/admin/auctions/${auctionId}/bidders${qs ? `?${qs}` : ""}`)).map(normalizeAuctionBidderAdminRow);
+  },
+  approveAuctionBidder: async (auctionId: string, userId: string) =>
+    request<JsonRecord>(`/admin/auctions/${auctionId}/bidders/${userId}/approve`, { method: "POST" }),
+  rejectAuctionBidder: async (auctionId: string, userId: string) =>
+    request<JsonRecord>(`/admin/auctions/${auctionId}/bidders/${userId}/reject`, { method: "POST" }),
+  getBidderProfile: async (userId: string) => normalizeTenantBidderProfile(await request<unknown>(`/admin/bidders/${userId}`)),
+  updateBidderProfile: async (
+    userId: string,
+    payload: {
+      status?: "ACTIVE" | "SUSPENDED";
+      risk_level?: "LOW" | "NORMAL" | "HIGH";
+      internal_notes?: string | null;
+      phone?: string | null;
+      company_name?: string | null;
+      address_line1?: string | null;
+      address_line2?: string | null;
+      city?: string | null;
+      postal_code?: string | null;
+      country?: string | null;
+    },
+  ) => normalizeTenantBidderProfile(await request<unknown>(`/admin/bidders/${userId}`, { method: "PUT", body: JSON.stringify(payload) })),
   listBidders: async () => (await request<unknown[]>("/admin/bidders")).map(normalizeUser),
   approveBidder: (id: string) => request<JsonRecord>(`/admin/bidders/${id}/approve`, { method: "PATCH" }),
   rejectBidder: (id: string) => request<JsonRecord>(`/admin/bidders/${id}/reject`, { method: "PATCH" }),

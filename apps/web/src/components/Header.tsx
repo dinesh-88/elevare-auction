@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import ElevareButton from "./ui/ElevareButton";
+import NotificationBell from "./NotificationBell";
 
 export default function Header({
   tenantName,
@@ -60,6 +61,7 @@ export default function Header({
             </>
           ) : (
             <>
+              <NotificationBell isAuthenticated={isAuthenticated} />
               <span className="text-xs text-neutral-500">{userEmail}</span>
               <ElevareButton variant="secondary" onClick={onLogout}>
                 Logout
@@ -68,15 +70,18 @@ export default function Header({
           )}
         </nav>
 
-        <button
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-200 text-neutral-900 md:hidden"
-          onClick={() => setMobileMenuOpen((v) => !v)}
-          type="button"
-          aria-label="Open menu"
-          aria-expanded={mobileMenuOpen}
-        >
-          ☰
-        </button>
+        <div className="flex items-center gap-2 md:hidden">
+          {isAuthenticated ? <NotificationBell isAuthenticated={isAuthenticated} /> : null}
+          <button
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-200 text-neutral-900"
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            type="button"
+            aria-label="Open menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            ☰
+          </button>
+        </div>
 
         {mobileMenuOpen ? (
           <div className="fixed left-0 right-0 top-[72px] z-20 max-h-[calc(100vh-72px)] overflow-y-auto border-b border-neutral-200 bg-white shadow-sm md:hidden">

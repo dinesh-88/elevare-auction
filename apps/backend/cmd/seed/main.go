@@ -102,6 +102,8 @@ func main() {
 	log.Println("admin: admin@demo.elevare.test / admin123")
 	log.Println("bidder: bidder@demo.elevare.test / bidder123")
 	log.Println("bidder2: bidder2@demo.elevare.test / bidder123")
+	log.Printf("proxy scenario lot: %s (LIVE)", lotLiveOne)
+	log.Printf("soft-close scenario lot: %s (LIVE, near end)", lotLiveTwo)
 }
 
 func seedTenant(ctx context.Context, tx pgx.Tx, now time.Time) error {
@@ -354,12 +356,13 @@ func seedLots(ctx context.Context, tx pgx.Tx, now time.Time) error {
 	endEnded := now.Add(-24 * time.Hour)
 	startLive := now.Add(-30 * time.Minute)
 	endLive := now.Add(2 * time.Hour)
+	endLiveSoftClose := now.Add(75 * time.Second)
 
 	rows := []lotRow{
 		{lotEndedSold, auctionEnded, "1", 1, "Sunlit Coastline", "Signed landscape, framed.", 10000, 12000, &r11000, 500, lot1Meta, "ENDED", &startEnded, &endEnded, &h12000, &t15180, &bidderOneID, snapshot1},
 		{lotEndedNoRes, auctionEnded, "2", 2, "Portrait Study", "Unsigned portrait study.", 9000, 9000, &r12000, 250, lot2Meta, "ENDED", &startEnded, &endEnded, nil, nil, nil, nil},
-		{lotLiveOne, auctionLive, "3", 1, "Abstract Composition", "Bright abstract work.", 5000, 6200, &r6500, 200, lot3Meta, "LIVE", &startLive, &endLive, nil, nil, nil, nil},
-		{lotLiveTwo, auctionLive, "4", 2, "Bronze Figure", "Mid-century bronze figure.", 6000, 6800, &r7000, 200, lot4Meta, "LIVE", &startLive, &endLive, nil, nil, nil, nil},
+		{lotLiveOne, auctionLive, "3", 1, "Abstract Composition", "Bright abstract work.", 5000, 8600, &r6500, 200, lot3Meta, "LIVE", &startLive, &endLive, nil, nil, nil, nil},
+		{lotLiveTwo, auctionLive, "4", 2, "Bronze Figure", "Mid-century bronze figure.", 6000, 9200, &r7000, 200, lot4Meta, "LIVE", &startLive, &endLiveSoftClose, nil, nil, nil, nil},
 		{lotFutureOne, auctionFuture, "5", 1, "Marble Bust", "Neoclassical marble bust.", 7000, 7000, nil, 300, lot5Meta, "PENDING", nil, nil, nil, nil, nil, nil},
 	}
 
@@ -410,25 +413,39 @@ func seedBids(ctx context.Context, tx pgx.Tx, now time.Time) error {
 		lotID   uuid.UUID
 		userID  uuid.UUID
 		amount  int64
+		maxBid  *int64
 		created time.Time
 	}{
-		{uuid.MustParse("11111111-aaaa-1111-1111-111111111111"), lotEndedSold, bidderTwoID, 11000, now.Add(-26 * time.Hour)},
-		{uuid.MustParse("22222222-aaaa-1111-1111-111111111111"), lotEndedSold, bidderOneID, 12000, now.Add(-25 * time.Hour)},
-		{uuid.MustParse("33333333-aaaa-1111-1111-111111111111"), lotLiveOne, bidderTwoID, 5600, now.Add(-20 * time.Minute)},
-		{uuid.MustParse("44444444-aaaa-1111-1111-111111111111"), lotLiveOne, bidderOneID, 6200, now.Add(-10 * time.Minute)},
-		{uuid.MustParse("55555555-aaaa-1111-1111-111111111111"), lotLiveTwo, bidderTwoID, 6800, now.Add(-8 * time.Minute)},
+		{uuid.MustParse("11111111-aaaa-1111-1111-111111111111"), lotEndedSold, bidderTwoID, 11000, nil, now.Add(-26 * time.Hour)},
+		{uuid.MustParse("22222222-aaaa-1111-1111-111111111111"), lotEndedSold, bidderOneID, 12000, nil, now.Add(-25 * time.Hour)},
+		{uuid.MustParse("33333333-aaaa-1111-1111-111111111111"), lotLiveOne, bidderOneID, 6200, int64Ptr(10000), now.Add(-20 * time.Minute)},
+		{uuid.MustParse("44444444-aaaa-1111-1111-111111111111"), lotLiveOne, bidderTwoID, 8500, nil, now.Add(-18 * time.Minute)},
+		{uuid.MustParse("55555555-aaaa-1111-1111-111111111111"), lotLiveOne, bidderOneID, 8600, int64Ptr(10000), now.Add(-18*time.Minute + time.Millisecond)},
+		{uuid.MustParse("66666666-bbbb-2222-2222-222222222222"), lotLiveTwo, bidderOneID, 7000, int64Ptr(10000), now.Add(-6 * time.Minute)},
+		{uuid.MustParse("77777777-bbbb-2222-2222-222222222222"), lotLiveTwo, bidderTwoID, 7200, int64Ptr(9000), now.Add(-5 * time.Minute)},
+		{uuid.MustParse("88888888-bbbb-2222-2222-222222222222"), lotLiveTwo, bidderOneID, 9200, int64Ptr(10000), now.Add(-5*time.Minute + time.Millisecond)},
 	}
 	for _, b := range bids {
 		_, err := tx.Exec(ctx, `
-INSERT INTO lot_bids (id, lot_id, user_id, amount, created_at)
-VALUES ($1,$2,$3,$4,$5)
-ON CONFLICT (id) DO NOTHING
-`, b.id, b.lotID, b.userID, b.amount, b.created)
+INSERT INTO lot_bids (id, tenant_id, lot_id, user_id, amount, max_bid_minor, created_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7)
+ON CONFLICT (id) DO UPDATE
+SET tenant_id = EXCLUDED.tenant_id,
+    lot_id = EXCLUDED.lot_id,
+    user_id = EXCLUDED.user_id,
+    amount = EXCLUDED.amount,
+    max_bid_minor = EXCLUDED.max_bid_minor,
+    created_at = EXCLUDED.created_at
+`, b.id, tenantID, b.lotID, b.userID, b.amount, b.maxBid, b.created)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
 }
 
 func seedFees(ctx context.Context, tx pgx.Tx, now time.Time) error {
@@ -485,20 +502,28 @@ func seedInvoices(ctx context.Context, tx pgx.Tx, now time.Time) error {
 	due := now.Add(7 * 24 * time.Hour)
 	_, err := tx.Exec(ctx, `
 INSERT INTO invoices (
-  id, lot_id, tenant_id, winner_user_id, invoice_number, issued_at, due_date,
-  currency, total_amount, snapshot, status, created_at
+  id, lot_id, tenant_id, auction_id, winner_user_id, invoice_number, issued_at, due_date,
+  currency, total_amount, hammer_price_minor, fees_total_minor, tax_total_minor, total_due_minor,
+  payment_status, snapshot, status, created_at
 )
-VALUES ($1,$2,$3,$4,'INV-2026-000001',$5,$6,'GBP',15180,$7,'ISSUED',$8)
+VALUES ($1,$2,$3,$4,$5,'INV-2026-000001',$6,$7,'GBP',15180,12000,3180,1380,15180,'UNPAID',$8,'ISSUED',$9)
 ON CONFLICT (lot_id) DO UPDATE
-SET winner_user_id = EXCLUDED.winner_user_id,
+SET tenant_id = EXCLUDED.tenant_id,
+    auction_id = EXCLUDED.auction_id,
+    winner_user_id = EXCLUDED.winner_user_id,
     invoice_number = EXCLUDED.invoice_number,
     issued_at = EXCLUDED.issued_at,
     due_date = EXCLUDED.due_date,
     currency = EXCLUDED.currency,
     total_amount = EXCLUDED.total_amount,
+    hammer_price_minor = EXCLUDED.hammer_price_minor,
+    fees_total_minor = EXCLUDED.fees_total_minor,
+    tax_total_minor = EXCLUDED.tax_total_minor,
+    total_due_minor = EXCLUDED.total_due_minor,
+    payment_status = EXCLUDED.payment_status,
     snapshot = EXCLUDED.snapshot,
     status = EXCLUDED.status
-`, invoiceOneID, lotEndedSold, tenantID, bidderOneID, issued, due, snapshot, issued)
+`, invoiceOneID, lotEndedSold, tenantID, auctionEnded, bidderOneID, issued, due, snapshot, issued)
 	return err
 }
 

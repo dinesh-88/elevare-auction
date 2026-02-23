@@ -70,6 +70,15 @@ func (n *csvNoopAudit) ListByTenant(ctx context.Context, tenantID uuid.UUID, lim
 func (n *csvNoopAudit) ListByEntity(ctx context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit int) ([]domain.AuditLog, error) {
 	return nil, nil
 }
+func (n *csvNoopAudit) ListByEntityPage(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	entityType string,
+	entityID uuid.UUID,
+	query port.AuditListQuery,
+) (port.AuditListPage, error) {
+	return port.AuditListPage{Items: []domain.AuditLog{}, HasMore: false}, nil
+}
 
 func TestExportSettlementCSVHeaderAndLines(t *testing.T) {
 	tenantID := uuid.New()

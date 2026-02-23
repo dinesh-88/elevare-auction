@@ -39,6 +39,7 @@ type CreateAuctionInput struct {
 	SnipingWindowSeconds    int
 	SnipingExtensionSeconds int
 	BidVisibility           domain.BidVisibility
+	RequireBidderApproval   bool
 }
 
 func (uc *AuctionUseCase) ListPublic(ctx context.Context, tenantID uuid.UUID, now time.Time) ([]domain.Auction, error) {
@@ -107,6 +108,7 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 		SnipingWindowSeconds:    in.SnipingWindowSeconds,
 		SnipingExtensionSeconds: in.SnipingExtensionSeconds,
 		BidVisibility:           in.BidVisibility,
+		RequireBidderApproval:   in.RequireBidderApproval,
 	}
 	if len(auction.Metadata) == 0 {
 		auction.Metadata = []byte(`{}`)
@@ -160,6 +162,7 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 	current.SnipingWindowSeconds = in.SnipingWindowSeconds
 	current.SnipingExtensionSeconds = in.SnipingExtensionSeconds
 	current.BidVisibility = in.BidVisibility
+	current.RequireBidderApproval = in.RequireBidderApproval
 	if len(current.Metadata) == 0 {
 		current.Metadata = []byte(`{}`)
 	}
@@ -169,7 +172,60 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 	if err := uc.Auctions.Update(ctx, current); err != nil {
 		return nil, err
 	}
+	if uc.Audit != nil {
+		auditCtx := middleware.AuditContextFromContext(ctx)
+		action := "AUCTION_REQUIRE_APPROVAL_DISABLED"
+		if current.RequireBidderApproval {
+			action = "AUCTION_REQUIRE_APPROVAL_ENABLED"
+		}
+		payload, _ := json.Marshal(map[string]any{"require_bidder_approval": current.RequireBidderApproval})
+		_ = uc.Audit.Append(ctx, port.AuditEntry{
+			TenantID:    &in.TenantID,
+			ActorUserID: auditCtx.ActorUserID,
+			ActorRole:   auditCtx.ActorRole,
+			Action:      action,
+			EntityType:  "AUCTION",
+			EntityID:    &current.ID,
+			RequestID:   auditCtx.RequestID,
+			IP:          auditCtx.IP,
+			UserAgent:   auditCtx.UserAgent,
+			Metadata:    payload,
+		})
+	}
 	return current, nil
+}
+
+func (uc *AuctionUseCase) UpdateRequireBidderApproval(ctx context.Context, tenantID, auctionID uuid.UUID, required bool) error {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionUpdate); err != nil {
+		return ErrForbidden
+	}
+	if err := uc.Auctions.UpdateRequireBidderApproval(ctx, tenantID, auctionID, required); err != nil {
+		return err
+	}
+	if uc.Audit != nil {
+		auditCtx := middleware.AuditContextFromContext(ctx)
+		action := "AUCTION_REQUIRE_APPROVAL_DISABLED"
+		if required {
+			action = "AUCTION_REQUIRE_APPROVAL_ENABLED"
+		}
+		payload, _ := json.Marshal(map[string]any{"require_bidder_approval": required})
+		_ = uc.Audit.Append(ctx, port.AuditEntry{
+			TenantID:    &tenantID,
+			ActorUserID: auditCtx.ActorUserID,
+			ActorRole:   auditCtx.ActorRole,
+			Action:      action,
+			EntityType:  "AUCTION",
+			EntityID:    &auctionID,
+			RequestID:   auditCtx.RequestID,
+			IP:          auditCtx.IP,
+			UserAgent:   auditCtx.UserAgent,
+			Metadata:    payload,
+		})
+	}
+	return nil
 }
 
 func (uc *AuctionUseCase) Delete(ctx context.Context, tenantID, auctionID uuid.UUID) error {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { api, type Auction } from "../../api/client";
@@ -166,7 +166,7 @@ export default function Auctions() {
                     <button
                       type="button"
                       data-auction-menu-trigger="true"
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 text-neutral-700 transition hover:bg-neutral-100"
+                      className="inline-flex h-9 items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
                       onClick={(event) => {
                         if (openMenu?.auctionID === a.id) {
                           setOpenMenu(null);
@@ -181,7 +181,8 @@ export default function Auctions() {
                       }}
                       aria-label="More actions"
                     >
-                      <MoreHorizontal size={16} />
+                      More
+                      <ChevronDown size={14} strokeWidth={2.2} />
                     </button>
                   </div>
                 </td>
@@ -236,6 +237,13 @@ export default function Auctions() {
                 onClick={() => setOpenMenu(null)}
               >
                 Financial Rules
+              </Link>
+              <Link
+                className="block rounded px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
+                to={`/admin/auctions/${openMenu.auctionID}/bidders`}
+                onClick={() => setOpenMenu(null)}
+              >
+                Bidders
               </Link>
               <Link
                 className="block rounded px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"

@@ -24,18 +24,18 @@ func (r *AuctionRepo) Create(ctx context.Context, auction *domain.Auction) error
 INSERT INTO auctions (
   id, tenant_id, currency, title, description, metadata,
   start_time, end_time, status, allow_manual_start, allow_manual_pause, allow_manual_end,
-  auto_extend_enabled, auction_mode, auto_progress_enabled, lot_duration_seconds, sniping_window_seconds, sniping_extension_seconds, bid_visibility, created_at
+  auto_extend_enabled, auction_mode, auto_progress_enabled, lot_duration_seconds, sniping_window_seconds, sniping_extension_seconds, bid_visibility, require_bidder_approval, created_at
 ) VALUES (
   $1,$2,$3,$4,$5,$6,
   $7,$8,$9,$10,$11,$12,
-  $13,$14,$15,$16,$17,$18,$19,now()
+  $13,$14,$15,$16,$17,$18,$19,$20,now()
 )`
 	_, err := r.DB.Exec(ctx, q,
 		auction.ID, auction.TenantID, auction.Currency, auction.Title, auction.Description, auction.Metadata,
 		auction.StartTime, auction.EndTime, auction.Status,
 		auction.AllowManualStart, auction.AllowManualPause, auction.AllowManualEnd,
 		auction.AutoExtendEnabled, auction.AuctionMode, auction.AutoProgressEnabled, auction.LotDurationSeconds,
-		auction.SnipingWindowSeconds, auction.SnipingExtensionSeconds, auction.BidVisibility,
+		auction.SnipingWindowSeconds, auction.SnipingExtensionSeconds, auction.BidVisibility, auction.RequireBidderApproval,
 	)
 	return err
 }
@@ -48,7 +48,7 @@ func scanAuction(row pgx.Row) (*domain.Auction, error) {
 		&a.StartTime, &a.EndTime, &a.Status,
 		&a.AllowManualStart, &a.AllowManualPause, &a.AllowManualEnd,
 		&a.AutoExtendEnabled, &a.AuctionMode, &a.AutoProgressEnabled, &a.LotDurationSeconds,
-		&a.SnipingWindowSeconds, &a.SnipingExtensionSeconds, &a.BidVisibility, &a.CreatedAt,
+		&a.SnipingWindowSeconds, &a.SnipingExtensionSeconds, &a.BidVisibility, &a.RequireBidderApproval, &a.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ SELECT a.id, a.tenant_id, a.currency, a.title, a.description, a.metadata,
        la.max_reserve_price AS reserve_price,
        COALESCE(la.min_increment, 1) AS min_increment,
        a.start_time, a.end_time, a.status, a.allow_manual_start, a.allow_manual_pause, a.allow_manual_end,
-       a.auto_extend_enabled, a.auction_mode, a.auto_progress_enabled, a.lot_duration_seconds, a.sniping_window_seconds, a.sniping_extension_seconds, a.bid_visibility, a.created_at
+       a.auto_extend_enabled, a.auction_mode, a.auto_progress_enabled, a.lot_duration_seconds, a.sniping_window_seconds, a.sniping_extension_seconds, a.bid_visibility, a.require_bidder_approval, a.created_at
 FROM auctions a
 ` + summaryLotsLateral() + `
 WHERE a.tenant_id = $1 AND a.status IN ('LIVE','SCHEDULED') AND a.end_time > $2
@@ -105,7 +105,7 @@ SELECT a.id, a.tenant_id, a.currency, a.title, a.description, a.metadata,
        la.max_reserve_price AS reserve_price,
        COALESCE(la.min_increment, 1) AS min_increment,
        a.start_time, a.end_time, a.status, a.allow_manual_start, a.allow_manual_pause, a.allow_manual_end,
-       a.auto_extend_enabled, a.auction_mode, a.auto_progress_enabled, a.lot_duration_seconds, a.sniping_window_seconds, a.sniping_extension_seconds, a.bid_visibility, a.created_at
+       a.auto_extend_enabled, a.auction_mode, a.auto_progress_enabled, a.lot_duration_seconds, a.sniping_window_seconds, a.sniping_extension_seconds, a.bid_visibility, a.require_bidder_approval, a.created_at
 FROM auctions a
 ` + summaryLotsLateral() + `
 WHERE a.tenant_id = $1
@@ -134,7 +134,7 @@ SELECT a.id, a.tenant_id, a.currency, a.title, a.description, a.metadata,
        la.max_reserve_price AS reserve_price,
        COALESCE(la.min_increment, 1) AS min_increment,
        a.start_time, a.end_time, a.status, a.allow_manual_start, a.allow_manual_pause, a.allow_manual_end,
-       a.auto_extend_enabled, a.auction_mode, a.auto_progress_enabled, a.lot_duration_seconds, a.sniping_window_seconds, a.sniping_extension_seconds, a.bid_visibility, a.created_at
+       a.auto_extend_enabled, a.auction_mode, a.auto_progress_enabled, a.lot_duration_seconds, a.sniping_window_seconds, a.sniping_extension_seconds, a.bid_visibility, a.require_bidder_approval, a.created_at
 FROM auctions a
 ` + summaryLotsLateral() + `
 WHERE a.tenant_id = $1 AND a.id = $2`
@@ -163,7 +163,8 @@ SET currency = $3,
     lot_duration_seconds = $15,
     sniping_window_seconds = $16,
     sniping_extension_seconds = $17,
-    bid_visibility = $18
+    bid_visibility = $18,
+    require_bidder_approval = $19
 WHERE tenant_id = $1 AND id = $2`
 	ct, err := r.DB.Exec(ctx, q,
 		auction.TenantID, auction.ID,
@@ -172,7 +173,7 @@ WHERE tenant_id = $1 AND id = $2`
 		auction.StartTime, auction.EndTime,
 		auction.AllowManualStart, auction.AllowManualPause, auction.AllowManualEnd,
 		auction.AutoExtendEnabled, auction.AuctionMode, auction.AutoProgressEnabled, auction.LotDurationSeconds,
-		auction.SnipingWindowSeconds, auction.SnipingExtensionSeconds, auction.BidVisibility,
+		auction.SnipingWindowSeconds, auction.SnipingExtensionSeconds, auction.BidVisibility, auction.RequireBidderApproval,
 	)
 	if err != nil {
 		return err
@@ -202,6 +203,18 @@ WHERE tenant_id = $1
 func (r *AuctionRepo) UpdateStatus(ctx context.Context, tenantID, auctionID uuid.UUID, status domain.AuctionStatus) error {
 	const q = `UPDATE auctions SET status = $3 WHERE tenant_id = $1 AND id = $2`
 	ct, err := r.DB.Exec(ctx, q, tenantID, auctionID, status)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("auction not found")
+	}
+	return nil
+}
+
+func (r *AuctionRepo) UpdateRequireBidderApproval(ctx context.Context, tenantID, auctionID uuid.UUID, required bool) error {
+	const q = `UPDATE auctions SET require_bidder_approval = $3 WHERE tenant_id = $1 AND id = $2`
+	ct, err := r.DB.Exec(ctx, q, tenantID, auctionID, required)
 	if err != nil {
 		return err
 	}

@@ -21,6 +21,7 @@ const adaptWsBaseToCurrentHostname = (base: string) => {
 interface LotBidEvent {
   bid_id: string;
   amount: number;
+  bidder_display?: string;
   current_price: number;
   ended_at?: string | null;
   created_at: string;

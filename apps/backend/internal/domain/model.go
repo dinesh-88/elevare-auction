@@ -132,7 +132,63 @@ type Auction struct {
 	SnipingWindowSeconds    int
 	SnipingExtensionSeconds int
 	BidVisibility           BidVisibility
+	RequireBidderApproval   bool
 	CreatedAt               time.Time
+}
+
+type TenantBidderStatus string
+
+const (
+	TenantBidderActive    TenantBidderStatus = "ACTIVE"
+	TenantBidderSuspended TenantBidderStatus = "SUSPENDED"
+)
+
+type TenantBidderRiskLevel string
+
+const (
+	TenantBidderRiskLow    TenantBidderRiskLevel = "LOW"
+	TenantBidderRiskNormal TenantBidderRiskLevel = "NORMAL"
+	TenantBidderRiskHigh   TenantBidderRiskLevel = "HIGH"
+)
+
+type TenantBidderProfile struct {
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	UserID        uuid.UUID
+	Phone         *string
+	CompanyName   *string
+	AddressLine1  *string
+	AddressLine2  *string
+	City          *string
+	PostalCode    *string
+	Country       *string
+	Status        TenantBidderStatus
+	RiskLevel     TenantBidderRiskLevel
+	InternalNotes *string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type AuctionBidderApproval struct {
+	ID        uuid.UUID
+	TenantID  uuid.UUID
+	AuctionID uuid.UUID
+	UserID    uuid.UUID
+	Status    ApprovalStatus
+	DecidedBy *uuid.UUID
+	DecidedAt *time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type AuctionBidderAdminRow struct {
+	UserID       uuid.UUID             `json:"user_id"`
+	Email        string                `json:"email"`
+	Approval     ApprovalStatus        `json:"approval_status"`
+	TenantStatus TenantBidderStatus    `json:"tenant_status"`
+	RiskLevel    TenantBidderRiskLevel `json:"risk_level"`
+	RequestedAt  time.Time             `json:"requested_at"`
+	DecidedAt    *time.Time            `json:"decided_at,omitempty"`
 }
 
 type LotStatus string

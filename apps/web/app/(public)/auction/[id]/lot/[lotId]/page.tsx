@@ -1,21 +1,20 @@
-import { api, normalizeAuction, normalizeLot, normalizeLotBid, type Auction, type Lot, type LotBid } from "../../../../../../../src/api/client";
-import LotDetail from "../../../../../../../src/screens/public/LotDetail";
+import { normalizeAuction, normalizeLot, normalizeLotBid, type Auction, type Lot } from "../../../../../../src/api/client";
+import LotDetail from "../../../../../../src/screens/public/LotDetail";
 
 type Props = {
-  params: {
-    auctionId: string;
+  params: Promise<{
+    id: string;
     lotId: string;
-  };
+  }>;
 };
 
 export default async function Page({ params }: Props) {
-  const lotId = params.lotId;
-  const auctionId = params.auctionId;
+  const { lotId, id: auctionId } = await params;
 
   let initialLot: Lot | null = null;
   let initialAuction: Auction | null = null;
   let initialRelatedLots: Lot[] = [];
-  let initialBids: LotBid[] = [];
+  let initialBids: Array<{ bid_id: string; amount_minor: number; created_at: string; bidder_display: string }> = [];
 
   try {
     const apiBase = process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
@@ -28,7 +27,16 @@ export default async function Page({ params }: Props) {
     if (lotRes.ok) initialLot = normalizeLot(await lotRes.json());
     if (auctionRes.ok) initialAuction = normalizeAuction(await auctionRes.json());
     if (lotsRes.ok) initialRelatedLots = ((await lotsRes.json()) as unknown[]).map(normalizeLot).filter((l) => l.id !== lotId);
-    if (bidsRes.ok) initialBids = ((await bidsRes.json()) as unknown[]).map(normalizeLotBid);
+    if (bidsRes.ok) {
+      initialBids = ((await bidsRes.json()) as unknown[])
+        .map(normalizeLotBid)
+        .map((bid) => ({
+          bid_id: bid.id,
+          amount_minor: bid.amount_minor,
+          created_at: bid.created_at,
+          bidder_display: bid.bidder_display,
+        }));
+    }
   } catch {
     // let client-side hydration fetch recover
   }

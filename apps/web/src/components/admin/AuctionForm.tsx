@@ -19,6 +19,7 @@ export type AuctionFormState = {
   sniping_window_seconds: number;
   sniping_extension_seconds: number;
   bid_visibility: "PUBLIC" | "ANONYMOUS" | "SEALED";
+  require_bidder_approval: boolean;
 };
 
 export const now = new Date();
@@ -37,6 +38,7 @@ export const defaultAuctionFormState = (): AuctionFormState => ({
   allow_manual_pause: true,
   allow_manual_end: true,
   bid_visibility: "PUBLIC",
+  require_bidder_approval: false,
   auction_mode: "TIMED",
   auto_progress_enabled: true,
   lot_duration_seconds: 120,
@@ -70,6 +72,7 @@ export const fromAuction = (a: Auction): AuctionFormState => ({
   sniping_window_seconds: a.sniping_window_seconds,
   sniping_extension_seconds: a.sniping_extension_seconds,
   bid_visibility: a.bid_visibility,
+  require_bidder_approval: Boolean(a.require_bidder_approval),
 });
 
 export const toPayload = (form: AuctionFormState) => ({
@@ -81,6 +84,7 @@ export const toPayload = (form: AuctionFormState) => ({
     images: form.images,
   },
   bid_visibility: form.bid_visibility,
+  require_bidder_approval: form.require_bidder_approval,
   auction_mode: form.auction_mode,
   allow_manual_start: form.allow_manual_start,
   allow_manual_pause: form.allow_manual_pause,

@@ -7,14 +7,18 @@ import (
 
 	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 )
 
 type LotUseCase struct {
 	Lots        port.LotRepository
+	Auctions    port.AuctionRepository
+	Bidders     port.BidderRepository
 	Broadcaster port.Broadcaster
 	Notifier    *NotificationService
+	Audit       port.AuditRepository
 }
 
 type CreateLotInput struct {
@@ -123,7 +127,9 @@ func (uc *LotUseCase) Start(ctx context.Context, tenantID, lotID uuid.UUID, now 
 	if err := uc.Lots.Start(ctx, tenantID, lotID, now); err != nil {
 		return err
 	}
-	uc.Broadcaster.BroadcastLotStatus(ctx, lotID, domain.LotLive)
+	if uc.Broadcaster != nil {
+		uc.Broadcaster.BroadcastLotStatus(ctx, lotID, domain.LotLive)
+	}
 	return nil
 }
 
@@ -157,7 +163,9 @@ func (uc *LotUseCase) End(ctx context.Context, tenantID, lotID uuid.UUID, now ti
 			return err
 		}
 	}
-	uc.Broadcaster.BroadcastLotStatus(ctx, lotID, domain.LotEnded)
+	if uc.Broadcaster != nil {
+		uc.Broadcaster.BroadcastLotStatus(ctx, lotID, domain.LotEnded)
+	}
 	return nil
 }
 
@@ -186,6 +194,58 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
 		return nil, err
 	}
+	if uc.Bidders != nil {
+		profile, err := uc.Bidders.EnsureTenantBidder(ctx, in.TenantID, in.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if profile.Status == domain.TenantBidderSuspended {
+			return nil, ErrBidderSuspended
+		}
+	}
+	if uc.Auctions != nil && uc.Bidders != nil {
+		lot, err := uc.Lots.GetByID(ctx, in.TenantID, in.LotID)
+		if err != nil {
+			return nil, err
+		}
+		auction, err := uc.Auctions.GetByID(ctx, in.TenantID, lot.AuctionID)
+		if err != nil {
+			return nil, err
+		}
+		if auction.RequireBidderApproval {
+			approval, err := uc.Bidders.GetAuctionApproval(ctx, in.TenantID, lot.AuctionID, in.UserID)
+			if err != nil {
+				createdApproval, created, reqErr := uc.Bidders.RequestAuctionApproval(ctx, in.TenantID, lot.AuctionID, in.UserID, in.Now)
+				if reqErr != nil {
+					return nil, reqErr
+				}
+				if created && uc.Audit != nil {
+					auditCtx := middleware.AuditContextFromContext(ctx)
+					payload, _ := json.Marshal(map[string]any{"user_id": in.UserID, "status": createdApproval.Status})
+					_ = uc.Audit.Append(ctx, port.AuditEntry{
+						TenantID:    &in.TenantID,
+						ActorUserID: auditCtx.ActorUserID,
+						ActorRole:   auditCtx.ActorRole,
+						Action:      "BIDDER_APPROVAL_REQUESTED",
+						EntityType:  "AUCTION",
+						EntityID:    &lot.AuctionID,
+						RequestID:   auditCtx.RequestID,
+						IP:          auditCtx.IP,
+						UserAgent:   auditCtx.UserAgent,
+						Metadata:    payload,
+					})
+				}
+				return nil, ErrApprovalRequired
+			}
+			switch approval.Status {
+			case domain.ApprovalApproved:
+			case domain.ApprovalPending:
+				return nil, ErrPendingApproval
+			default:
+				return nil, ErrNotApproved
+			}
+		}
+	}
 	res, err := uc.Lots.PlaceBidTx(ctx, in)
 	if err != nil {
 		return nil, err
@@ -209,9 +269,11 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 			return nil, err
 		}
 	}
-	uc.Broadcaster.BroadcastLotBid(ctx, res.Lot.ID, res.Bid, res.Lot.CurrentPrice, res.Lot.EndedAt)
-	if res.WasExtended && res.ExtensionEndTime != nil {
-		uc.Broadcaster.BroadcastLotExtended(ctx, res.Lot.ID, *res.ExtensionEndTime)
+	if uc.Broadcaster != nil {
+		uc.Broadcaster.BroadcastLotBid(ctx, res.Lot.ID, res.Bid, res.Lot.CurrentPrice, res.Lot.EndedAt)
+		if res.WasExtended && res.ExtensionEndTime != nil {
+			uc.Broadcaster.BroadcastLotExtended(ctx, res.Lot.ID, *res.ExtensionEndTime)
+		}
 	}
 	return res, nil
 }

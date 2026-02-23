@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, type User } from "../../api/client";
 import ElevareButton from "../../components/ui/ElevareButton";
 import StatusBadge from "../../components/ui/StatusBadge";
@@ -75,6 +76,7 @@ export default function Bidders() {
                 <td>{b.created_at ? new Date(b.created_at).toLocaleString() : "-"}</td>
                 <td>
                   <div className="flex gap-2">
+                    <Link className="btn-link-brand" to={`/admin/bidders/${b.id}`}>Profile</Link>
                     {b.approval_status !== "APPROVED" ? (
                       <ElevareButton onClick={() => approve(b.id)}>Approve</ElevareButton>
                     ) : null}

@@ -42,6 +42,9 @@ func (f *fakeAuctionRepo) Delete(ctx context.Context, tenantID, auctionID uuid.U
 func (f *fakeAuctionRepo) UpdateStatus(ctx context.Context, tenantID, auctionID uuid.UUID, status domain.AuctionStatus) error {
 	return nil
 }
+func (f *fakeAuctionRepo) UpdateRequireBidderApproval(ctx context.Context, tenantID, auctionID uuid.UUID, required bool) error {
+	return nil
+}
 func (f *fakeAuctionRepo) RunSchedulerTick(ctx context.Context, now time.Time) error { return nil }
 
 type fakeLotRepo struct {
@@ -132,6 +135,15 @@ func (f *fakeAuditRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, li
 }
 func (f *fakeAuditRepo) ListByEntity(ctx context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit int) ([]domain.AuditLog, error) {
 	return nil, nil
+}
+func (f *fakeAuditRepo) ListByEntityPage(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	entityType string,
+	entityID uuid.UUID,
+	query port.AuditListQuery,
+) (port.AuditListPage, error) {
+	return port.AuditListPage{Items: []domain.AuditLog{}, HasMore: false}, nil
 }
 
 func TestEnsureTenantScopeRejectsCrossTenant(t *testing.T) {
