@@ -3,6 +3,7 @@ package httptransport
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -30,7 +31,7 @@ type Config struct {
 func LoadConfig() Config {
 	ttl := getEnvDuration("JWT_TTL", 30*time.Minute)
 	return Config{
-		Addr:               getEnv("APP_ADDR", ":8080"),
+		Addr:               resolveListenAddr(),
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable"),
 		JWTSecret:          getEnv("JWT_SECRET", "dev-secret-change-me"),
 		PlatformAdminToken: getEnv("PLATFORM_ADMIN_TOKEN", "dev-platform-admin-token"),
@@ -49,6 +50,23 @@ func LoadConfig() Config {
 		CSRFCookie:         getEnv("CSRF_COOKIE_NAME", "csrf_token"),
 		CookieSecure:       getEnvBool("COOKIE_SECURE", false),
 	}
+}
+
+func resolveListenAddr() string {
+	raw := strings.TrimSpace(os.Getenv("APP_ADDR"))
+	if raw == "" {
+		raw = strings.TrimSpace(os.Getenv("PORT"))
+	}
+	if raw == "" {
+		return ":8080"
+	}
+	if strings.HasPrefix(raw, ":") {
+		return raw
+	}
+	if _, err := strconv.Atoi(raw); err == nil {
+		return ":" + raw
+	}
+	return raw
 }
 
 func getEnv(k, fallback string) string {
