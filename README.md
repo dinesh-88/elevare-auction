@@ -108,6 +108,19 @@ docker compose down -v
 migrate -path apps/backend/migrations -database "$DATABASE_URL" up
 ```
 
+## Render Automated Migrations
+
+This repo includes `render.yaml` plus an embedded migration binary (`/app/migrate`) in the backend image.
+
+- API service: runs `preDeployCommand: /app/migrate` before `/app/api`
+- Worker service: runs `preDeployCommand: /app/migrate` before `/app/worker`
+
+To enable:
+
+1. In Render, use **Blueprint** deploy from this repo (reads `render.yaml`), or copy the same pre-deploy command into your existing API/worker services.
+2. Ensure both services have `DATABASE_URL` set.
+3. Redeploy. Migrations will run automatically and treat `no change` as success.
+
 ## Seed Demo Data
 
 From `apps/backend`:

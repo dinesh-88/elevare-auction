@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: elevare-api
+    env: docker
+    rootDir: apps/backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    preDeployCommand: /app/migrate
+    startCommand: /app/api
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_ADDR
+        value: ":8080"
+      - key: JWT_SECRET
+        sync: false
+      - key: PLATFORM_ADMIN_TOKEN
+        sync: false
+      - key: SITE_PREVIEW_TOKEN
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+
+  - type: worker
+    name: elevare-worker
+    env: docker
+    rootDir: apps/backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    preDeployCommand: /app/migrate
+    startCommand: /app/worker
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PLATFORM_ADMIN_TOKEN
+        sync: false
+      - key: SITE_PREVIEW_TOKEN
+        sync: false
