@@ -1,0 +1,14 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#F7F7F5"/>
+  <rect x="36" y="36" width="1128" height="558" rx="24" fill="white" stroke="#E5E5E0" stroke-width="2"/>
+  <rect x="84" y="96" width="290" height="24" rx="8" fill="#EAEAE5"/>
+  <rect x="84" y="152" width="768" height="64" rx="12" fill="#1C1C1A"/>
+  <rect x="84" y="238" width="910" height="18" rx="9" fill="#EDEDE8"/>
+  <rect x="84" y="270" width="860" height="18" rx="9" fill="#EDEDE8"/>
+  <rect x="84" y="342" width="300" height="54" rx="10" fill="#1C1C1A"/>
+  <rect x="402" y="342" width="300" height="54" rx="10" fill="white" stroke="#D6D6CF" stroke-width="2"/>
+  <text x="84" y="113" fill="#3F3F3A" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Elevare Auctions</text>
+  <text x="96" y="194" fill="white" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="700">White-Label Online Auction Platform</text>
+  <text x="96" y="378" fill="white" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">Request a Demo</text>
+  <text x="447" y="378" fill="#3F3F3A" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">View Demo Auction</text>
+</svg>

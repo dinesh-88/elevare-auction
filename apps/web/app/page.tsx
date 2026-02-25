@@ -1,0 +1,72 @@
+import Link from "next/link";
+import type { Metadata } from "next";
+import Footer from "../components/marketing/Footer";
+import HeroSection from "../components/marketing/HeroSection";
+import FeatureGrid from "../components/marketing/FeatureGrid";
+import Navbar from "../components/marketing/Navbar";
+import Section from "../components/marketing/Section";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/"
+  }
+};
+
+export default function HomePage() {
+  return (
+    <div className="bg-white text-neutral-900">
+      <Navbar />
+      <main>
+        <HeroSection />
+
+        <Section>
+          <h2 className="text-3xl md:text-4xl font-semibold text-neutral-900">Most Online Auction Platforms Take Control.</h2>
+          <ul className="mt-8 space-y-4 text-lg text-neutral-600">
+            <li>Your brand becomes secondary.</li>
+            <li>Your bidders belong to the platform.</li>
+            <li>Your fees are fixed.</li>
+            <li>Your data is not fully yours.</li>
+          </ul>
+          <p className="mt-8 text-xl text-neutral-800 font-medium">Elevare gives you full ownership.</p>
+        </Section>
+
+        <Section background="neutral">
+          <h2 className="text-3xl md:text-4xl font-semibold text-neutral-900">Core Capabilities</h2>
+          <p className="mt-4 text-lg text-neutral-600">Everything required to operate high-trust online auctions under your own institution.</p>
+          <div className="mt-10">
+            <FeatureGrid />
+          </div>
+        </Section>
+
+        <Section>
+          <h2 className="text-3xl md:text-4xl font-semibold text-neutral-900">Built for Institutional Control</h2>
+          <ul className="mt-8 space-y-4 text-lg text-neutral-600">
+            <li>Bidder approval workflows</li>
+            <li>Risk controls and suspension</li>
+            <li>Full audit timeline</li>
+            <li>Role-based permissions</li>
+          </ul>
+        </Section>
+
+        <Section background="neutral">
+          <h2 className="text-3xl md:text-4xl font-semibold text-neutral-900">Ready to Run Your Own Branded Auction?</h2>
+          <div className="mt-8 flex flex-wrap gap-4">
+            <Link
+              href="/demo"
+              className="inline-flex items-center rounded-md bg-neutral-900 px-6 py-3 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
+            >
+              Book a Demo
+            </Link>
+            <Link
+              href="/contact"
+              className="inline-flex items-center rounded-md border border-neutral-300 px-6 py-3 text-sm font-medium text-neutral-800 hover:bg-white transition-colors"
+            >
+              Contact Us
+            </Link>
+          </div>
+        </Section>
+      </main>
+      <Footer />
+    </div>
+  );
+}
