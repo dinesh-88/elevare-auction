@@ -44,6 +44,14 @@ func main() {
 	if dbURL == "" {
 		dbURL = defaultDBURL
 	}
+	subdomain := os.Getenv("DEMO_SUBDOMAIN")
+	if subdomain == "" {
+		subdomain = "demo"
+	}
+	customDomain := os.Getenv("DEMO_CUSTOM_DOMAIN")
+	if customDomain == "" {
+		customDomain = "demo.elevareauctions.com"
+	}
 
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
@@ -68,7 +76,7 @@ func main() {
 		log.Fatalf("failed to hash bidder password: %v", err)
 	}
 
-	if err := seedTenant(ctx, tx, now); err != nil {
+	if err := seedTenant(ctx, tx, now, subdomain, customDomain); err != nil {
 		log.Fatalf("tenant seed failed: %v", err)
 	}
 	if err := seedUsers(ctx, tx, now, adminHash, bidderHash); err != nil {
@@ -98,9 +106,9 @@ func main() {
 	}
 
 	log.Println("seed complete")
-	log.Println("tenant host (prod): elevareauctions.com")
+	log.Printf("tenant host (prod): %s", customDomain)
 	log.Println("api host (prod): api.elevareauctions.com")
-	log.Println("tenant host (local): main.localhost")
+	log.Printf("tenant host (local): %s.localhost", subdomain)
 	log.Println("admin: admin@elevareauctions.com / admin123")
 	log.Println("bidder: bidder@elevareauctions.com / bidder123")
 	log.Println("bidder2: bidder2@elevareauctions.com / bidder123")
@@ -108,7 +116,7 @@ func main() {
 	log.Printf("soft-close scenario lot: %s (LIVE, near end)", lotLiveTwo)
 }
 
-func seedTenant(ctx context.Context, tx pgx.Tx, now time.Time) error {
+func seedTenant(ctx context.Context, tx pgx.Tx, now time.Time, subdomain, customDomain string) error {
 	branding := map[string]any{
 		"logo_url":        "https://picsum.photos/seed/elevare-logo/120/120",
 		"primary_color":   "#1E2A3A",
@@ -171,8 +179,9 @@ INSERT INTO tenants (
   require_admin_approval, require_kyc, default_currency, invoice_prefix, invoice_counter, created_at
 )
 VALUES ($1,$2,$3,$4,'ACTIVE',$5,$6,$7,$8,$9,$10,$11,1,1,false,false,'GBP','INV',1,$12)
-ON CONFLICT (subdomain) DO UPDATE
+ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
+    subdomain = EXCLUDED.subdomain,
     custom_domain = EXCLUDED.custom_domain,
     status = 'ACTIVE',
     country = EXCLUDED.country,
@@ -189,7 +198,7 @@ SET name = EXCLUDED.name,
     default_currency = EXCLUDED.default_currency,
     invoice_prefix = 'INV',
     invoice_counter = GREATEST(tenants.invoice_counter, 1)
-`, tenantID, "Elevare Demo House", "main", "elevareauctions.com", "US", 200, brandingJSON, siteBrandingJSON, siteBrandingJSON, siteContentJSON, siteContentJSON, now.Add(-72*time.Hour))
+`, tenantID, "Elevare Demo House", subdomain, customDomain, "US", 200, brandingJSON, siteBrandingJSON, siteBrandingJSON, siteContentJSON, siteContentJSON, now.Add(-72*time.Hour))
 	return err
 }
 
@@ -210,8 +219,10 @@ INSERT INTO users (
   id, tenant_id, email, password_hash, role, status, email_verified, approval_status, kyc_status, created_at
 )
 VALUES ($1,$2,$3,$4,$5,'ACTIVE',true,'APPROVED','NONE',$6)
-ON CONFLICT (tenant_id, email) DO UPDATE
+ON CONFLICT (id) DO UPDATE
 SET password_hash = EXCLUDED.password_hash,
+    tenant_id = EXCLUDED.tenant_id,
+    email = EXCLUDED.email,
     role = EXCLUDED.role,
     email_verified = true,
     approval_status = 'APPROVED',

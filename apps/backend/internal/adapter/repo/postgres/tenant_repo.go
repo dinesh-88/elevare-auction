@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"strings"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
@@ -35,7 +36,12 @@ func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 }
 
 func (r *TenantRepo) GetByHost(ctx context.Context, host string) (*domain.Tenant, error) {
-	trimmedAPIHost := strings.TrimPrefix(strings.ToLower(host), "api.")
+	normalizedHost := strings.ToLower(strings.TrimSpace(host))
+	if cleanHost, _, err := net.SplitHostPort(normalizedHost); err == nil {
+		normalizedHost = cleanHost
+	}
+	normalizedHost = strings.Split(normalizedHost, ":")[0]
+	trimmedAPIHost := strings.TrimPrefix(normalizedHost, "api.")
 	const q = `
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
        branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
@@ -44,7 +50,7 @@ FROM tenants
 WHERE (subdomain = split_part($1, '.', 1) OR custom_domain = $1 OR custom_domain = $2)
   AND status = 'ACTIVE'
 LIMIT 1`
-	t, err := scanTenant(r.DB.QueryRow(ctx, q, host, trimmedAPIHost))
+	t, err := scanTenant(r.DB.QueryRow(ctx, q, normalizedHost, trimmedAPIHost))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
