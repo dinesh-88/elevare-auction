@@ -28,12 +28,17 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			"http://127.0.0.1:5173",
 			"http://localhost:3000",
 			"http://127.0.0.1:3000",
+			"https://elevareauctions.com",
+			"https://www.elevareauctions.com",
 		},
 		AllowOriginFunc: func(_ *http.Request, origin string) bool {
 			return strings.HasPrefix(origin, "http://") && strings.HasSuffix(origin, ".localhost:5173") ||
 				strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".localhost:5173") ||
 				strings.HasPrefix(origin, "http://") && strings.HasSuffix(origin, ".localhost:3000") ||
-				strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".localhost:3000")
+				strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".localhost:3000") ||
+				(origin != "https://elevareauctions.com" &&
+					strings.HasPrefix(origin, "https://") &&
+					strings.HasSuffix(origin, ".elevareauctions.com"))
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},

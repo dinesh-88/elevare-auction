@@ -29,7 +29,7 @@ services:
         "-path",
         "/migrations",
         "-database",
-        "postgres://postgres:postgres@db:5432/elevare-auction?sslmode=disable",
+        "${DATABASE_URL}",
         "up",
       ]
     restart: "no"

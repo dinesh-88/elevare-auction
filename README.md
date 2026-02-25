@@ -113,13 +113,17 @@ migrate -path apps/backend/migrations -database "$DATABASE_URL" up
 This repo includes `render.yaml` plus an embedded migration binary (`/app/migrate`) in the backend image.
 
 - API service: runs `preDeployCommand: /app/migrate` before `/app/api`
-- Worker service: runs `preDeployCommand: /app/migrate` before `/app/worker`
+- Worker service: starts normally (`/app/worker`) and does not run migrations
 
 To enable:
 
 1. In Render, use **Blueprint** deploy from this repo (reads `render.yaml`), or copy the same pre-deploy command into your existing API/worker services.
 2. Ensure both services have `DATABASE_URL` set.
 3. Redeploy. Migrations will run automatically and treat `no change` as success.
+
+Notes:
+- `/app/migrate` sets `x-no-lock=true` by default to avoid advisory lock issues behind poolers/proxies.
+- If needed, disable this behavior by setting `MIGRATE_NO_LOCK=false` on the API service.
 
 ## Seed Demo Data
 

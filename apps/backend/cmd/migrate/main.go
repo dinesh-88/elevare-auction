@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"log"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -14,6 +16,10 @@ func main() {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
+	}
+	noLock := strings.TrimSpace(os.Getenv("MIGRATE_NO_LOCK"))
+	if noLock == "" || strings.EqualFold(noLock, "true") || noLock == "1" {
+		databaseURL = withQueryParam(databaseURL, "x-no-lock", "true")
 	}
 	migrationsPath := os.Getenv("MIGRATIONS_PATH")
 	if migrationsPath == "" {
@@ -36,4 +42,17 @@ func main() {
 		log.Fatalf("migration failed: %v", err)
 	}
 	log.Println("migrations applied")
+}
+
+func withQueryParam(rawURL, key, value string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	query := parsed.Query()
+	if query.Get(key) == "" {
+		query.Set(key, value)
+		parsed.RawQuery = query.Encode()
+	}
+	return parsed.String()
 }
