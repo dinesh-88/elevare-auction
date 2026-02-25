@@ -98,10 +98,12 @@ func main() {
 	}
 
 	log.Println("seed complete")
-	log.Println("tenant host: demo.localhost")
-	log.Println("admin: admin@demo.elevare.test / admin123")
-	log.Println("bidder: bidder@demo.elevare.test / bidder123")
-	log.Println("bidder2: bidder2@demo.elevare.test / bidder123")
+	log.Println("tenant host (prod): elevareauctions.com")
+	log.Println("api host (prod): api.elevareauctions.com")
+	log.Println("tenant host (local): main.localhost")
+	log.Println("admin: admin@elevareauctions.com / admin123")
+	log.Println("bidder: bidder@elevareauctions.com / bidder123")
+	log.Println("bidder2: bidder2@elevareauctions.com / bidder123")
 	log.Printf("proxy scenario lot: %s (LIVE)", lotLiveOne)
 	log.Printf("soft-close scenario lot: %s (LIVE, near end)", lotLiveTwo)
 }
@@ -143,7 +145,7 @@ func seedTenant(ctx context.Context, tx pgx.Tx, now time.Time) error {
 		},
 		"footer": map[string]any{
 			"text":          "© 2026 Elevare Demo House",
-			"contact_email": "info@demo.elevare.test",
+		"contact_email": "info@elevareauctions.com",
 			"social_links": map[string]any{
 				"instagram": "https://instagram.com/elevare",
 				"x":         "https://x.com/elevare",
@@ -155,7 +157,7 @@ func seedTenant(ctx context.Context, tx pgx.Tx, now time.Time) error {
 		"contact": map[string]any{
 			"address": "21 Regent Street, London",
 			"phone":   "+44 20 7000 0000",
-			"email":   "info@demo.elevare.test",
+			"email":   "info@elevareauctions.com",
 		},
 	}
 	brandingJSON, _ := json.Marshal(branding)
@@ -163,14 +165,15 @@ func seedTenant(ctx context.Context, tx pgx.Tx, now time.Time) error {
 	siteContentJSON, _ := json.Marshal(siteContent)
 	_, err := tx.Exec(ctx, `
 INSERT INTO tenants (
-  id, name, subdomain, status, country, estimated_auction_volume,
+  id, name, subdomain, custom_domain, status, country, estimated_auction_volume,
   branding, branding_published, branding_draft, content_published, content_draft,
   content_version, content_schema_version,
   require_admin_approval, require_kyc, default_currency, invoice_prefix, invoice_counter, created_at
 )
-VALUES ($1,$2,$3,'ACTIVE',$4,$5,$6,$7,$8,$9,$10,1,1,false,false,'GBP','INV',1,$11)
+VALUES ($1,$2,$3,$4,'ACTIVE',$5,$6,$7,$8,$9,$10,$11,1,1,false,false,'GBP','INV',1,$12)
 ON CONFLICT (subdomain) DO UPDATE
 SET name = EXCLUDED.name,
+    custom_domain = EXCLUDED.custom_domain,
     status = 'ACTIVE',
     country = EXCLUDED.country,
     estimated_auction_volume = EXCLUDED.estimated_auction_volume,
@@ -186,7 +189,7 @@ SET name = EXCLUDED.name,
     default_currency = EXCLUDED.default_currency,
     invoice_prefix = 'INV',
     invoice_counter = GREATEST(tenants.invoice_counter, 1)
-`, tenantID, "Elevare Demo House", "demo", "US", 200, brandingJSON, siteBrandingJSON, siteBrandingJSON, siteContentJSON, siteContentJSON, now.Add(-72*time.Hour))
+`, tenantID, "Elevare Demo House", "main", "elevareauctions.com", "US", 200, brandingJSON, siteBrandingJSON, siteBrandingJSON, siteContentJSON, siteContentJSON, now.Add(-72*time.Hour))
 	return err
 }
 
@@ -197,9 +200,9 @@ func seedUsers(ctx context.Context, tx pgx.Tx, now time.Time, adminHash, bidderH
 		role  string
 		hash  string
 	}{
-		{adminID, "admin@demo.elevare.test", "ADMIN", adminHash},
-		{bidderOneID, "bidder@demo.elevare.test", "BIDDER", bidderHash},
-		{bidderTwoID, "bidder2@demo.elevare.test", "BIDDER", bidderHash},
+		{adminID, "admin@elevareauctions.com", "ADMIN", adminHash},
+		{bidderOneID, "bidder@elevareauctions.com", "BIDDER", bidderHash},
+		{bidderTwoID, "bidder2@elevareauctions.com", "BIDDER", bidderHash},
 	}
 	for _, q := range queries {
 		_, err := tx.Exec(ctx, `
