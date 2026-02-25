@@ -1,6 +1,7 @@
 package httptransport
 
 import (
+	"net/url"
 	"net/http"
 	"os"
 	"strings"
@@ -32,13 +33,22 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			"https://www.elevareauctions.com",
 		},
 		AllowOriginFunc: func(_ *http.Request, origin string) bool {
-			return strings.HasPrefix(origin, "http://") && strings.HasSuffix(origin, ".localhost:5173") ||
-				strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".localhost:5173") ||
-				strings.HasPrefix(origin, "http://") && strings.HasSuffix(origin, ".localhost:3000") ||
-				strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".localhost:3000") ||
-				(origin != "https://elevareauctions.com" &&
-					strings.HasPrefix(origin, "https://") &&
-					strings.HasSuffix(origin, ".elevareauctions.com"))
+			u, err := url.Parse(origin)
+			if err != nil {
+				return false
+			}
+			host := strings.ToLower(u.Hostname())
+			scheme := strings.ToLower(u.Scheme)
+
+			if (scheme == "http" || scheme == "https") &&
+				(strings.HasSuffix(host, ".localhost") || host == "localhost" || host == "127.0.0.1") {
+				return true
+			}
+			if scheme == "https" &&
+				(host == "elevareauctions.com" || host == "www.elevareauctions.com" || strings.HasSuffix(host, ".elevareauctions.com")) {
+				return true
+			}
+			return false
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
