@@ -4,8 +4,9 @@ type Variant = "primary" | "secondary" | "disabled";
 type Size = "default" | "large";
 
 const variantClasses: Record<Variant, string> = {
-  primary: "bg-brand-primary text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed",
-  secondary: "bg-neutral-50 text-neutral-900 border border-neutral-200 hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed",
+  primary: "bg-accent-500 text-white hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed",
+  secondary:
+    "bg-white text-brand-900 border border-brand-900 hover:bg-brand-900 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed",
   disabled: "bg-neutral-200 text-neutral-500 cursor-not-allowed",
 };
 

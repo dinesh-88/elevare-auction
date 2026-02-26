@@ -21,17 +21,17 @@ export const metadata: Metadata = {
 
 export default function PricingPage() {
   return (
-    <div className="bg-white text-neutral-900">
+    <div className="bg-white text-brand-900">
       <Navbar />
       <main>
         <Section>
-          <p className="text-xs uppercase tracking-[0.16em] text-neutral-500">Pricing Philosophy</p>
-          <h1 className="mt-4 text-4xl md:text-5xl font-semibold text-neutral-900">Transparent, Institution-Aligned Pricing</h1>
-          <p className="mt-6 text-lg text-neutral-600 max-w-3xl">
+          <p className="text-xs uppercase tracking-[0.16em] text-accent-600">Pricing Philosophy</p>
+          <h1 className="mt-4 text-4xl md:text-5xl font-semibold text-brand-900">Transparent, Institution-Aligned Pricing</h1>
+          <p className="mt-6 text-lg text-brand-700 max-w-3xl">
             Elevare is built as white-label infrastructure, not a marketplace tax. Pricing is aligned with your
             operational model, auction cadence, and governance requirements.
           </p>
-          <ul className="mt-8 space-y-4 text-lg text-neutral-600">
+          <ul className="mt-8 space-y-4 text-lg text-brand-700">
             <li>No forced marketplace branding</li>
             <li>Configurable commercial structure</li>
             <li>Support for institutional accounting and controls</li>

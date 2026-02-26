@@ -185,19 +185,19 @@
   }
 
   .btn-brand {
-    @apply inline-flex items-center justify-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition hover:opacity-90;
+    @apply inline-flex items-center justify-center rounded-lg bg-accent-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-600;
   }
 
   .btn-link-brand {
-    @apply text-sm font-medium text-brand-primary hover:underline;
+    @apply text-sm font-medium text-brand-900 hover:text-accent-600 hover:underline;
   }
 
   .error {
-    @apply text-red-700 text-sm;
+    @apply text-danger-500 text-sm;
   }
 
   .success {
-    @apply text-green-700 text-sm;
+    @apply text-success-500 text-sm;
   }
 }
 

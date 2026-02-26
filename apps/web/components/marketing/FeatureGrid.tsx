@@ -18,10 +18,10 @@ export default function FeatureGrid() {
     <div className="grid gap-6 md:grid-cols-3">
       {capabilities.map((capability) => (
         <article key={capability.title} className="rounded-xl border border-neutral-200 bg-white p-8">
-          <h3 className="text-2xl font-semibold text-neutral-900">{capability.title}</h3>
+          <h3 className="text-2xl font-semibold text-brand-900">{capability.title}</h3>
           <ul className="mt-5 space-y-3">
             {capability.points.map((point) => (
-              <li key={point} className="text-base text-neutral-600">
+              <li key={point} className="text-base text-brand-700">
                 {point}
               </li>
             ))}

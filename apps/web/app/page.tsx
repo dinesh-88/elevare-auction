@@ -14,33 +14,33 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div className="bg-white text-neutral-900">
+    <div className="bg-white text-brand-900">
       <Navbar />
       <main>
         <HeroSection />
 
         <Section>
-          <h2 className="text-3xl md:text-4xl font-semibold text-neutral-900">Most Online Auction Platforms Take Control.</h2>
-          <ul className="mt-8 space-y-4 text-lg text-neutral-600">
+          <h2 className="text-3xl md:text-4xl font-semibold text-brand-900">Most Online Auction Platforms Take Control.</h2>
+          <ul className="mt-8 space-y-4 text-lg text-brand-700">
             <li>Your brand becomes secondary.</li>
             <li>Your bidders belong to the platform.</li>
             <li>Your fees are fixed.</li>
             <li>Your data is not fully yours.</li>
           </ul>
-          <p className="mt-8 text-xl text-neutral-800 font-medium">Elevare gives you full ownership.</p>
+          <p className="mt-8 text-xl text-brand-800 font-medium">Elevare gives you full ownership.</p>
         </Section>
 
         <Section background="neutral">
-          <h2 className="text-3xl md:text-4xl font-semibold text-neutral-900">Core Capabilities</h2>
-          <p className="mt-4 text-lg text-neutral-600">Everything required to operate high-trust online auctions under your own institution.</p>
+          <h2 className="text-3xl md:text-4xl font-semibold text-brand-900">Core Capabilities</h2>
+          <p className="mt-4 text-lg text-brand-700">Everything required to operate high-trust online auctions under your own institution.</p>
           <div className="mt-10">
             <FeatureGrid />
           </div>
         </Section>
 
         <Section>
-          <h2 className="text-3xl md:text-4xl font-semibold text-neutral-900">Built for Institutional Control</h2>
-          <ul className="mt-8 space-y-4 text-lg text-neutral-600">
+          <h2 className="text-3xl md:text-4xl font-semibold text-brand-900">Built for Institutional Control</h2>
+          <ul className="mt-8 space-y-4 text-lg text-brand-700">
             <li>Bidder approval workflows</li>
             <li>Risk controls and suspension</li>
             <li>Full audit timeline</li>
@@ -49,17 +49,17 @@ export default function HomePage() {
         </Section>
 
         <Section background="neutral">
-          <h2 className="text-3xl md:text-4xl font-semibold text-neutral-900">Ready to Run Your Own Branded Auction?</h2>
+          <h2 className="text-3xl md:text-4xl font-semibold text-brand-900">Ready to Run Your Own Branded Auction?</h2>
           <div className="mt-8 flex flex-wrap gap-4">
             <Link
               href="/demo"
-              className="inline-flex items-center rounded-md bg-neutral-900 px-6 py-3 text-sm font-medium text-white hover:bg-neutral-800 transition-colors"
+              className="inline-flex items-center rounded-md bg-accent-500 px-6 py-3 text-sm font-medium text-white hover:bg-accent-600 transition-colors"
             >
               Book a Demo
             </Link>
             <Link
               href="/contact"
-              className="inline-flex items-center rounded-md border border-neutral-300 px-6 py-3 text-sm font-medium text-neutral-800 hover:bg-white transition-colors"
+              className="inline-flex items-center rounded-md border border-brand-900 px-6 py-3 text-sm font-medium text-brand-900 hover:bg-brand-900 hover:text-white transition-colors"
             >
               Contact Us
             </Link>

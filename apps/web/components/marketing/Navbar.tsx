@@ -10,18 +10,18 @@ export default function Navbar() {
   return (
     <header className="border-b border-neutral-200 bg-white/95 backdrop-blur">
       <div className="max-w-7xl mx-auto px-6 py-4 sm:h-20 sm:py-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
-        <Link href="/" className="text-lg font-semibold tracking-tight text-neutral-900">
+        <Link href="/" className="text-lg font-semibold tracking-tight text-brand-900">
           Elevare Auctions
         </Link>
-        <nav className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm text-neutral-700">
+        <nav className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm text-brand-700">
           {navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="hover:text-neutral-900 transition-colors">
+            <Link key={link.href} href={link.href} className="hover:text-accent-600 transition-colors">
               {link.label}
             </Link>
           ))}
           <Link
             href="/login"
-            className="inline-flex items-center rounded-md border border-neutral-300 px-4 py-2 font-medium text-neutral-800 hover:bg-neutral-50 transition-colors"
+            className="inline-flex items-center rounded-md border border-brand-900 px-4 py-2 font-medium text-brand-900 hover:bg-brand-900 hover:text-white transition-colors"
           >
             Login
           </Link>

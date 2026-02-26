@@ -1,16 +1,16 @@
 @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap");
 
 :root {
-  --neutral-50: #f7f7f5;
-  --neutral-100: #ecece8;
-  --neutral-200: #dcdcd6;
+  --neutral-50: #f8f6f2;
+  --neutral-100: #f1efea;
+  --neutral-200: #e5e2db;
   --neutral-500: #8b8b85;
-  --neutral-800: #2a2a26;
-  --neutral-900: #1c1c1a;
+  --neutral-800: #2e2e2e;
+  --neutral-900: #1c1c1c;
 
-  --brand-primary: #1e2a3a;
-  --brand-secondary: #b89a5d;
-  --brand-accent: #a67c52;
+  --brand-primary: #1c1c1c;
+  --brand-secondary: #222222;
+  --brand-accent: #9e874c;
 
   --surface: #ffffff;
   --surface-soft: #f8f8f6;
