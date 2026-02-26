@@ -13,7 +13,13 @@ type TenantMiddleware struct {
 
 func (m TenantMiddleware) Resolve(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
+		host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
+		if host == "" {
+			host = r.Host
+		}
+		if strings.Contains(host, ",") {
+			host = strings.TrimSpace(strings.Split(host, ",")[0])
+		}
 		if strings.Contains(host, ":") {
 			cleanHost, _, err := net.SplitHostPort(host)
 			if err == nil {

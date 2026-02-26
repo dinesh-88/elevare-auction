@@ -17,7 +17,7 @@ async function fetchJSON<T>(path: string): Promise<T> {
   const cookie = h.get("cookie") ?? "";
   const url = `${resolveApiBase()}${path}`;
   const requestHeaders: HeadersInit = {
-    Host: host,
+    "X-Forwarded-Host": host,
     "X-Forwarded-Proto": protocol,
     Accept: "application/json",
   };
