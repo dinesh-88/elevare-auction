@@ -97,6 +97,9 @@ func main() {
 	if err := seedBids(ctx, tx, now); err != nil {
 		log.Fatalf("bid seed failed: %v", err)
 	}
+	if err := seedAuctionApprovals(ctx, tx, now); err != nil {
+		log.Fatalf("auction approval seed failed: %v", err)
+	}
 	if err := seedFees(ctx, tx, now); err != nil {
 		log.Fatalf("fee seed failed: %v", err)
 	}
@@ -573,7 +576,116 @@ SET tenant_id = EXCLUDED.tenant_id,
 	return nil
 }
 
+func seedAuctionApprovals(ctx context.Context, tx pgx.Tx, now time.Time) error {
+	rows := []struct {
+		id               uuid.UUID
+		auctionID        uuid.UUID
+		userID           uuid.UUID
+		status           string
+		riskLevel        string
+		maxBidLimitMinor *int64
+		depositRequired  bool
+		depositAmount    *int64
+		depositStatus    string
+		internalNotes    *string
+		decidedBy        *uuid.UUID
+		decidedAt        *time.Time
+		approvedBy       *uuid.UUID
+		approvedAt       *time.Time
+		createdAt        time.Time
+		updatedAt        time.Time
+	}{
+		{
+			id:              uuid.MustParse("99999999-aaaa-1111-1111-111111111111"),
+			auctionID:       auctionLive,
+			userID:          bidderOneID,
+			status:          "APPROVED",
+			riskLevel:       "low",
+			depositRequired: false,
+			depositStatus:   "not_required",
+			decidedBy:       &adminID,
+			decidedAt:       timePtr(now.Add(-3 * time.Hour)),
+			approvedBy:      &adminID,
+			approvedAt:      timePtr(now.Add(-3 * time.Hour)),
+			createdAt:       now.Add(-20 * time.Hour),
+			updatedAt:       now.Add(-3 * time.Hour),
+		},
+		{
+			id:               uuid.MustParse("aaaaaaaa-bbbb-1111-1111-111111111111"),
+			auctionID:        auctionLive,
+			userID:           bidderTwoID,
+			status:           "APPROVED",
+			riskLevel:        "medium",
+			maxBidLimitMinor: int64Ptr(9000),
+			depositRequired:  false,
+			depositStatus:    "not_required",
+			internalNotes:    stringPtr("Approved with a capped bidding limit."),
+			decidedBy:        &adminID,
+			decidedAt:        timePtr(now.Add(-2 * time.Hour)),
+			approvedBy:       &adminID,
+			approvedAt:       timePtr(now.Add(-2 * time.Hour)),
+			createdAt:        now.Add(-18 * time.Hour),
+			updatedAt:        now.Add(-2 * time.Hour),
+		},
+		{
+			id:              uuid.MustParse("bbbbbbbb-cccc-1111-1111-111111111111"),
+			auctionID:       auctionFuture,
+			userID:          bidderTwoID,
+			status:          "PENDING",
+			riskLevel:       "high",
+			depositRequired: true,
+			depositAmount:   int64Ptr(1500),
+			depositStatus:   "required",
+			internalNotes:   stringPtr("High-risk bidder pending deposit."),
+			createdAt:       now.Add(-4 * time.Hour),
+			updatedAt:       now.Add(-30 * time.Minute),
+		},
+	}
+
+	for _, row := range rows {
+		_, err := tx.Exec(ctx, `
+INSERT INTO auction_bidder_approvals (
+  id, tenant_id, auction_id, user_id, status, risk_level, max_bid_limit_minor,
+  deposit_required, deposit_amount_minor, deposit_status, internal_notes,
+  decided_by, decided_at, approved_by_user_id, approved_at, created_at, updated_at
+)
+VALUES (
+  $1,$2,$3,$4,$5,$6,$7,
+  $8,$9,$10,$11,
+  $12,$13,$14,$15,$16,$17
+)
+ON CONFLICT (auction_id, user_id) DO UPDATE
+SET status = EXCLUDED.status,
+    risk_level = EXCLUDED.risk_level,
+    max_bid_limit_minor = EXCLUDED.max_bid_limit_minor,
+    deposit_required = EXCLUDED.deposit_required,
+    deposit_amount_minor = EXCLUDED.deposit_amount_minor,
+    deposit_status = EXCLUDED.deposit_status,
+    internal_notes = EXCLUDED.internal_notes,
+    decided_by = EXCLUDED.decided_by,
+    decided_at = EXCLUDED.decided_at,
+    approved_by_user_id = EXCLUDED.approved_by_user_id,
+    approved_at = EXCLUDED.approved_at,
+    updated_at = EXCLUDED.updated_at
+`, row.id, tenantID, row.auctionID, row.userID, row.status, row.riskLevel, row.maxBidLimitMinor,
+			row.depositRequired, row.depositAmount, row.depositStatus, row.internalNotes,
+			row.decidedBy, row.decidedAt, row.approvedBy, row.approvedAt, row.createdAt, row.updatedAt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func int64Ptr(v int64) *int64 {
+	return &v
+}
+
+func stringPtr(v string) *string {
+	return &v
+}
+
+func timePtr(v time.Time) *time.Time {
 	return &v
 }
 

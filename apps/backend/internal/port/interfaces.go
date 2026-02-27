@@ -86,7 +86,8 @@ type BidderRepository interface {
 	RequestAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, now time.Time) (*domain.AuctionBidderApproval, bool, error)
 	GetAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID) (*domain.AuctionBidderApproval, error)
 	SetAuctionApproval(ctx context.Context, tenantID, auctionID, userID, decidedBy uuid.UUID, status domain.ApprovalStatus, now time.Time) (*domain.AuctionBidderApproval, error)
-	ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, status *domain.ApprovalStatus) ([]domain.AuctionBidderAdminRow, error)
+	UpdateAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, in UpdateAuctionBidderApprovalInput, now time.Time) (*domain.AuctionBidderApproval, error)
+	ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, filter ListAuctionBiddersFilter) ([]domain.AuctionBidderAdminRow, error)
 }
 
 type UpdateTenantBidderInput struct {
@@ -100,6 +101,22 @@ type UpdateTenantBidderInput struct {
 	City          *string
 	PostalCode    *string
 	Country       *string
+}
+
+type UpdateAuctionBidderApprovalInput struct {
+	RiskLevel          domain.AuctionBidderRiskLevel
+	MaxBidLimitMinor   *int64
+	DepositRequired    bool
+	DepositAmountMinor *int64
+	DepositStatus      domain.AuctionBidderDepositStatus
+	InternalNotes      *string
+}
+
+type ListAuctionBiddersFilter struct {
+	Status          *domain.ApprovalStatus
+	RiskLevel       *domain.AuctionBidderRiskLevel
+	DepositRequired *bool
+	DepositStatus   *domain.AuctionBidderDepositStatus
 }
 
 type FeeRepository interface {

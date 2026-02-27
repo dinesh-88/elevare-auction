@@ -1091,18 +1091,50 @@ func (h *Handler) ListAuctionBidders(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
-	var statusFilter *domain.ApprovalStatus
+	filter := port.ListAuctionBiddersFilter{}
 	if raw := strings.TrimSpace(r.URL.Query().Get("status")); raw != "" {
 		status := domain.ApprovalStatus(strings.ToUpper(raw))
 		switch status {
 		case domain.ApprovalPending, domain.ApprovalApproved, domain.ApprovalRejected:
-			statusFilter = &status
+			filter.Status = &status
 		default:
 			http.Error(w, "invalid status", http.StatusBadRequest)
 			return
 		}
 	}
-	rows, err := h.Bidder.ListAuctionBidders(r.Context(), tenant.ID, auctionID, statusFilter)
+	if raw := strings.TrimSpace(r.URL.Query().Get("risk_level")); raw != "" {
+		risk := domain.AuctionBidderRiskLevel(strings.ToLower(raw))
+		switch risk {
+		case domain.AuctionBidderRiskLow, domain.AuctionBidderRiskMedium, domain.AuctionBidderRiskHigh:
+			filter.RiskLevel = &risk
+		default:
+			http.Error(w, "invalid risk level", http.StatusBadRequest)
+			return
+		}
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("deposit_required")); raw != "" {
+		value, parseErr := strconv.ParseBool(raw)
+		if parseErr != nil {
+			http.Error(w, "invalid deposit_required", http.StatusBadRequest)
+			return
+		}
+		filter.DepositRequired = &value
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("deposit_status")); raw != "" {
+		status := domain.AuctionBidderDepositStatus(strings.ToLower(raw))
+		switch status {
+		case domain.AuctionBidderDepositNotRequired,
+			domain.AuctionBidderDepositRequired,
+			domain.AuctionBidderDepositPending,
+			domain.AuctionBidderDepositReceived,
+			domain.AuctionBidderDepositWaived:
+			filter.DepositStatus = &status
+		default:
+			http.Error(w, "invalid deposit status", http.StatusBadRequest)
+			return
+		}
+	}
+	rows, err := h.Bidder.ListAuctionBidders(r.Context(), tenant.ID, auctionID, filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1124,6 +1156,71 @@ func (h *Handler) ApproveAuctionBidder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item, err := h.Bidder.ApproveAuctionBidder(r.Context(), tenant.ID, auctionID, userID, claims.UserID, time.Now().UTC())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) UpdateAuctionBidderApproval(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		RiskLevel          string  `json:"risk_level"`
+		MaxBidLimitMinor   *int64  `json:"max_bid_limit_minor"`
+		DepositRequired    bool    `json:"deposit_required"`
+		DepositAmountMinor *int64  `json:"deposit_amount_minor"`
+		DepositStatus      string  `json:"deposit_status"`
+		InternalNotes      *string `json:"internal_notes"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	riskLevel := domain.AuctionBidderRiskLevel(strings.ToLower(strings.TrimSpace(req.RiskLevel)))
+	switch riskLevel {
+	case domain.AuctionBidderRiskLow, domain.AuctionBidderRiskMedium, domain.AuctionBidderRiskHigh:
+	default:
+		http.Error(w, "invalid risk level", http.StatusBadRequest)
+		return
+	}
+	depositStatus := domain.AuctionBidderDepositStatus(strings.ToLower(strings.TrimSpace(req.DepositStatus)))
+	switch depositStatus {
+	case domain.AuctionBidderDepositNotRequired,
+		domain.AuctionBidderDepositRequired,
+		domain.AuctionBidderDepositPending,
+		domain.AuctionBidderDepositReceived,
+		domain.AuctionBidderDepositWaived:
+	default:
+		http.Error(w, "invalid deposit status", http.StatusBadRequest)
+		return
+	}
+	if req.MaxBidLimitMinor != nil && *req.MaxBidLimitMinor < 0 {
+		http.Error(w, "invalid max bid limit", http.StatusBadRequest)
+		return
+	}
+	if req.DepositAmountMinor != nil && *req.DepositAmountMinor < 0 {
+		http.Error(w, "invalid deposit amount", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Bidder.UpdateAuctionBidderApproval(r.Context(), tenant.ID, auctionID, userID, port.UpdateAuctionBidderApprovalInput{
+		RiskLevel:          riskLevel,
+		MaxBidLimitMinor:   req.MaxBidLimitMinor,
+		DepositRequired:    req.DepositRequired,
+		DepositAmountMinor: req.DepositAmountMinor,
+		DepositStatus:      depositStatus,
+		InternalNotes:      req.InternalNotes,
+	}, time.Now().UTC())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

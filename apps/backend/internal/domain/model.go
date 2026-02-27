@@ -181,26 +181,57 @@ type TenantBidderProfile struct {
 }
 
 type AuctionBidderApproval struct {
-	ID        uuid.UUID
-	TenantID  uuid.UUID
-	AuctionID uuid.UUID
-	UserID    uuid.UUID
-	Status    ApprovalStatus
-	DecidedBy *uuid.UUID
-	DecidedAt *time.Time
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID                 uuid.UUID
+	TenantID           uuid.UUID
+	AuctionID          uuid.UUID
+	UserID             uuid.UUID
+	Status             ApprovalStatus
+	RiskLevel          AuctionBidderRiskLevel
+	MaxBidLimitMinor   *int64
+	DepositRequired    bool
+	DepositAmountMinor *int64
+	DepositStatus      AuctionBidderDepositStatus
+	InternalNotes      *string
+	DecidedBy          *uuid.UUID
+	DecidedAt          *time.Time
+	ApprovedByUserID   *uuid.UUID
+	ApprovedAt         *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 type AuctionBidderAdminRow struct {
-	UserID       uuid.UUID             `json:"user_id"`
-	Email        string                `json:"email"`
-	Approval     ApprovalStatus        `json:"approval_status"`
-	TenantStatus TenantBidderStatus    `json:"tenant_status"`
-	RiskLevel    TenantBidderRiskLevel `json:"risk_level"`
-	RequestedAt  time.Time             `json:"requested_at"`
-	DecidedAt    *time.Time            `json:"decided_at,omitempty"`
+	UserID             uuid.UUID                  `json:"user_id"`
+	Email              string                     `json:"email"`
+	Approval           ApprovalStatus             `json:"approval_status"`
+	TenantStatus       TenantBidderStatus         `json:"tenant_status"`
+	RiskLevel          AuctionBidderRiskLevel     `json:"risk_level"`
+	MaxBidLimitMinor   *int64                     `json:"max_bid_limit_minor,omitempty"`
+	DepositRequired    bool                       `json:"deposit_required"`
+	DepositAmountMinor *int64                     `json:"deposit_amount_minor,omitempty"`
+	DepositStatus      AuctionBidderDepositStatus `json:"deposit_status"`
+	InternalNotes      *string                    `json:"internal_notes,omitempty"`
+	RequestedAt        time.Time                  `json:"requested_at"`
+	DecidedAt          *time.Time                 `json:"decided_at,omitempty"`
 }
+
+type AuctionBidderRiskLevel string
+
+const (
+	AuctionBidderRiskLow    AuctionBidderRiskLevel = "low"
+	AuctionBidderRiskMedium AuctionBidderRiskLevel = "medium"
+	AuctionBidderRiskHigh   AuctionBidderRiskLevel = "high"
+)
+
+type AuctionBidderDepositStatus string
+
+const (
+	AuctionBidderDepositNotRequired AuctionBidderDepositStatus = "not_required"
+	AuctionBidderDepositRequired    AuctionBidderDepositStatus = "required"
+	AuctionBidderDepositPending     AuctionBidderDepositStatus = "pending"
+	AuctionBidderDepositReceived    AuctionBidderDepositStatus = "received"
+	AuctionBidderDepositWaived      AuctionBidderDepositStatus = "waived"
+)
 
 type LotStatus string
 

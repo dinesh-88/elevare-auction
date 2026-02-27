@@ -177,9 +177,19 @@ func (f *fakeBidSimBidderRepo) GetAuctionApproval(ctx context.Context, tenantID,
 }
 func (f *fakeBidSimBidderRepo) SetAuctionApproval(ctx context.Context, tenantID, auctionID, userID, decidedBy uuid.UUID, status domain.ApprovalStatus, now time.Time) (*domain.AuctionBidderApproval, error) {
 	f.approvalCalls++
-	return &domain.AuctionBidderApproval{TenantID: tenantID, AuctionID: auctionID, UserID: userID, Status: status}, nil
+	return &domain.AuctionBidderApproval{
+		TenantID:      tenantID,
+		AuctionID:     auctionID,
+		UserID:        userID,
+		Status:        status,
+		RiskLevel:     domain.AuctionBidderRiskLow,
+		DepositStatus: domain.AuctionBidderDepositNotRequired,
+	}, nil
 }
-func (f *fakeBidSimBidderRepo) ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, status *domain.ApprovalStatus) ([]domain.AuctionBidderAdminRow, error) {
+func (f *fakeBidSimBidderRepo) UpdateAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, in port.UpdateAuctionBidderApprovalInput, now time.Time) (*domain.AuctionBidderApproval, error) {
+	return nil, errors.New("unused")
+}
+func (f *fakeBidSimBidderRepo) ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, filter port.ListAuctionBiddersFilter) ([]domain.AuctionBidderAdminRow, error) {
 	return nil, errors.New("unused")
 }
 

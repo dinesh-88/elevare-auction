@@ -146,13 +146,15 @@ func (f *fakeBidderApprovalRepo) RequestAuctionApproval(ctx context.Context, ten
 		return &existing, false, nil
 	}
 	item := domain.AuctionBidderApproval{
-		ID:        uuid.New(),
-		TenantID:  tenantID,
-		AuctionID: auctionID,
-		UserID:    userID,
-		Status:    domain.ApprovalPending,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:            uuid.New(),
+		TenantID:      tenantID,
+		AuctionID:     auctionID,
+		UserID:        userID,
+		Status:        domain.ApprovalPending,
+		RiskLevel:     domain.AuctionBidderRiskLow,
+		DepositStatus: domain.AuctionBidderDepositNotRequired,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 	f.approvals[key] = item
 	f.lastRequestMade = true
@@ -171,11 +173,48 @@ func (f *fakeBidderApprovalRepo) SetAuctionApproval(ctx context.Context, tenantI
 		f.approvals = map[string]domain.AuctionBidderApproval{}
 	}
 	key := approvalKey(auctionID, userID)
-	item := domain.AuctionBidderApproval{ID: uuid.New(), TenantID: tenantID, AuctionID: auctionID, UserID: userID, Status: status, CreatedAt: now, UpdatedAt: now}
+	item := domain.AuctionBidderApproval{
+		ID:            uuid.New(),
+		TenantID:      tenantID,
+		AuctionID:     auctionID,
+		UserID:        userID,
+		Status:        status,
+		RiskLevel:     domain.AuctionBidderRiskLow,
+		DepositStatus: domain.AuctionBidderDepositNotRequired,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
 	f.approvals[key] = item
 	return &item, nil
 }
-func (f *fakeBidderApprovalRepo) ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, status *domain.ApprovalStatus) ([]domain.AuctionBidderAdminRow, error) {
+func (f *fakeBidderApprovalRepo) UpdateAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, in port.UpdateAuctionBidderApprovalInput, now time.Time) (*domain.AuctionBidderApproval, error) {
+	if f.approvals == nil {
+		f.approvals = map[string]domain.AuctionBidderApproval{}
+	}
+	key := approvalKey(auctionID, userID)
+	item := f.approvals[key]
+	if item.ID == uuid.Nil {
+		item = domain.AuctionBidderApproval{
+			ID:            uuid.New(),
+			TenantID:      tenantID,
+			AuctionID:     auctionID,
+			UserID:        userID,
+			Status:        domain.ApprovalPending,
+			DepositStatus: domain.AuctionBidderDepositNotRequired,
+			CreatedAt:     now,
+		}
+	}
+	item.RiskLevel = in.RiskLevel
+	item.MaxBidLimitMinor = in.MaxBidLimitMinor
+	item.DepositRequired = in.DepositRequired
+	item.DepositAmountMinor = in.DepositAmountMinor
+	item.DepositStatus = in.DepositStatus
+	item.InternalNotes = in.InternalNotes
+	item.UpdatedAt = now
+	f.approvals[key] = item
+	return &item, nil
+}
+func (f *fakeBidderApprovalRepo) ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, filter port.ListAuctionBiddersFilter) ([]domain.AuctionBidderAdminRow, error) {
 	return nil, nil
 }
 
@@ -242,6 +281,66 @@ func TestPlaceBid_RejectsSuspendedBidder(t *testing.T) {
 	}
 }
 
+func TestPlaceBid_RejectsAmountAboveAuthorisedLimit(t *testing.T) {
+	tenantID := uuid.New()
+	auctionID := uuid.New()
+	userID := uuid.New()
+	limit := int64(150)
+	lotRepo := &fakeBidderApprovalLotRepo{lot: domain.Lot{AuctionID: auctionID}}
+	auctionRepo := &fakeBidderApprovalAuctionRepo{auction: domain.Auction{RequireBidderApproval: true}}
+	bidderRepo := &fakeBidderApprovalRepo{
+		approvals: map[string]domain.AuctionBidderApproval{
+			approvalKey(auctionID, userID): {
+				ID:               uuid.New(),
+				TenantID:         tenantID,
+				AuctionID:        auctionID,
+				UserID:           userID,
+				Status:           domain.ApprovalApproved,
+				RiskLevel:        domain.AuctionBidderRiskMedium,
+				MaxBidLimitMinor: &limit,
+				DepositStatus:    domain.AuctionBidderDepositNotRequired,
+			},
+		},
+	}
+	uc := &LotUseCase{Lots: lotRepo, Auctions: auctionRepo, Bidders: bidderRepo}
+	_, err := uc.PlaceBid(bidderCtx(tenantID, userID), port.PlaceLotBidTxInput{
+		TenantID: tenantID, LotID: uuid.New(), UserID: userID, Amount: int64Ptr(200), Now: time.Now().UTC(),
+	})
+	if !errors.Is(err, ErrBidLimitExceeded) {
+		t.Fatalf("expected ErrBidLimitExceeded, got %v", err)
+	}
+}
+
+func TestPlaceBid_RejectsProxyBidUntilDepositReceived(t *testing.T) {
+	tenantID := uuid.New()
+	auctionID := uuid.New()
+	userID := uuid.New()
+	lotRepo := &fakeBidderApprovalLotRepo{lot: domain.Lot{AuctionID: auctionID}}
+	auctionRepo := &fakeBidderApprovalAuctionRepo{auction: domain.Auction{RequireBidderApproval: true}}
+	bidderRepo := &fakeBidderApprovalRepo{
+		approvals: map[string]domain.AuctionBidderApproval{
+			approvalKey(auctionID, userID): {
+				ID:              uuid.New(),
+				TenantID:        tenantID,
+				AuctionID:       auctionID,
+				UserID:          userID,
+				Status:          domain.ApprovalApproved,
+				RiskLevel:       domain.AuctionBidderRiskHigh,
+				DepositRequired: true,
+				DepositStatus:   domain.AuctionBidderDepositPending,
+			},
+		},
+	}
+	maxBid := int64(500)
+	uc := &LotUseCase{Lots: lotRepo, Auctions: auctionRepo, Bidders: bidderRepo}
+	_, err := uc.PlaceBid(bidderCtx(tenantID, userID), port.PlaceLotBidTxInput{
+		TenantID: tenantID, LotID: uuid.New(), UserID: userID, MaxBid: &maxBid, Now: time.Now().UTC(),
+	})
+	if !errors.Is(err, ErrDepositNeeded) {
+		t.Fatalf("expected ErrDepositNeeded, got %v", err)
+	}
+}
+
 func TestRequestToBid_Idempotent(t *testing.T) {
 	tenantID := uuid.New()
 	auctionID := uuid.New()
@@ -270,7 +369,7 @@ func TestAuctionBidderListCrossTenantForbidden(t *testing.T) {
 	tenantA := uuid.New()
 	tenantB := uuid.New()
 	uc := &BidderUseCase{Bidders: &fakeBidderApprovalRepo{}}
-	_, err := uc.ListAuctionBidders(authCtx(tenantA, domain.RoleAdmin), tenantB, uuid.New(), nil)
+	_, err := uc.ListAuctionBidders(authCtx(tenantA, domain.RoleAdmin), tenantB, uuid.New(), port.ListAuctionBiddersFilter{})
 	if err != ErrForbidden {
 		t.Fatalf("expected ErrForbidden, got %v", err)
 	}

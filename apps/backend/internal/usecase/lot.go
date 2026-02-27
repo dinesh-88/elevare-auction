@@ -246,6 +246,9 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 			}
 			switch approval.Status {
 			case domain.ApprovalApproved:
+				if err := validateAuctionBidderApprovalControls(approval, in); err != nil {
+					return nil, err
+				}
 			case domain.ApprovalPending:
 				return nil, ErrPendingApproval
 			default:
@@ -284,6 +287,30 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 		}
 	}
 	return res, nil
+}
+
+func validateAuctionBidderApprovalControls(approval *domain.AuctionBidderApproval, in port.PlaceLotBidTxInput) error {
+	if approval == nil {
+		return nil
+	}
+	requested := int64(0)
+	switch {
+	case in.MaxBid != nil:
+		requested = *in.MaxBid
+	case in.Amount != nil:
+		requested = *in.Amount
+	default:
+		return nil
+	}
+	if approval.MaxBidLimitMinor != nil && requested > *approval.MaxBidLimitMinor {
+		return ErrBidLimitExceeded
+	}
+	if approval.DepositRequired &&
+		approval.DepositStatus != domain.AuctionBidderDepositReceived &&
+		approval.DepositStatus != domain.AuctionBidderDepositWaived {
+		return ErrDepositNeeded
+	}
+	return nil
 }
 
 func (uc *LotUseCase) validateSimulatorTenant(ctx context.Context, tenantID, userID uuid.UUID) error {

@@ -109,7 +109,12 @@ export interface AuctionBidderAdminRow {
   email: string;
   approval_status: "PENDING" | "APPROVED" | "REJECTED";
   tenant_status: "ACTIVE" | "SUSPENDED";
-  risk_level: "LOW" | "NORMAL" | "HIGH";
+  risk_level: "low" | "medium" | "high";
+  max_bid_limit_minor?: number | null;
+  deposit_required: boolean;
+  deposit_amount_minor?: number | null;
+  deposit_status: "not_required" | "required" | "pending" | "received" | "waived";
+  internal_notes?: string | null;
   requested_at: string;
   decided_at?: string | null;
 }
@@ -547,7 +552,12 @@ function normalizeAuctionBidderAdminRow(raw: unknown): AuctionBidderAdminRow {
     email: String(r.email ?? r.Email ?? ""),
     approval_status: String(r.approval_status ?? r.ApprovalStatus ?? "PENDING") as AuctionBidderAdminRow["approval_status"],
     tenant_status: String(r.tenant_status ?? r.TenantStatus ?? "ACTIVE") as AuctionBidderAdminRow["tenant_status"],
-    risk_level: String(r.risk_level ?? r.RiskLevel ?? "NORMAL") as AuctionBidderAdminRow["risk_level"],
+    risk_level: String(r.risk_level ?? r.RiskLevel ?? "low") as AuctionBidderAdminRow["risk_level"],
+    max_bid_limit_minor: r.max_bid_limit_minor != null || r.MaxBidLimitMinor != null ? Number(r.max_bid_limit_minor ?? r.MaxBidLimitMinor) : null,
+    deposit_required: Boolean(r.deposit_required ?? r.DepositRequired ?? false),
+    deposit_amount_minor: r.deposit_amount_minor != null || r.DepositAmountMinor != null ? Number(r.deposit_amount_minor ?? r.DepositAmountMinor) : null,
+    deposit_status: String(r.deposit_status ?? r.DepositStatus ?? "not_required") as AuctionBidderAdminRow["deposit_status"],
+    internal_notes: (r.internal_notes ?? r.InternalNotes ?? null) as string | null,
     requested_at: String(r.requested_at ?? r.RequestedAt ?? ""),
     decided_at: (r.decided_at ?? r.DecidedAt ?? null) as string | null,
   };
@@ -953,9 +963,20 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ require_bidder_approval: requireBidderApproval }),
     }),
-  listAuctionBidders: async (auctionId: string, status?: "PENDING" | "APPROVED" | "REJECTED") => {
+  listAuctionBidders: async (
+    auctionId: string,
+    filters?: {
+      status?: "PENDING" | "APPROVED" | "REJECTED";
+      risk_level?: "low" | "medium" | "high";
+      deposit_required?: boolean;
+      deposit_status?: "not_required" | "required" | "pending" | "received" | "waived";
+    },
+  ) => {
     const params = new URLSearchParams();
-    if (status) params.set("status", status);
+    if (filters?.status) params.set("status", filters.status);
+    if (filters?.risk_level) params.set("risk_level", filters.risk_level);
+    if (filters?.deposit_required != null) params.set("deposit_required", String(filters.deposit_required));
+    if (filters?.deposit_status) params.set("deposit_status", filters.deposit_status);
     const qs = params.toString();
     return (await request<unknown[]>(`/admin/auctions/${auctionId}/bidders${qs ? `?${qs}` : ""}`)).map(normalizeAuctionBidderAdminRow);
   },
@@ -963,6 +984,18 @@ export const api = {
     request<JsonRecord>(`/admin/auctions/${auctionId}/bidders/${userId}/approve`, { method: "POST" }),
   rejectAuctionBidder: async (auctionId: string, userId: string) =>
     request<JsonRecord>(`/admin/auctions/${auctionId}/bidders/${userId}/reject`, { method: "POST" }),
+  updateAuctionBidderApproval: async (
+    auctionId: string,
+    userId: string,
+    payload: {
+      risk_level: "low" | "medium" | "high";
+      max_bid_limit_minor?: number | null;
+      deposit_required: boolean;
+      deposit_amount_minor?: number | null;
+      deposit_status: "not_required" | "required" | "pending" | "received" | "waived";
+      internal_notes?: string | null;
+    },
+  ) => request<JsonRecord>(`/admin/auctions/${auctionId}/bidders/${userId}`, { method: "PUT", body: JSON.stringify(payload) }),
   getBidderProfile: async (userId: string) => normalizeTenantBidderProfile(await request<unknown>(`/admin/bidders/${userId}`)),
   updateBidderProfile: async (
     userId: string,

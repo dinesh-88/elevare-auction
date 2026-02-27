@@ -108,7 +108,7 @@ func (uc *BidderUseCase) RequestToBid(ctx context.Context, tenantID, auctionID, 
 	return approval, nil
 }
 
-func (uc *BidderUseCase) ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, status *domain.ApprovalStatus) ([]domain.AuctionBidderAdminRow, error) {
+func (uc *BidderUseCase) ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, filter port.ListAuctionBiddersFilter) ([]domain.AuctionBidderAdminRow, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (uc *BidderUseCase) ListAuctionBidders(ctx context.Context, tenantID, aucti
 	if uc.Bidders == nil {
 		return nil, ErrValidation
 	}
-	return uc.Bidders.ListAuctionBidders(ctx, tenantID, auctionID, status)
+	return uc.Bidders.ListAuctionBidders(ctx, tenantID, auctionID, filter)
 }
 
 func (uc *BidderUseCase) ApproveAuctionBidder(ctx context.Context, tenantID, auctionID, userID, decidedBy uuid.UUID, now time.Time) (*domain.AuctionBidderApproval, error) {
@@ -181,6 +181,28 @@ func (uc *BidderUseCase) RejectAuctionBidder(ctx context.Context, tenantID, auct
 	return item, nil
 }
 
+func (uc *BidderUseCase) UpdateAuctionBidderApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, in port.UpdateAuctionBidderApprovalInput, now time.Time) (*domain.AuctionBidderApproval, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionBidderApprove); err != nil {
+		return nil, ErrForbidden
+	}
+	if uc.Bidders == nil {
+		return nil, ErrValidation
+	}
+	prev, err := uc.Bidders.GetAuctionApproval(ctx, tenantID, auctionID, userID)
+	if err != nil {
+		prev = nil
+	}
+	item, err := uc.Bidders.UpdateAuctionApproval(ctx, tenantID, auctionID, userID, in, now)
+	if err != nil {
+		return nil, err
+	}
+	uc.appendAuctionBidderControlsAudit(ctx, tenantID, auctionID, userID, prev, item)
+	return item, nil
+}
+
 func (uc *BidderUseCase) GetProfile(ctx context.Context, tenantID, userID uuid.UUID) (*domain.TenantBidderProfile, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
@@ -227,4 +249,78 @@ func (uc *BidderUseCase) UpdateProfile(ctx context.Context, tenantID, userID uui
 		})
 	}
 	return item, nil
+}
+
+func (uc *BidderUseCase) appendAuctionBidderControlsAudit(
+	ctx context.Context,
+	tenantID, auctionID, userID uuid.UUID,
+	before, after *domain.AuctionBidderApproval,
+) {
+	if uc.Audit == nil || after == nil {
+		return
+	}
+	changes := map[string]map[string]any{}
+	addChange := func(name string, oldValue, newValue any) {
+		if oldValue == newValue {
+			return
+		}
+		changes[name] = map[string]any{"before": oldValue, "after": newValue}
+	}
+
+	var beforeRisk domain.AuctionBidderRiskLevel
+	var beforeLimit *int64
+	var beforeDepositRequired bool
+	var beforeDepositAmount *int64
+	var beforeDepositStatus domain.AuctionBidderDepositStatus
+	var beforeNotes *string
+	if before != nil {
+		beforeRisk = before.RiskLevel
+		beforeLimit = before.MaxBidLimitMinor
+		beforeDepositRequired = before.DepositRequired
+		beforeDepositAmount = before.DepositAmountMinor
+		beforeDepositStatus = before.DepositStatus
+		beforeNotes = before.InternalNotes
+	}
+	addChange("risk_level", string(beforeRisk), string(after.RiskLevel))
+	addChange("max_bid_limit_minor", nullableInt64Value(beforeLimit), nullableInt64Value(after.MaxBidLimitMinor))
+	addChange("deposit_required", beforeDepositRequired, after.DepositRequired)
+	addChange("deposit_amount_minor", nullableInt64Value(beforeDepositAmount), nullableInt64Value(after.DepositAmountMinor))
+	addChange("deposit_status", string(beforeDepositStatus), string(after.DepositStatus))
+	addChange("internal_notes", nullableStringValue(beforeNotes), nullableStringValue(after.InternalNotes))
+	if len(changes) == 0 {
+		return
+	}
+
+	auditCtx := middleware.AuditContextFromContext(ctx)
+	payload, _ := json.Marshal(map[string]any{
+		"user_id":  userID,
+		"changes":  changes,
+		"approval": after.Status,
+	})
+	_ = uc.Audit.Append(ctx, port.AuditEntry{
+		TenantID:    &tenantID,
+		ActorUserID: auditCtx.ActorUserID,
+		ActorRole:   auditCtx.ActorRole,
+		Action:      "AUCTION_BIDDER_CONTROLS_UPDATED",
+		EntityType:  "AUCTION",
+		EntityID:    &auctionID,
+		RequestID:   auditCtx.RequestID,
+		IP:          auditCtx.IP,
+		UserAgent:   auditCtx.UserAgent,
+		Metadata:    payload,
+	})
+}
+
+func nullableInt64Value(v *int64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
+func nullableStringValue(v *string) any {
+	if v == nil {
+		return nil
+	}
+	return *v
 }

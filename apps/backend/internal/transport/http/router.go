@@ -141,6 +141,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.With(authz.Require(domain.PermissionBidderApprove)).Get("/auctions/{auctionId}/bidders", h.ListAuctionBidders)
 			r.With(authz.Require(domain.PermissionBidderApprove)).Post("/auctions/{auctionId}/bidders/{userId}/approve", h.ApproveAuctionBidder)
 			r.With(authz.Require(domain.PermissionBidderApprove)).Post("/auctions/{auctionId}/bidders/{userId}/reject", h.RejectAuctionBidder)
+			r.With(authz.Require(domain.PermissionBidderApprove)).Put("/auctions/{auctionId}/bidders/{userId}", h.UpdateAuctionBidderApproval)
 			r.With(authz.Require(domain.PermissionLotUpdate)).Patch("/lots/{lotId}", h.UpdateLot)
 			r.With(authz.Require(domain.PermissionLotUpdate)).Delete("/lots/{lotId}", h.DeleteLot)
 			r.With(authz.Require(domain.PermissionLotStart)).Post("/lots/{lotId}/start", h.StartLot)

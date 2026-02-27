@@ -13,4 +13,6 @@ var (
 	ErrNotApproved       = errors.New("not approved")
 	ErrBidderSuspended   = errors.New("you are not allowed to bid")
 	ErrSimulatorBlocked  = errors.New("simulator bidder is restricted to the demo tenant")
+	ErrBidLimitExceeded  = errors.New("Your bid exceeds your authorised limit.")
+	ErrDepositNeeded     = errors.New("A deposit is required before bidding.")
 )
