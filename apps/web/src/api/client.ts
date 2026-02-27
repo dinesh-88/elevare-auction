@@ -99,6 +99,11 @@ export interface InstitutionProfile extends InstitutionSummary {
   completed_auctions: InstitutionAuctionReference[];
 }
 
+export interface FeaturedAuction {
+  institution: InstitutionSummary;
+  auction: InstitutionAuctionReference;
+}
+
 export interface AuctionBidderAdminRow {
   user_id: string;
   email: string;
@@ -524,6 +529,14 @@ export function normalizeInstitutionProfile(raw: unknown): InstitutionProfile {
     completed_auctions: Array.isArray(r.completed_auctions)
       ? r.completed_auctions.map(normalizeInstitutionAuctionReference)
       : [],
+  };
+}
+
+export function normalizeFeaturedAuction(raw: unknown): FeaturedAuction {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    institution: normalizeInstitutionSummary(r.institution),
+    auction: normalizeInstitutionAuctionReference(r.auction),
   };
 }
 

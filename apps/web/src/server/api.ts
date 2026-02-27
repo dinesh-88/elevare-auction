@@ -61,3 +61,7 @@ export async function fetchPublicInstitutions() {
 export async function fetchPublicInstitution(slug: string) {
   return fetchJSON<any>(`/public/institutions/${slug}`);
 }
+
+export async function fetchPublicFeaturedAuction() {
+  return fetchJSON<any>("/public/featured-auction");
+}

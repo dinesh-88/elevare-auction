@@ -114,6 +114,11 @@ type publicInstitutionDetailResponse struct {
 	CompletedAuctions []publicInstitutionAuctionResponse `json:"completed_auctions"`
 }
 
+type publicFeaturedAuctionResponse struct {
+	Institution publicInstitutionSummaryResponse  `json:"institution"`
+	Auction     publicInstitutionAuctionResponse `json:"auction"`
+}
+
 func parseJSONMap(raw json.RawMessage) map[string]any {
 	if len(raw) == 0 {
 		return map[string]any{}
@@ -442,6 +447,46 @@ func (h *Handler) GetPublicInstitution(w http.ResponseWriter, r *http.Request) {
 		publicInstitutionSummaryResponse: publicInstitutionSummaryFromTenant(*tenant),
 		ActiveAuctions:                   active,
 		CompletedAuctions:                completed,
+	})
+}
+
+func (h *Handler) GetPublicFeaturedAuction(w http.ResponseWriter, r *http.Request) {
+	tenants, err := h.Onboarding.Tenants.ListByStatus(r.Context(), domain.TenantActive)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var selectedTenant *domain.Tenant
+	var selectedAuction *domain.Auction
+	for i := range tenants {
+		auctions, listErr := h.Auction.Auctions.ListAdmin(r.Context(), tenants[i].ID)
+		if listErr != nil {
+			http.Error(w, listErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		for j := range auctions {
+			status := auctions[j].Status
+			if status != domain.AuctionScheduled && status != domain.AuctionLive {
+				continue
+			}
+			if status == domain.AuctionLive && selectedAuction != nil && selectedAuction.Status == domain.AuctionScheduled {
+				continue
+			}
+			if selectedAuction == nil ||
+				(status == domain.AuctionScheduled && selectedAuction.Status == domain.AuctionLive) ||
+				auctions[j].StartTime.Before(selectedAuction.StartTime) {
+				selectedTenant = &tenants[i]
+				selectedAuction = &auctions[j]
+			}
+		}
+	}
+	if selectedTenant == nil || selectedAuction == nil {
+		http.Error(w, "featured auction not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, publicFeaturedAuctionResponse{
+		Institution: publicInstitutionSummaryFromTenant(*selectedTenant),
+		Auction:     institutionAuctionResponse(*selectedAuction),
 	})
 }
 

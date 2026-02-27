@@ -7,6 +7,7 @@ import InstitutionPreviewSection from "../components/marketing/InstitutionPrevie
 import InstitutionalControlsSection from "../components/marketing/InstitutionalControlsSection";
 import Navbar from "../components/marketing/Navbar";
 import ProblemSection from "../components/marketing/ProblemSection";
+import UpcomingAuctionTeaser from "../components/marketing/UpcomingAuctionTeaser";
 
 export const metadata: Metadata = {
   alternates: {
@@ -24,6 +25,7 @@ export default function HomePage() {
         <CapabilitiesSection />
         <InstitutionalControlsSection />
         <InstitutionPreviewSection />
+        <UpcomingAuctionTeaser />
         <ClosingCTASection />
       </main>
       <Footer />

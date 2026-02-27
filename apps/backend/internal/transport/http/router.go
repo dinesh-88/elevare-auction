@@ -73,6 +73,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	r.Post("/contact", h.SubmitDemoRequest)
 	r.Get("/public/institutions", h.ListPublicInstitutions)
 	r.Get("/public/institutions/{slug}", h.GetPublicInstitution)
+	r.Get("/public/featured-auction", h.GetPublicFeaturedAuction)
 
 	r.Route("/platform/admin", func(r chi.Router) {
 		r.Use(middleware.RequirePlatformAdmin(platformAdminToken))

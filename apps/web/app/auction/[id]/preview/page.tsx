@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import Footer from "../../../../components/marketing/Footer";
+import Countdown from "../../../../components/marketing/Countdown";
 import Navbar from "../../../../components/marketing/Navbar";
 import Section from "../../../../components/marketing/Section";
-import CountdownTimer from "../../../../src/components/CountdownTimer";
 import { normalizeAuction, normalizeLot, type Auction, type Lot } from "../../../../src/api/client";
 import { fetchAuction, fetchLotsByAuction, fetchPublicAuctions } from "../../../../src/server/api";
 import { extractAuctionIdFromSlug, slugifyAuctionTitle } from "../../../../src/utils/auctionRoutes";
@@ -79,7 +79,9 @@ export default async function AuctionPreviewPage({ params }: Props) {
                 </div>
               </div>
               <div className="mt-6">
-                <CountdownTimer endTime={new Date(auction.start_time)} variant="large" showLabel={false} />
+                <div className="font-serif text-3xl font-semibold tracking-tight text-brand-900">
+                  <Countdown startTime={auction.start_time} status={auction.status} />
+                </div>
               </div>
             </div>
 
