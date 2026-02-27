@@ -9,7 +9,7 @@ const controls = [
 
 export default function InstitutionalControlsSection() {
   return (
-    <Section>
+    <Section background="white">
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-accent-600">Institutional Control</p>

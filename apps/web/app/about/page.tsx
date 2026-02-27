@@ -76,7 +76,7 @@ export default function AboutPage() {
           <p className="text-xs uppercase tracking-[0.16em] text-accent-600">Institution Profile</p>
           <div className="mt-4 grid gap-10 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)] lg:items-end">
             <div>
-              <h1 className="text-4xl font-semibold leading-tight text-brand-900 md:text-5xl">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-brand-900 md:text-5xl">
                 Auction infrastructure designed for institutions that need control, not marketplace dependence.
               </h1>
               <p className="mt-6 max-w-3xl text-lg leading-8 text-brand-700">
@@ -87,7 +87,9 @@ export default function AboutPage() {
             </div>
             <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-6">
               <p className="text-sm font-medium uppercase tracking-[0.12em] text-brand-600">Core Position</p>
-              <p className="mt-4 text-2xl font-semibold text-brand-900">White-label, audit-conscious, institution-led.</p>
+              <p className="mt-4 font-serif text-2xl font-semibold text-brand-900">
+                White-label, audit-conscious, institution-led.
+              </p>
               <p className="mt-4 text-sm leading-7 text-brand-700">
                 Elevare keeps branding, bidder ownership, and operating rules with the institution rather than the
                 software provider.
@@ -97,7 +99,7 @@ export default function AboutPage() {
         </Section>
 
         <Section background="neutral">
-          <h2 className="text-3xl font-semibold text-brand-900 md:text-4xl">Who We Serve</h2>
+          <h2 className="font-serif text-3xl font-semibold text-brand-900 md:text-4xl">Who We Serve</h2>
           <p className="mt-4 max-w-3xl text-lg text-brand-700">
             The platform is intended for organisations that need public confidence, disciplined workflows, and a
             presentation standard aligned with their own reputation.
@@ -105,7 +107,7 @@ export default function AboutPage() {
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             {audiences.map((audience) => (
               <article key={audience.title} className="rounded-xl border border-neutral-200 bg-white p-8">
-                <h3 className="text-2xl font-semibold text-brand-900">{audience.title}</h3>
+                <h3 className="font-serif text-2xl font-semibold text-brand-900">{audience.title}</h3>
                 <p className="mt-4 leading-7 text-brand-700">{audience.body}</p>
               </article>
             ))}
@@ -115,7 +117,7 @@ export default function AboutPage() {
         <Section>
           <div className="grid gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <div>
-              <h2 className="text-3xl font-semibold text-brand-900 md:text-4xl">Operating Principles</h2>
+              <h2 className="font-serif text-3xl font-semibold text-brand-900 md:text-4xl">Operating Principles</h2>
               <p className="mt-4 max-w-2xl text-lg text-brand-700">
                 Elevare is structured around four expectations common to serious institutional operations.
               </p>
@@ -131,7 +133,7 @@ export default function AboutPage() {
         </Section>
 
         <Section background="neutral">
-          <h2 className="text-3xl font-semibold text-brand-900 md:text-4xl">Governance Overview</h2>
+          <h2 className="font-serif text-3xl font-semibold text-brand-900 md:text-4xl">Governance Overview</h2>
           <p className="mt-4 max-w-3xl text-lg text-brand-700">
             Institutions using Elevare can maintain formal controls across the bidder journey, catalogue operations,
             and financial administration.
@@ -139,7 +141,7 @@ export default function AboutPage() {
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             {governancePoints.map((point) => (
               <article key={point.title} className="rounded-xl border border-neutral-200 bg-white p-8">
-                <h3 className="text-2xl font-semibold text-brand-900">{point.title}</h3>
+                <h3 className="font-serif text-2xl font-semibold text-brand-900">{point.title}</h3>
                 <p className="mt-4 leading-7 text-brand-700">{point.body}</p>
               </article>
             ))}
@@ -149,7 +151,7 @@ export default function AboutPage() {
         <Section>
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center">
             <div>
-              <h2 className="text-3xl font-semibold text-brand-900 md:text-4xl">Institutional Outcomes</h2>
+              <h2 className="font-serif text-3xl font-semibold text-brand-900 md:text-4xl">Institutional Outcomes</h2>
               <p className="mt-4 max-w-2xl text-lg text-brand-700">
                 The intended result is not merely a cleaner interface. It is a more defensible operating model for
                 digital auctions.
@@ -166,7 +168,9 @@ export default function AboutPage() {
         </Section>
 
         <Section background="neutral">
-          <h2 className="text-3xl font-semibold text-brand-900 md:text-4xl">Discuss Your Institutional Requirements</h2>
+          <h2 className="font-serif text-3xl font-semibold text-brand-900 md:text-4xl">
+            Discuss Your Institutional Requirements
+          </h2>
           <p className="mt-4 max-w-3xl text-lg text-brand-700">
             If your organisation needs branded auction delivery with stronger control over approvals, operations, and
             financial handling, we can walk through the platform in detail.
@@ -182,7 +186,7 @@ export default function AboutPage() {
               href="/contact"
               className="inline-flex items-center rounded-md border border-brand-900 px-6 py-3 text-sm font-medium text-brand-900 transition-colors hover:bg-brand-900 hover:text-white"
             >
-              Contact Us
+              Contact Elevare
             </Link>
           </div>
         </Section>

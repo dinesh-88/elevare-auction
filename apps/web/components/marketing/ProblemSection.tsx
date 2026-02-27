@@ -9,7 +9,7 @@ const painPoints = [
 
 export default function ProblemSection() {
   return (
-    <Section>
+    <Section background="white">
       <div className="mx-auto max-w-3xl text-center">
         <p className="text-xs uppercase tracking-[0.16em] text-accent-600">The Common Constraint</p>
         <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight text-brand-900 md:text-4xl">

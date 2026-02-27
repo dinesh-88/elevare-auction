@@ -13,15 +13,22 @@ export const metadata: Metadata = {
   title: "Elevare Auctions — White-Label Online Auction Platform",
   description:
     "Operate fully branded online auctions under your own domain, with institutional-grade controls, real-time bidding, and configurable fees.",
+  keywords: ["white-label auctions", "auction platform", "auction SaaS", "institutional bidding"],
   alternates: {
     canonical: "/"
   },
   openGraph: {
     title: "Elevare Auctions — White-Label Online Auction Platform",
+    description: "Operate fully branded online auctions under your own domain with institutional-grade controls.",
+    type: "website",
+    url: "https://elevareauctions.com/",
+    images: ["/og/elevare-marketing-og.svg"]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Elevare Auctions — White-Label Online Auction Platform",
     description:
       "Operate fully branded online auctions under your own domain, with institutional-grade controls, real-time bidding, and configurable fees.",
-    type: "website",
-    url: "https://elevareauctions.com",
     images: ["/og/elevare-marketing-og.svg"]
   }
 };

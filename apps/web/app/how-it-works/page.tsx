@@ -8,8 +8,22 @@ export const metadata: Metadata = {
   description:
     "Learn how proxy bidding, soft close rules, bidder approvals, and governance controls operate within Elevare's auction model.",
   alternates: {
-    canonical: "/how-it-works",
+    canonical: "/how-it-works"
   },
+  openGraph: {
+    title: "How Online Auctions Operate | Elevare",
+    description:
+      "Learn how proxy bidding, soft close rules, bidder approvals, and governance controls operate within Elevare's auction model.",
+    url: "https://elevareauctions.com/how-it-works",
+    images: ["/og/elevare-marketing-og.svg"]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "How Online Auctions Operate | Elevare",
+    description:
+      "Learn how proxy bidding, soft close rules, bidder approvals, and governance controls operate within Elevare's auction model.",
+    images: ["/og/elevare-marketing-og.svg"]
+  }
 };
 
 const sections = [

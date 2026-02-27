@@ -112,7 +112,7 @@ export default function ContactRequestForm() {
         disabled={submitting}
         className="mt-6 inline-flex items-center rounded-md bg-accent-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-70"
       >
-        {submitting ? "Submitting..." : "Send Request"}
+        {submitting ? "Submitting..." : "Arrange a Demonstration"}
       </button>
     </form>
   );

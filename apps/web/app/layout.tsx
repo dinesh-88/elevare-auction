@@ -17,9 +17,18 @@ const fontSans = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://elevareauctions.com"),
+  applicationName: "Elevare Auctions",
   title: "Elevare Auctions — White-Label Online Auction Platform",
   description:
     "Run fully branded online auctions with real-time bidding, proxy logic, and institutional-grade controls.",
+  keywords: [
+    "white-label auction platform",
+    "online auctions",
+    "institutional auctions",
+    "auction software",
+    "real-time bidding"
+  ],
+  category: "technology",
   alternates: {
     canonical: "/"
   },
@@ -40,8 +49,13 @@ export const metadata: Metadata = {
     ]
   },
   icons: {
-    icon: "/favicon.ico",
-    apple: "/apple-touch-icon.png"
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" }
+    ],
+    shortcut: "/favicon.ico",
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
   },
   twitter: {
     card: "summary_large_image",

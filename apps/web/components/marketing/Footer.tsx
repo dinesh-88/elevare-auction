@@ -14,9 +14,12 @@ export default function Footer() {
   return (
     <footer className="bg-brand-900 text-neutral-200">
       <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="font-serif text-xl font-semibold tracking-tight text-neutral-100">Elevare Auctions</p>
-          <p className="mt-1 text-sm text-neutral-200">Institutional white-label online auction platform</p>
+        <div className="flex items-center gap-4">
+          <img src="/brand/elevare-monogram.svg" alt="" className="h-11 w-11 rounded-sm border border-white/10 bg-white" />
+          <div>
+            <p className="font-serif text-xl font-semibold tracking-tight text-neutral-100">Elevare Auctions</p>
+            <p className="mt-1 text-sm text-neutral-200">Institutional white-label online auction platform</p>
+          </div>
         </div>
         <nav className="flex flex-wrap items-center gap-5 text-sm text-neutral-200">
           {footerLinks.map((link) => (
