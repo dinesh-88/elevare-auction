@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 type Props = {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ id: string }>;
 };
 
 async function resolveAuction(slug: string): Promise<Auction | null> {
@@ -37,8 +37,8 @@ async function resolveAuction(slug: string): Promise<Auction | null> {
 }
 
 export default async function AuctionPreviewPage({ params }: Props) {
-  const { slug } = await params;
-  const auction = await resolveAuction(slug);
+  const { id } = await params;
+  const auction = await resolveAuction(id);
   if (!auction) notFound();
 
   if (auction.status !== "SCHEDULED" && auction.status !== "DRAFT") {

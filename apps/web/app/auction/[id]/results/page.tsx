@@ -15,12 +15,12 @@ export const metadata: Metadata = {
 };
 
 type Props = {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ id: string }>;
 };
 
 export default async function AuctionResultsPage({ params }: Props) {
-  const { slug } = await params;
-  const auctionID = extractAuctionIdFromSlug(slug);
+  const { id } = await params;
+  const auctionID = extractAuctionIdFromSlug(id);
   if (!auctionID) notFound();
 
   let auction: Auction | null = null;
