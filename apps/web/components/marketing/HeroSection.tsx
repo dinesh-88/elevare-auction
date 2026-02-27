@@ -1,46 +1,36 @@
-import Image from "next/image";
 import Link from "next/link";
 
 export default function HeroSection() {
-  const demoAuctionUrl = process.env.NEXT_PUBLIC_DEMO_AUCTION_URL ?? "https://demo.elevareauctions.com/auctions";
-
   return (
-    <section className="bg-neutral-50 py-24">
-      <div className="max-w-7xl mx-auto px-6 grid gap-14 items-center lg:grid-cols-2">
-        <div>
+    <section className="bg-neutral-50 py-28">
+      <div className="mx-auto max-w-7xl px-6">
+        <div className="max-w-5xl">
           <p className="text-xs uppercase tracking-[0.16em] text-accent-600">White-Label Auction Infrastructure</p>
-          <h1 className="mt-4 font-serif text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-brand-900 md:text-5xl">
-            Run Fully Branded Online Auctions — Without Marketplace Fees.
+          <h1 className="mt-5 font-serif text-5xl font-semibold leading-[1.1] tracking-[-0.02em] text-brand-900 md:text-7xl">
+            Operate fully branded online auctions under your own domain, governance, and commercial model.
           </h1>
-          <p className="mt-6 text-lg text-brand-700 max-w-2xl">
-            Elevare enables museums, galleries, and collectors to run secure, real-time auctions under their own
-            domain and brand.
+          <p className="mt-7 max-w-3xl text-lg leading-8 text-brand-700 md:text-xl">
+            Elevare provides the public-facing experience and operational controls required to run institutional online
+            auctions with confidence, without handing over the bidder relationship or brand presentation.
           </p>
-          <div className="mt-8 flex flex-wrap gap-4">
+          <div className="mt-10 flex flex-wrap gap-4">
             <Link
-              href="/demo"
-              className="inline-flex items-center rounded-md bg-accent-500 px-6 py-3 text-sm font-medium text-white hover:bg-accent-600 transition-colors"
+              href="/contact"
+              className="inline-flex items-center rounded-md bg-accent-500 px-6 py-3 text-sm font-medium text-white hover:bg-accent-600"
             >
-              Request a Demo
+              Arrange a Demonstration
             </Link>
             <a
-              href={demoAuctionUrl}
-              className="inline-flex items-center rounded-md border border-brand-900 px-6 py-3 text-sm font-medium text-brand-900 hover:bg-brand-900 hover:text-white transition-colors"
+              href="https://demo.elevareauctions.com"
+              className="inline-flex items-center rounded-md border border-brand-900 px-6 py-3 text-sm font-medium text-brand-900 hover:bg-brand-900 hover:text-white"
             >
-              View Demo Auction
+              View Live Demo
             </a>
           </div>
-        </div>
-
-        <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-          <Image
-            src="/marketing-demo-placeholder.svg"
-            alt="Elevare branded auction dashboard preview"
-            width={1280}
-            height={820}
-            className="h-auto w-full rounded-xl"
-            priority
-          />
+          <div className="mt-10 h-px w-full max-w-4xl bg-neutral-200" />
+          <p className="mt-5 text-sm text-brand-700">
+            Institutional-grade controls · Transparent fee configuration · Real-time bidding engine
+          </p>
         </div>
       </div>
     </section>

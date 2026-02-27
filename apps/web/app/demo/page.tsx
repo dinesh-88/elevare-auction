@@ -4,16 +4,16 @@ import Navbar from "../../components/marketing/Navbar";
 import Section from "../../components/marketing/Section";
 
 export const metadata: Metadata = {
-  title: "Request a Demo — Elevare Auctions",
+  title: "Arrange a Demonstration — Elevare Auctions",
   description:
-    "Book a guided demo of Elevare's white-label auction platform for museums, galleries, and collectors.",
+    "Arrange a guided review of Elevare's white-label auction platform for museums, galleries, and specialist institutions.",
   alternates: {
     canonical: "/demo"
   },
   openGraph: {
-    title: "Request a Demo — Elevare Auctions",
+    title: "Arrange a Demonstration — Elevare Auctions",
     description:
-      "Book a guided demo of Elevare's white-label auction platform for museums, galleries, and collectors.",
+      "Arrange a guided review of Elevare's white-label auction platform for museums, galleries, and specialist institutions.",
     url: "https://elevareauctions.com/demo",
     images: ["/og/elevare-marketing-og.svg"]
   }
@@ -26,13 +26,21 @@ export default function DemoPage() {
       <main>
         <Section>
           <p className="text-xs uppercase tracking-[0.16em] text-neutral-500">Demo</p>
-          <h1 className="mt-4 text-4xl md:text-5xl font-semibold text-neutral-900">Request a Guided Elevare Demo</h1>
-          <p className="mt-6 text-lg text-neutral-600 max-w-3xl">
-            We will walk your team through branded auction setup, bidder management, live bidding controls, and
-            settlement workflows tailored to institutional operations.
+          <h1 className="mt-4 font-serif text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-neutral-900 md:text-5xl">
+            Arrange a Demonstration
+          </h1>
+          <p className="mt-6 max-w-3xl text-lg leading-8 text-neutral-600">
+            We will review branded auction setup, bidder governance, live bidding controls, and settlement workflows
+            tailored to institutional operations.
           </p>
           <div className="mt-8 rounded-xl border border-neutral-200 bg-neutral-50 p-6">
-            <p className="text-neutral-700">Email us at <a className="text-neutral-900 underline" href="mailto:demo@elevareauctions.com">demo@elevareauctions.com</a> to schedule a session.</p>
+            <p className="text-neutral-700">
+              Email us at{" "}
+              <a className="text-neutral-900 underline" href="mailto:demo@elevareauctions.com">
+                demo@elevareauctions.com
+              </a>{" "}
+              to arrange a suitable session.
+            </p>
           </div>
         </Section>
       </main>

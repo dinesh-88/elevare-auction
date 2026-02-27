@@ -11,7 +11,7 @@ export default function Navbar() {
   const loginHubUrl = process.env.NEXT_PUBLIC_LOGIN_HUB_URL ?? "https://login.elevareauctions.com/login-hub";
 
   return (
-    <header className="border-b border-neutral-200 bg-white/95 backdrop-blur">
+    <header className="border-b border-neutral-200 bg-white">
       <div className="max-w-7xl mx-auto px-6 py-4 sm:h-20 sm:py-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
         <Link href="/" className="font-serif text-2xl font-semibold tracking-tight text-brand-900">
           Elevare Auctions
