@@ -314,14 +314,19 @@ function Modal({
 }
 
 function formatMoney(currency = "USD", minor = 0): string {
-  const decimals = currencyDecimals(currency);
+  const safeCurrency = normalizeCurrencyCode(currency);
+  const decimals = currencyDecimals(safeCurrency);
   const amount = minor / 10 ** decimals;
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(amount);
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: safeCurrency,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(amount);
+  } catch {
+    return `${safeCurrency} ${amount.toFixed(decimals)}`;
+  }
 }
 
 function currencyDecimals(currency: string): number {
@@ -333,4 +338,12 @@ function currencyDecimals(currency: string): number {
     default:
       return 2;
   }
+}
+
+function normalizeCurrencyCode(currency: string): string {
+  const normalized = (currency || "").trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(normalized)) {
+    return normalized;
+  }
+  return "USD";
 }
