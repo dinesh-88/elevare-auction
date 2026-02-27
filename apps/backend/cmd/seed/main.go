@@ -18,24 +18,30 @@ const (
 )
 
 var (
-	tenantID      = uuid.MustParse("11111111-1111-1111-1111-111111111111")
-	adminID       = uuid.MustParse("21111111-1111-1111-1111-111111111111")
-	bidderOneID   = uuid.MustParse("31111111-1111-1111-1111-111111111111")
-	bidderTwoID   = uuid.MustParse("41111111-1111-1111-1111-111111111111")
-	auctionEnded  = uuid.MustParse("51111111-1111-1111-1111-111111111111")
-	auctionLive   = uuid.MustParse("61111111-1111-1111-1111-111111111111")
-	auctionFuture = uuid.MustParse("71111111-1111-1111-1111-111111111111")
-	lotEndedSold  = uuid.MustParse("81111111-1111-1111-1111-111111111111")
-	lotEndedNoRes = uuid.MustParse("91111111-1111-1111-1111-111111111111")
-	lotLiveOne    = uuid.MustParse("a1111111-1111-1111-1111-111111111111")
-	lotLiveTwo    = uuid.MustParse("b1111111-1111-1111-1111-111111111111")
-	lotFutureOne  = uuid.MustParse("c1111111-1111-1111-1111-111111111111")
-	feePremium    = uuid.MustParse("d1111111-1111-1111-1111-111111111111")
-	feeVAT        = uuid.MustParse("e1111111-1111-1111-1111-111111111111")
-	invoiceOneID  = uuid.MustParse("f1111111-1111-1111-1111-111111111111")
-	assetLogoID   = uuid.MustParse("f2111111-1111-1111-1111-111111111111")
-	assetBannerID = uuid.MustParse("f3111111-1111-1111-1111-111111111111")
-	assetImageID  = uuid.MustParse("f4111111-1111-1111-1111-111111111111")
+	tenantID         = uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	tenantTwoID      = uuid.MustParse("12111111-1111-1111-1111-111111111111")
+	adminID          = uuid.MustParse("21111111-1111-1111-1111-111111111111")
+	bidderOneID      = uuid.MustParse("31111111-1111-1111-1111-111111111111")
+	bidderTwoID      = uuid.MustParse("41111111-1111-1111-1111-111111111111")
+	auctionEnded     = uuid.MustParse("51111111-1111-1111-1111-111111111111")
+	auctionLive      = uuid.MustParse("61111111-1111-1111-1111-111111111111")
+	auctionFuture    = uuid.MustParse("71111111-1111-1111-1111-111111111111")
+	auctionTwoEnded  = uuid.MustParse("14111111-1111-1111-1111-111111111111")
+	auctionTwoFuture = uuid.MustParse("13111111-1111-1111-1111-111111111111")
+	lotEndedSold     = uuid.MustParse("81111111-1111-1111-1111-111111111111")
+	lotEndedNoRes    = uuid.MustParse("91111111-1111-1111-1111-111111111111")
+	lotLiveOne       = uuid.MustParse("a1111111-1111-1111-1111-111111111111")
+	lotLiveTwo       = uuid.MustParse("b1111111-1111-1111-1111-111111111111")
+	lotFutureOne     = uuid.MustParse("c1111111-1111-1111-1111-111111111111")
+	lotFutureTwo     = uuid.MustParse("15111111-1111-1111-1111-111111111111")
+	lotTwoEndedOne   = uuid.MustParse("17111111-1111-1111-1111-111111111111")
+	lotTwoFutureOne  = uuid.MustParse("16111111-1111-1111-1111-111111111111")
+	feePremium       = uuid.MustParse("d1111111-1111-1111-1111-111111111111")
+	feeVAT           = uuid.MustParse("e1111111-1111-1111-1111-111111111111")
+	invoiceOneID     = uuid.MustParse("f1111111-1111-1111-1111-111111111111")
+	assetLogoID      = uuid.MustParse("f2111111-1111-1111-1111-111111111111")
+	assetBannerID    = uuid.MustParse("f3111111-1111-1111-1111-111111111111")
+	assetImageID     = uuid.MustParse("f4111111-1111-1111-1111-111111111111")
 )
 
 func main() {
@@ -117,61 +123,131 @@ func main() {
 }
 
 func seedTenant(ctx context.Context, tx pgx.Tx, now time.Time, subdomain, customDomain string) error {
-	branding := map[string]any{
-		"logo_url":        "https://picsum.photos/seed/elevare-logo/120/120",
-		"primary_color":   "#1E2A3A",
-		"secondary_color": "#B89A5D",
-		"hero_image":      "https://picsum.photos/seed/elevare-hero/1400/700",
-		"footer_text":     "Elevare Demo Collection",
+	type tenantSeed struct {
+		id           uuid.UUID
+		name         string
+		subdomain    string
+		customDomain string
+		country      string
+		volume       int
+		branding     map[string]any
+		siteBranding map[string]any
+		siteContent  map[string]any
+		createdAt    time.Time
 	}
-	siteBranding := map[string]any{
-		"logo_url":        "https://picsum.photos/seed/elevare-logo/120/120",
-		"primary_color":   "#1E2A3A",
-		"secondary_color": "#B89A5D",
-		"favicon_url":     "https://picsum.photos/seed/elevare-favicon/64/64",
-		"font_family":     "Playfair Display",
-	}
-	siteContent := map[string]any{
-		"homepage": map[string]any{
-			"hero": map[string]any{
-				"headline":         "Elevare Demo House",
-				"subheadline":      "Curated collections and timed auctions",
-				"banner_image_url": "https://picsum.photos/seed/elevare-hero/1400/700",
-				"cta": map[string]any{
-					"label": "View auctions",
-					"href":  "/auctions",
+
+	items := []tenantSeed{
+		{
+			id:           tenantID,
+			name:         "Elevare Demo House",
+			subdomain:    subdomain,
+			customDomain: customDomain,
+			country:      "US",
+			volume:       200,
+			branding: map[string]any{
+				"logo_url":        "https://picsum.photos/seed/elevare-logo/120/120",
+				"primary_color":   "#1E2A3A",
+				"secondary_color": "#B89A5D",
+				"hero_image":      "https://picsum.photos/seed/elevare-hero/1400/700",
+				"footer_text":     "Elevare Demo Collection",
+			},
+			siteBranding: map[string]any{
+				"logo_url":        "https://picsum.photos/seed/elevare-logo/120/120",
+				"primary_color":   "#1E2A3A",
+				"secondary_color": "#B89A5D",
+				"favicon_url":     "https://picsum.photos/seed/elevare-favicon/64/64",
+				"font_family":     "Playfair Display",
+			},
+			siteContent: map[string]any{
+				"homepage": map[string]any{
+					"hero": map[string]any{
+						"headline":         "Elevare Demo House",
+						"subheadline":      "Curated collections and timed auctions",
+						"banner_image_url": "https://picsum.photos/seed/elevare-hero/1400/700",
+						"cta": map[string]any{
+							"label": "View auctions",
+							"href":  "/auctions",
+						},
+					},
+					"featuredAuction": map[string]any{
+						"mode": "AUTO",
+					},
+					"highlights": []map[string]any{
+						{"title": "Institution-grade", "body": "Audit-safe records and immutable settlements.", "icon": "shield"},
+						{"title": "Global reach", "body": "Run events for private collectors and galleries.", "icon": "globe"},
+						{"title": "Trusted workflow", "body": "Draft, review, and publish with version control.", "icon": "file-check"},
+					},
+				},
+				"footer": map[string]any{
+					"text":          "© 2026 Elevare Demo House",
+					"contact_email": "info@elevareauctions.com",
+					"social_links": map[string]any{
+						"instagram": "https://instagram.com/elevare",
+						"x":         "https://x.com/elevare",
+					},
+				},
+				"about": map[string]any{
+					"markdown": "Elevare Demo House presents catalogued works from private and institutional collections.",
+				},
+				"contact": map[string]any{
+					"address": "21 Regent Street, London",
+					"phone":   "+44 20 7000 0000",
+					"email":   "info@elevareauctions.com",
 				},
 			},
-			"featuredAuction": map[string]any{
-				"mode": "AUTO",
-			},
-			"highlights": []map[string]any{
-				{"title": "Institution-grade", "body": "Audit-safe records and immutable settlements.", "icon": "shield"},
-				{"title": "Global reach", "body": "Run events for private collectors and galleries.", "icon": "globe"},
-				{"title": "Trusted workflow", "body": "Draft, review, and publish with version control.", "icon": "file-check"},
-			},
+			createdAt: now.Add(-72 * time.Hour),
 		},
-		"footer": map[string]any{
-			"text":          "© 2026 Elevare Demo House",
-		"contact_email": "info@elevareauctions.com",
-			"social_links": map[string]any{
-				"instagram": "https://instagram.com/elevare",
-				"x":         "https://x.com/elevare",
+		{
+			id:           tenantTwoID,
+			name:         "Regency Archive House",
+			subdomain:    "regency",
+			customDomain: "regency.elevareauctions.com",
+			country:      "GB",
+			volume:       120,
+			branding: map[string]any{
+				"logo_url":        "https://picsum.photos/seed/regency-logo/120/120",
+				"primary_color":   "#2A2A2A",
+				"secondary_color": "#A88C55",
+				"hero_image":      "https://picsum.photos/seed/regency-hero/1400/700",
+				"footer_text":     "Regency Archive House",
 			},
-		},
-		"about": map[string]any{
-			"markdown": "Elevare Demo House presents catalogued works from private and institutional collections.",
-		},
-		"contact": map[string]any{
-			"address": "21 Regent Street, London",
-			"phone":   "+44 20 7000 0000",
-			"email":   "info@elevareauctions.com",
+			siteBranding: map[string]any{
+				"logo_url":        "https://picsum.photos/seed/regency-logo/120/120",
+				"primary_color":   "#2A2A2A",
+				"secondary_color": "#A88C55",
+				"favicon_url":     "https://picsum.photos/seed/regency-favicon/64/64",
+				"font_family":     "Cormorant Garamond",
+			},
+			siteContent: map[string]any{
+				"homepage": map[string]any{
+					"hero": map[string]any{
+						"headline":         "Regency Archive House",
+						"subheadline":      "Specialist catalogues for collections, libraries, and estates",
+						"banner_image_url": "https://picsum.photos/seed/regency-hero/1400/700",
+					},
+				},
+				"footer": map[string]any{
+					"text":          "© 2026 Regency Archive House",
+					"contact_email": "catalogue@regencyarchive.co.uk",
+				},
+				"about": map[string]any{
+					"markdown": "Regency Archive House conducts scholarly online sales for manuscripts, decorative arts, and estate property.",
+				},
+				"contact": map[string]any{
+					"address": "14 St James's Square, London",
+					"phone":   "+44 20 7123 4567",
+					"email":   "catalogue@regencyarchive.co.uk",
+				},
+			},
+			createdAt: now.Add(-60 * time.Hour),
 		},
 	}
-	brandingJSON, _ := json.Marshal(branding)
-	siteBrandingJSON, _ := json.Marshal(siteBranding)
-	siteContentJSON, _ := json.Marshal(siteContent)
-	_, err := tx.Exec(ctx, `
+
+	for _, item := range items {
+		brandingJSON, _ := json.Marshal(item.branding)
+		siteBrandingJSON, _ := json.Marshal(item.siteBranding)
+		siteContentJSON, _ := json.Marshal(item.siteContent)
+		_, err := tx.Exec(ctx, `
 INSERT INTO tenants (
   id, name, subdomain, custom_domain, status, country, estimated_auction_volume,
   branding, branding_published, branding_draft, content_published, content_draft,
@@ -198,8 +274,12 @@ SET name = EXCLUDED.name,
     default_currency = EXCLUDED.default_currency,
     invoice_prefix = 'INV',
     invoice_counter = GREATEST(tenants.invoice_counter, 1)
-`, tenantID, "Elevare Demo House", subdomain, customDomain, "US", 200, brandingJSON, siteBrandingJSON, siteBrandingJSON, siteContentJSON, siteContentJSON, now.Add(-72*time.Hour))
-	return err
+`, item.id, item.name, item.subdomain, item.customDomain, item.country, item.volume, brandingJSON, siteBrandingJSON, siteBrandingJSON, siteContentJSON, siteContentJSON, item.createdAt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func seedUsers(ctx context.Context, tx pgx.Tx, now time.Time, adminHash, bidderHash string) error {
@@ -251,6 +331,7 @@ func seedAuctions(ctx context.Context, tx pgx.Tx, now time.Time) error {
 
 	items := []struct {
 		id          uuid.UUID
+		tenantID    uuid.UUID
 		currency    string
 		title       string
 		description string
@@ -260,9 +341,11 @@ func seedAuctions(ctx context.Context, tx pgx.Tx, now time.Time) error {
 		status      string
 		mode        string
 	}{
-		{auctionEnded, "GBP", "Old Masters Evening Sale", "A completed premium sale with invoice records.", endedMeta, now.Add(-7 * 24 * time.Hour), now.Add(-24 * time.Hour), "ENDED", "TIMED"},
-		{auctionLive, "USD", "Modern & Contemporary Live", "Live lots open for bidding now.", liveMeta, now.Add(-2 * time.Hour), now.Add(8 * time.Hour), "LIVE", "TIMED"},
-		{auctionFuture, "EUR", "Sculpture Highlights", "Scheduled sale with upcoming lots.", futureMeta, now.Add(24 * time.Hour), now.Add(48 * time.Hour), "SCHEDULED", "TIMED"},
+		{auctionEnded, tenantID, "GBP", "Old Masters Evening Sale", "A completed premium sale with invoice records.", endedMeta, now.Add(-7 * 24 * time.Hour), now.Add(-24 * time.Hour), "ENDED", "TIMED"},
+		{auctionLive, tenantID, "USD", "Modern & Contemporary Live", "Live lots open for bidding now.", liveMeta, now.Add(-2 * time.Hour), now.Add(8 * time.Hour), "LIVE", "TIMED"},
+		{auctionFuture, tenantID, "EUR", "Sculpture Highlights", "Scheduled sale with upcoming lots.", futureMeta, now.Add(24 * time.Hour), now.Add(48 * time.Hour), "SCHEDULED", "TIMED"},
+		{auctionTwoFuture, tenantTwoID, "GBP", "Fine Books & Manuscripts", "A forthcoming specialist sale of rare books and manuscripts.", futureMeta, now.Add(36 * time.Hour), now.Add(60 * time.Hour), "SCHEDULED", "TIMED"},
+		{auctionTwoEnded, tenantTwoID, "GBP", "Decorative Arts Cabinet", "A completed cabinet sale with published results.", endedMeta, now.Add(-10 * 24 * time.Hour), now.Add(-4 * 24 * time.Hour), "ENDED", "TIMED"},
 	}
 	for _, a := range items {
 		_, err := tx.Exec(ctx, `
@@ -287,7 +370,7 @@ SET currency = EXCLUDED.currency,
     end_time = EXCLUDED.end_time,
     status = EXCLUDED.status,
     auction_mode = EXCLUDED.auction_mode
-`, a.id, tenantID, a.currency, a.title, a.description, a.metadata, a.startTime, a.endTime, a.status, a.mode, now.Add(-72*time.Hour))
+`, a.id, a.tenantID, a.currency, a.title, a.description, a.metadata, a.startTime, a.endTime, a.status, a.mode, now.Add(-72*time.Hour))
 		if err != nil {
 			return err
 		}
@@ -329,6 +412,21 @@ func seedLots(ctx context.Context, tx pgx.Tx, now time.Time) error {
 			"https://picsum.photos/seed/lot-5a/1200/900",
 		},
 	})
+	lot6Meta, _ := json.Marshal(map[string]any{
+		"images": []string{
+			"https://picsum.photos/seed/lot-6a/1200/900",
+		},
+	})
+	lot7Meta, _ := json.Marshal(map[string]any{
+		"images": []string{
+			"https://picsum.photos/seed/lot-7a/1200/900",
+		},
+	})
+	lot8Meta, _ := json.Marshal(map[string]any{
+		"images": []string{
+			"https://picsum.photos/seed/lot-8a/1200/900",
+		},
+	})
 	snapshot1, _ := json.Marshal(map[string]any{
 		"currency":     "GBP",
 		"hammer_price": 12000,
@@ -364,13 +462,27 @@ func seedLots(ctx context.Context, tx pgx.Tx, now time.Time) error {
 	r12000 := int64(12000)
 	r6500 := int64(6500)
 	r7000 := int64(7000)
+	r5000 := int64(5000)
 	h12000 := int64(12000)
+	h5400 := int64(5400)
 	t15180 := int64(15180)
+	t6120 := int64(6120)
 	startEnded := now.Add(-6 * 24 * time.Hour)
 	endEnded := now.Add(-24 * time.Hour)
+	startEndedTwo := now.Add(-9 * 24 * time.Hour)
+	endEndedTwo := now.Add(-4 * 24 * time.Hour)
 	startLive := now.Add(-30 * time.Minute)
 	endLive := now.Add(2 * time.Hour)
 	endLiveSoftClose := now.Add(75 * time.Second)
+	snapshot2, _ := json.Marshal(map[string]any{
+		"currency":     "GBP",
+		"hammer_price": 5400,
+		"fees": []map[string]any{
+			{"name": "Buyer's Premium", "type": "PERCENTAGE", "value": 10, "amount": 540},
+			{"name": "VAT", "type": "PERCENTAGE", "value": 10, "amount": 180},
+		},
+		"total_due": 6120,
+	})
 
 	rows := []lotRow{
 		{lotEndedSold, auctionEnded, "1", 1, "Sunlit Coastline", "Signed landscape, framed.", 10000, 12000, &r11000, 500, lot1Meta, "ENDED", &startEnded, &endEnded, &h12000, &t15180, &bidderOneID, snapshot1},
@@ -378,6 +490,9 @@ func seedLots(ctx context.Context, tx pgx.Tx, now time.Time) error {
 		{lotLiveOne, auctionLive, "3", 1, "Abstract Composition", "Bright abstract work.", 5000, 8600, &r6500, 200, lot3Meta, "LIVE", &startLive, &endLive, nil, nil, nil, nil},
 		{lotLiveTwo, auctionLive, "4", 2, "Bronze Figure", "Mid-century bronze figure.", 6000, 9200, &r7000, 200, lot4Meta, "LIVE", &startLive, &endLiveSoftClose, nil, nil, nil, nil},
 		{lotFutureOne, auctionFuture, "5", 1, "Marble Bust", "Neoclassical marble bust.", 7000, 7000, nil, 300, lot5Meta, "PENDING", nil, nil, nil, nil, nil, nil},
+		{lotFutureTwo, auctionFuture, "6", 2, "Giltwood Mirror", "Late Georgian giltwood wall mirror.", 4200, 4200, nil, 200, lot6Meta, "PENDING", nil, nil, nil, nil, nil, nil},
+		{lotTwoFutureOne, auctionTwoFuture, "1", 1, "Annotated Travel Journal", "A nineteenth-century journal with hand-coloured plates.", 3800, 3800, nil, 150, lot7Meta, "PENDING", nil, nil, nil, nil, nil, nil},
+		{lotTwoEndedOne, auctionTwoEnded, "1", 1, "Mahogany Collectors Cabinet", "A fitted collectors cabinet with brass pulls.", 4800, 5400, &r5000, 150, lot8Meta, "ENDED", &startEndedTwo, &endEndedTwo, &h5400, &t6120, &bidderTwoID, snapshot2},
 	}
 
 	for _, l := range rows {

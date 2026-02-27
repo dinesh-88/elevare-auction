@@ -115,7 +115,7 @@ type publicInstitutionDetailResponse struct {
 }
 
 type publicFeaturedAuctionResponse struct {
-	Institution publicInstitutionSummaryResponse  `json:"institution"`
+	Institution publicInstitutionSummaryResponse `json:"institution"`
 	Auction     publicInstitutionAuctionResponse `json:"auction"`
 }
 
