@@ -39,6 +39,10 @@ export const metadata: Metadata = {
       }
     ]
   },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png"
+  },
   twitter: {
     card: "summary_large_image",
     title: "Elevare Auctions — White-Label Online Auction Platform",
