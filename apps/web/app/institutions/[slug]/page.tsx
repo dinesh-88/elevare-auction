@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Footer from "../../../components/marketing/Footer";
@@ -11,12 +12,49 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
+function truncateDescription(description: string) {
+  const trimmed = description.trim();
+  if (trimmed.length <= 150) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, 147).trimEnd()}...`;
+}
+
+async function getInstitutionProfile(slug: string) {
+  return normalizeInstitutionProfile(await fetchPublicInstitution(slug));
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  try {
+    const institution = await getInstitutionProfile(slug);
+    const description = truncateDescription(institution.description || `Auction listings for ${institution.name}.`);
+    return {
+      title: `${institution.name} — Auctions on Elevare`,
+      description,
+      alternates: {
+        canonical: `/institutions/${slug}`
+      },
+      openGraph: {
+        title: `${institution.name} — Auctions on Elevare`,
+        description,
+        url: `https://elevareauctions.com/institutions/${slug}`,
+        images: ["/og/elevare-marketing-og.svg"]
+      }
+    };
+  } catch {
+    return {
+      title: "Institution Profile — Elevare Auctions"
+    };
+  }
+}
+
 export default async function InstitutionProfilePage({ params }: Props) {
   const { slug } = await params;
 
   let institution = null;
   try {
-    institution = normalizeInstitutionProfile(await fetchPublicInstitution(slug));
+    institution = await getInstitutionProfile(slug);
   } catch {
     notFound();
   }

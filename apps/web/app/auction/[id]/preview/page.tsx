@@ -9,11 +9,6 @@ import { normalizeAuction, normalizeLot, type Auction, type Lot } from "../../..
 import { fetchAuction, fetchLotsByAuction, fetchPublicAuctions } from "../../../../src/server/api";
 import { extractAuctionIdFromSlug, slugifyAuctionTitle } from "../../../../src/utils/auctionRoutes";
 
-export const metadata: Metadata = {
-  title: "Auction Preview | Elevare Auctions",
-  description: "Preview an upcoming auction, review featured lots, and register ahead of the opening date.",
-};
-
 type Props = {
   params: Promise<{ id: string }>;
 };
@@ -34,6 +29,29 @@ async function resolveAuction(slug: string): Promise<Auction | null> {
   } catch {
     return null;
   }
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const auction = await resolveAuction(id);
+  if (!auction) {
+    return {
+      title: "Auction Preview | Elevare Auctions"
+    };
+  }
+  return {
+    title: `${auction.title} — Preview`,
+    description: auction.description,
+    alternates: {
+      canonical: `/auction/${id}/preview`
+    },
+    openGraph: {
+      title: `${auction.title} — Preview`,
+      description: auction.description,
+      url: `https://elevareauctions.com/auction/${id}/preview`,
+      images: ["/og/elevare-marketing-og.svg"]
+    }
+  };
 }
 
 export default async function AuctionPreviewPage({ params }: Props) {

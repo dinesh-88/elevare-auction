@@ -10,8 +10,19 @@ import ProblemSection from "../components/marketing/ProblemSection";
 import UpcomingAuctionTeaser from "../components/marketing/UpcomingAuctionTeaser";
 
 export const metadata: Metadata = {
+  title: "Elevare Auctions — White-Label Online Auction Platform",
+  description:
+    "Operate fully branded online auctions under your own domain, with institutional-grade controls, real-time bidding, and configurable fees.",
   alternates: {
     canonical: "/"
+  },
+  openGraph: {
+    title: "Elevare Auctions — White-Label Online Auction Platform",
+    description:
+      "Operate fully branded online auctions under your own domain, with institutional-grade controls, real-time bidding, and configurable fees.",
+    type: "website",
+    url: "https://elevareauctions.com",
+    images: ["/og/elevare-marketing-og.svg"]
   }
 };
 
