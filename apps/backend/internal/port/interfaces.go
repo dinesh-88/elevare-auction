@@ -26,6 +26,10 @@ type AssetRepository interface {
 	ListByKind(ctx context.Context, tenantID uuid.UUID, kind string, limit int) ([]domain.TenantAsset, error)
 }
 
+type DemoRequestRepository interface {
+	Create(ctx context.Context, item *domain.DemoRequest) error
+}
+
 type UserRepository interface {
 	Create(ctx context.Context, tenantID uuid.UUID, user *domain.User) error
 	GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error)

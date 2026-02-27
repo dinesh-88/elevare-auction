@@ -31,6 +31,7 @@ type Handler struct {
 	Site                *usecase.SiteUseCase
 	Asset               *usecase.AssetUseCase
 	Onboarding          *usecase.OnboardingUseCase
+	DemoRequest         *usecase.DemoRequestUseCase
 	Storage             port.ObjectStorage
 	PreviewToken        string
 	JWTTTL              time.Duration
@@ -117,6 +118,42 @@ func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
 		"tenant_status":         tenant.Status,
 		"admin_user_id":         admin.ID,
 		"admin_approval_status": admin.ApprovalStatus,
+	})
+}
+
+func (h *Handler) SubmitDemoRequest(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name        string `json:"name"`
+		Institution string `json:"institution"`
+		Email       string `json:"email"`
+		Message     string `json:"message"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	if h.DemoRequest == nil {
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	item, err := h.DemoRequest.Submit(r.Context(), usecase.SubmitDemoRequestInput{
+		Name:        req.Name,
+		Institution: req.Institution,
+		Email:       req.Email,
+		Message:     req.Message,
+	})
+	if err != nil {
+		status := http.StatusBadRequest
+		if !errors.Is(err, usecase.ErrValidation) {
+			status = http.StatusInternalServerError
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"status":     "RECEIVED",
+		"id":         item.ID,
+		"created_at": item.CreatedAt,
 	})
 }
 

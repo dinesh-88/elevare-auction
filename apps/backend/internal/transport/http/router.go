@@ -70,6 +70,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/openapi.yaml")))
 	r.Post("/signup", h.PublicTenantSignup)
 	r.Post("/auth/discover-tenant", h.DiscoverTenantLogin)
+	r.Post("/contact", h.SubmitDemoRequest)
 
 	r.Route("/platform/admin", func(r chi.Router) {
 		r.Use(middleware.RequirePlatformAdmin(platformAdminToken))

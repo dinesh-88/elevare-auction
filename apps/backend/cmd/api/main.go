@@ -35,6 +35,7 @@ func main() {
 	tenantRepo := &postgres.TenantRepo{DB: db, Audit: auditRepo}
 	userRepo := &postgres.UserRepo{DB: db}
 	assetRepo := &postgres.AssetRepo{DB: db}
+	demoRequestRepo := &postgres.DemoRequestRepo{DB: db}
 	auctionRepo := &postgres.AuctionRepo{DB: db, Audit: auditRepo}
 	lotRepo := &postgres.LotRepo{DB: db, Audit: auditRepo}
 	feeRepo := &postgres.FeeRepo{DB: db}
@@ -69,6 +70,7 @@ func main() {
 	siteUC := &usecase.SiteUseCase{Tenants: tenantRepo}
 	assetUC := &usecase.AssetUseCase{Assets: assetRepo}
 	onboardingUC := &usecase.OnboardingUseCase{Tenants: tenantRepo, Hasher: hasher}
+	demoRequestUC := &usecase.DemoRequestUseCase{Requests: demoRequestRepo}
 
 	var objectStorage port.ObjectStorage
 	serveLocalUploads := false
@@ -115,6 +117,7 @@ func main() {
 		Site:                siteUC,
 		Asset:               assetUC,
 		Onboarding:          onboardingUC,
+		DemoRequest:         demoRequestUC,
 		Storage:             objectStorage,
 		PreviewToken:        cfg.SitePreviewToken,
 		JWTTTL:              cfg.JWTTTL,

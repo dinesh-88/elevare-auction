@@ -8,6 +8,7 @@ import CountdownTimer from "../../components/CountdownTimer";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { useAuth } from "../../hooks/useAuth";
 import { currencySymbol } from "../../utils/currency";
+import { buildAuctionSlug } from "../../utils/auctionRoutes";
 
 export default function AuctionListing({ initialAuctions }: { initialAuctions?: Auction[] }) {
   const { isAuthenticated, isAdmin } = useAuth();
@@ -28,6 +29,11 @@ export default function AuctionListing({ initialAuctions }: { initialAuctions?: 
     return [...auctions].sort((a, b) => new Date(a.end_time).getTime() - new Date(b.end_time).getTime())[0];
   }, [auctions]);
   const featuredSymbol = currencySymbol(featuredAuction?.currency);
+  const featuredHref = featuredAuction
+    ? featuredAuction.status === "SCHEDULED" || featuredAuction.status === "DRAFT"
+      ? `/auction/${buildAuctionSlug(featuredAuction)}/preview`
+      : `/auction/${featuredAuction.id}`
+    : "/auctions";
 
   return (
     <section className="min-h-screen bg-white">
@@ -58,7 +64,7 @@ export default function AuctionListing({ initialAuctions }: { initialAuctions?: 
                   </div>
                 </div>
                 <CountdownTimer endTime={new Date(featuredAuction.end_time)} variant="large" />
-                <Link to={`/auction/${featuredAuction.id}`} className="btn-brand inline-flex items-center gap-2 px-8 py-3">
+                <Link to={featuredHref} className="btn-brand inline-flex items-center gap-2 px-8 py-3">
                   View Auction <span>→</span>
                 </Link>
               </div>

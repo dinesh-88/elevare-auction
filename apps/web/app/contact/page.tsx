@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import ContactRequestForm from "../../components/marketing/ContactRequestForm";
 import Footer from "../../components/marketing/Footer";
 import Navbar from "../../components/marketing/Navbar";
 import Section from "../../components/marketing/Section";
@@ -22,16 +23,14 @@ export default function ContactPage() {
     <div className="bg-white text-brand-900">
       <Navbar />
       <main>
-        <Section>
+        <Section background="neutral" className="text-center">
           <p className="text-xs uppercase tracking-[0.16em] text-accent-600">Contact</p>
-          <h1 className="mt-4 text-4xl md:text-5xl font-semibold text-brand-900">Speak With the Elevare Team</h1>
-          <p className="mt-6 text-lg text-brand-700 max-w-3xl">
-            For product discussions, implementation planning, or institutional onboarding, contact us directly.
+          <h1 className="mt-4 text-4xl md:text-5xl font-semibold text-brand-900">Arrange a Demonstration</h1>
+          <p className="mx-auto mt-6 max-w-3xl text-lg text-brand-700">
+            If your institution would value a formal review of the platform, please send your details below and we
+            shall arrange a suitable time to discuss implementation, governance, and operational requirements.
           </p>
-          <div className="mt-8 rounded-xl border border-neutral-200 bg-neutral-50 p-6 space-y-3 text-brand-700">
-            <p>Email: <a className="text-brand-900 underline decoration-accent-500 underline-offset-2" href="mailto:contact@elevareauctions.com">contact@elevareauctions.com</a></p>
-            <p>Website: <a className="text-brand-900 underline decoration-accent-500 underline-offset-2" href="https://elevareauctions.com">elevareauctions.com</a></p>
-          </div>
+          <ContactRequestForm />
         </Section>
       </main>
       <Footer />

@@ -2,13 +2,18 @@ import { Link } from "react-router-dom";
 import type { Auction } from "../api/client";
 import CountdownTimer from "./CountdownTimer";
 import { currencySymbol } from "../utils/currency";
+import { buildAuctionSlug } from "../utils/auctionRoutes";
 
 export default function AuctionCard({ auction }: { auction: Auction }) {
   const image = auction.metadata?.image ?? auction.metadata?.images?.[0];
   const symbol = currencySymbol(auction.currency);
+  const href =
+    auction.status === "SCHEDULED" || auction.status === "DRAFT"
+      ? `/auction/${buildAuctionSlug(auction)}/preview`
+      : `/auction/${auction.id}`;
 
   return (
-    <Link to={`/auction/${auction.id}`} className="group block no-underline">
+    <Link to={href} className="group block no-underline">
       <article className="overflow-hidden rounded-lg border border-neutral-200 bg-white transition-shadow hover:shadow-md">
         <div className="aspect-[4/3] overflow-hidden bg-neutral-100">
           {image ? (

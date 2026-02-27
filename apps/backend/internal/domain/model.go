@@ -95,6 +95,15 @@ type Tenant struct {
 	CreatedAt              time.Time
 }
 
+type DemoRequest struct {
+	ID          uuid.UUID
+	Name        string
+	Institution string
+	Email       string
+	Message     *string
+	CreatedAt   time.Time
+}
+
 type User struct {
 	ID             uuid.UUID
 	TenantID       uuid.UUID
