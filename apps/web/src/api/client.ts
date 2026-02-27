@@ -407,6 +407,7 @@ export interface TenantAsset {
 export interface TenantLoginDiscoveryItem {
   tenant_id: string;
   tenant_name: string;
+  slug: string;
   host: string;
   login_url: string;
 }

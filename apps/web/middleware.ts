@@ -30,9 +30,26 @@ function isTenantHost(host: string): boolean {
   return !getMarketingHosts().has(host);
 }
 
+function getLoginHubHost(): string {
+  return (process.env.NEXT_PUBLIC_LOGIN_HUB_HOST ?? "login.elevareauctions.com").toLowerCase().trim();
+}
+
 export function middleware(request: NextRequest) {
   const host = normalizeHost(request);
   const { pathname } = request.nextUrl;
+
+  if (host === getLoginHubHost()) {
+    if (pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+    if (pathname === "/login") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login-hub";
+      return NextResponse.rewrite(url);
+    }
+  }
 
   if (pathname === "/" && isTenantHost(host)) {
     const url = request.nextUrl.clone();
@@ -44,5 +61,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/"]
+  matcher: ["/", "/login"]
 };

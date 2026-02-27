@@ -314,6 +314,7 @@ func (h *Handler) DiscoverTenantLogin(w http.ResponseWriter, r *http.Request) {
 		items = append(items, map[string]any{
 			"tenant_id":   m.TenantID,
 			"tenant_name": m.TenantName,
+			"slug":        m.Subdomain,
 			"host":        host,
 			"login_url":   h.buildTenantLoginURL(m),
 		})

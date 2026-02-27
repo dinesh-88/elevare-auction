@@ -1,0 +1,135 @@
+import { NextRequest, NextResponse } from "next/server";
+
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+
+const WINDOW_MS = 5 * 60 * 1000;
+const LIMIT = 8;
+const MIN_RESPONSE_MS = 350;
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type RateLimitBucket = {
+  count: number;
+  resetAt: number;
+};
+
+type TenantResolveCandidate = {
+  tenant_id?: string;
+  tenant_name?: string;
+  slug?: string;
+  host?: string;
+  login_url?: string;
+};
+
+const rateLimitBuckets = new Map<string, RateLimitBucket>();
+
+function resolveApiBase() {
+  const fromServer = process.env.API_BASE_URL?.trim();
+  if (fromServer) return trimTrailingSlash(fromServer);
+  const fromPublic = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (fromPublic) return trimTrailingSlash(fromPublic);
+  return "http://localhost:8080";
+}
+
+function resolveTenantBase(slug: string) {
+  const scheme = (process.env.NEXT_PUBLIC_TENANT_APP_SCHEME ?? "https").trim() || "https";
+  const baseDomain = (process.env.NEXT_PUBLIC_TENANT_APP_BASE_DOMAIN ?? "elevareauctions.com").trim() || "elevareauctions.com";
+  return `${scheme}://${slug}.${baseDomain}`;
+}
+
+function buildTenantLoginUrl(slug: string, email: string) {
+  const url = new URL(`${resolveTenantBase(slug)}/login`);
+  url.searchParams.set("email", email);
+  return url.toString();
+}
+
+function sleep(ms: number) {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function clientKey(request: NextRequest) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    const first = forwardedFor.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return request.headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+function isRateLimited(key: string, nowMs: number) {
+  const current = rateLimitBuckets.get(key);
+  if (!current || current.resetAt <= nowMs) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: nowMs + WINDOW_MS });
+    return false;
+  }
+  current.count += 1;
+  if (current.count > LIMIT) {
+    rateLimitBuckets.set(key, current);
+    return true;
+  }
+  rateLimitBuckets.set(key, current);
+  return false;
+}
+
+async function fetchCandidates(email: string) {
+  const response = await fetch(`${resolveApiBase()}/auth/discover-tenant`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ email }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    return [] as TenantResolveCandidate[];
+  }
+
+  const payload = (await response.json()) as { items?: TenantResolveCandidate[] };
+  return Array.isArray(payload.items) ? payload.items : [];
+}
+
+export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
+  const finish = async (response: NextResponse) => {
+    await sleep(MIN_RESPONSE_MS - (Date.now() - startedAt));
+    return response;
+  };
+
+  if (isRateLimited(clientKey(request), startedAt)) {
+    return finish(NextResponse.json({ error: "Too many requests. Please try again shortly." }, { status: 429 }));
+  }
+
+  const payload = (await request.json().catch(() => ({}))) as { email?: string };
+  const email = payload.email?.trim().toLowerCase() ?? "";
+  if (!emailPattern.test(email)) {
+    return finish(NextResponse.json({ error: "Enter a valid email address." }, { status: 400 }));
+  }
+
+  const items = await fetchCandidates(email);
+  const normalized = items
+    .map((item) => ({
+      slug: String(item.slug ?? "").trim().toLowerCase(),
+      name: String(item.tenant_name ?? "").trim(),
+    }))
+    .filter((item) => item.slug && item.name);
+
+  if (normalized.length === 0) {
+    return finish(NextResponse.json({ error: "No associated institutions found." }, { status: 404 }));
+  }
+
+  if (normalized.length === 1) {
+    return finish(
+      NextResponse.json({
+        redirect_url: buildTenantLoginUrl(normalized[0].slug, email),
+      }),
+    );
+  }
+
+  return finish(
+    NextResponse.json({
+      tenants: normalized.map((item) => ({ slug: item.slug, name: item.name })),
+    }),
+  );
+}

@@ -8,7 +8,7 @@ const navLinks = [
 ];
 
 export default function Navbar() {
-  const loginHubUrl = process.env.NEXT_PUBLIC_LOGIN_HUB_URL ?? "https://login.elevareauctions.com/login-hub";
+  const loginHubUrl = process.env.NEXT_PUBLIC_LOGIN_HUB_URL ?? "https://login.elevareauctions.com/login";
 
   return (
     <header className="border-b border-neutral-200 bg-white">
