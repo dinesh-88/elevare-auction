@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -1945,10 +1946,12 @@ func (h *Handler) setSessionCookies(w http.ResponseWriter, token string) {
 	}
 	csrf := uuid.NewString()
 	maxAge := int(ttl.Seconds())
+	domain := h.sessionCookieDomain()
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.accessCookieName(),
 		Value:    token,
+		Domain:   domain,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   h.CookieSecure,
@@ -1958,6 +1961,7 @@ func (h *Handler) setSessionCookies(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.csrfCookieName(),
 		Value:    csrf,
+		Domain:   domain,
 		Path:     "/",
 		HttpOnly: false,
 		Secure:   h.CookieSecure,
@@ -1967,10 +1971,12 @@ func (h *Handler) setSessionCookies(w http.ResponseWriter, token string) {
 }
 
 func (h *Handler) clearSessionCookies(w http.ResponseWriter) {
+	domain := h.sessionCookieDomain()
 	for _, name := range []string{h.accessCookieName(), h.csrfCookieName()} {
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
 			Value:    "",
+			Domain:   domain,
 			Path:     "/",
 			HttpOnly: name == h.accessCookieName(),
 			Secure:   h.CookieSecure,
@@ -1978,4 +1984,15 @@ func (h *Handler) clearSessionCookies(w http.ResponseWriter) {
 			MaxAge:   -1,
 		})
 	}
+}
+
+func (h *Handler) sessionCookieDomain() string {
+	host := strings.ToLower(strings.TrimSpace(h.TenantAppBaseDomain))
+	if host == "" || host == "localhost" || host == "127.0.0.1" {
+		return ""
+	}
+	if net.ParseIP(host) != nil {
+		return ""
+	}
+	return strings.TrimPrefix(host, ".")
 }
