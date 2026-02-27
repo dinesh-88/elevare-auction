@@ -66,7 +66,10 @@ type noopBidBroadcaster struct{}
 
 func (n *noopBidBroadcaster) BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.Bid, currentPrice int64, endedAt *time.Time) {
 }
-func (n *noopBidBroadcaster) BroadcastLotExtended(ctx context.Context, lotID uuid.UUID, newEndTime time.Time) {}
+func (n *noopBidBroadcaster) BroadcastAuctionBid(ctx context.Context, auctionID uuid.UUID, lot domain.Lot, bid domain.Bid, currentPrice int64, endedAt *time.Time) {
+}
+func (n *noopBidBroadcaster) BroadcastLotExtended(ctx context.Context, lotID uuid.UUID, newEndTime time.Time) {
+}
 func (n *noopBidBroadcaster) BroadcastLotStatus(ctx context.Context, lotID uuid.UUID, status domain.LotStatus) {
 }
 func (n *noopBidBroadcaster) BroadcastAuctionStatus(ctx context.Context, auctionID uuid.UUID, status domain.AuctionStatus) {

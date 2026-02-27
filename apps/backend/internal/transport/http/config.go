@@ -29,6 +29,10 @@ type Config struct {
 	TenantAppScheme     string
 	TenantAppBaseDomain string
 	TenantAppPort       string
+	DemoTenantSlug      string
+	BidSimInterval      time.Duration
+	BidSimIdleThreshold time.Duration
+	BidSimMaxEvents     int
 }
 
 func LoadConfig() Config {
@@ -55,6 +59,10 @@ func LoadConfig() Config {
 		TenantAppScheme:     getEnv("TENANT_APP_SCHEME", "https"),
 		TenantAppBaseDomain: getEnv("TENANT_APP_BASE_DOMAIN", "elevareauctions.com"),
 		TenantAppPort:       strings.TrimSpace(os.Getenv("TENANT_APP_PORT")),
+		DemoTenantSlug:      strings.TrimSpace(os.Getenv("DEMO_TENANT_SLUG")),
+		BidSimInterval:      getEnvDuration("BID_SIM_INTERVAL_SECONDS", 12*time.Second),
+		BidSimIdleThreshold: getEnvDuration("BID_SIM_IDLE_THRESHOLD_SECONDS", 20*time.Second),
+		BidSimMaxEvents:     getEnvInt("BID_SIM_MAX_EVENTS_PER_MINUTE", 6),
 	}
 }
 
@@ -109,4 +117,16 @@ func getEnvDuration(k string, fallback time.Duration) time.Duration {
 		return time.Duration(seconds) * time.Second
 	}
 	return fallback
+}
+
+func getEnvInt(k string, fallback int) int {
+	v := strings.TrimSpace(os.Getenv(k))
+	if v == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(v)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }

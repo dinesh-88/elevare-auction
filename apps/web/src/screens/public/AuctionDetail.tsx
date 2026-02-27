@@ -11,6 +11,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useLotsSockets } from "../../hooks/useLotsSockets";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { currencySymbol } from "../../utils/currency";
+import LiveActivityPanel from "../../components/auction/LiveActivityPanel";
 
 export default function AuctionDetail({
   auctionID,
@@ -156,12 +157,12 @@ export default function AuctionDetail({
         </div>
       </header>
 
-      <div className="mb-12 grid grid-cols-1 gap-8 md:gap-12 lg:grid-cols-8">
-        <div className="lg:col-span-5">
+      <div className="mb-12 grid grid-cols-1 gap-8 md:gap-12 lg:grid-cols-12">
+        <div className="lg:col-span-7">
           <LotImageGallery images={selectedImages} alt={selectedLot.title} />
         </div>
 
-        <aside className="lg:col-span-3">
+        <aside className="lg:col-span-5">
           <div className="space-y-6 lg:sticky lg:top-8">
             <div>
               <div className="text-sm text-neutral-500">Lot {selectedLot.lot_number}</div>
@@ -207,6 +208,8 @@ export default function AuctionDetail({
                 </div>
               )}
             </div>
+
+            <LiveActivityPanel auctionId={auction?.id} currencySymbol={symbol} />
           </div>
         </aside>
       </div>

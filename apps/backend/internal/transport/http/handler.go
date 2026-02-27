@@ -1441,7 +1441,8 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, usecase.ErrApprovalRequired),
 			errors.Is(err, usecase.ErrPendingApproval),
 			errors.Is(err, usecase.ErrNotApproved),
-			errors.Is(err, usecase.ErrBidderSuspended):
+			errors.Is(err, usecase.ErrBidderSuspended),
+			errors.Is(err, usecase.ErrSimulatorBlocked):
 			http.Error(w, err.Error(), http.StatusForbidden)
 		default:
 			http.Error(w, err.Error(), http.StatusBadRequest)

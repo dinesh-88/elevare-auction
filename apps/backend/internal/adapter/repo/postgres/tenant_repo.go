@@ -60,6 +60,24 @@ LIMIT 1`
 	return t, nil
 }
 
+func (r *TenantRepo) GetBySubdomain(ctx context.Context, subdomain string) (*domain.Tenant, error) {
+	const q = `
+SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
+       branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
+       require_admin_approval, require_kyc, created_at
+FROM tenants
+WHERE subdomain = $1
+LIMIT 1`
+	t, err := scanTenant(r.DB.QueryRow(ctx, q, strings.ToLower(strings.TrimSpace(subdomain))))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
 func (r *TenantRepo) GetByID(ctx context.Context, tenantID uuid.UUID) (*domain.Tenant, error) {
 	const q = `
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,

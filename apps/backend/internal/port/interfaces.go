@@ -12,6 +12,7 @@ import (
 
 type TenantRepository interface {
 	GetByHost(ctx context.Context, host string) (*domain.Tenant, error)
+	GetBySubdomain(ctx context.Context, subdomain string) (*domain.Tenant, error)
 	GetByID(ctx context.Context, tenantID uuid.UUID) (*domain.Tenant, error)
 	CreatePendingTenantWithAdmin(ctx context.Context, in CreatePendingTenantWithAdminInput) error
 	ListByStatus(ctx context.Context, status domain.TenantStatus) ([]domain.Tenant, error)
@@ -198,6 +199,7 @@ type TokenClaims struct {
 
 type Broadcaster interface {
 	BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.Bid, currentPrice int64, endedAt *time.Time)
+	BroadcastAuctionBid(ctx context.Context, auctionID uuid.UUID, lot domain.Lot, bid domain.Bid, currentPrice int64, endedAt *time.Time)
 	BroadcastLotExtended(ctx context.Context, lotID uuid.UUID, newEndTime time.Time)
 	BroadcastLotStatus(ctx context.Context, lotID uuid.UUID, status domain.LotStatus)
 	BroadcastAuctionStatus(ctx context.Context, auctionID uuid.UUID, status domain.AuctionStatus)

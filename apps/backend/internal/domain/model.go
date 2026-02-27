@@ -117,6 +117,8 @@ type User struct {
 	CreatedAt      time.Time
 }
 
+const DemoBidSimulatorEmail = "simulator@elevare.local"
+
 type Auction struct {
 	ID                      uuid.UUID
 	TenantID                uuid.UUID

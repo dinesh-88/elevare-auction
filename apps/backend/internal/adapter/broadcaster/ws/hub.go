@@ -78,11 +78,39 @@ func (h *Hub) BroadcastLotBid(ctx context.Context, lotID uuid.UUID, bid domain.B
 		return
 	}
 	payload := map[string]any{
-		"type":          "lot_bid_placed",
-		"lot_id":        lotID,
+		"type":           "lot_bid_placed",
+		"lot_id":         lotID,
+		"bid_id":         bid.ID,
+		"amount":         bid.Amount,
+		"bidder_display": lotBidderAlias(bid.UserID),
+		"current_price":  currentPrice,
+		"ended_at":       endedAt,
+		"created_at":     bid.CreatedAt,
+	}
+	b, _ := json.Marshal(payload)
+	for _, c := range conns {
+		_ = c.Write(ctx, websocket.MessageText, b)
+	}
+}
+
+func (h *Hub) BroadcastAuctionBid(ctx context.Context, auctionID uuid.UUID, lot domain.Lot, bid domain.Bid, currentPrice int64, endedAt *time.Time) {
+	h.mu.RLock()
+	room := h.rooms[auctionID]
+	conns := make([]*websocket.Conn, 0, len(room))
+	for c := range room {
+		conns = append(conns, c)
+	}
+	h.mu.RUnlock()
+	if len(conns) == 0 {
+		return
+	}
+	payload := map[string]any{
+		"type":          "bid.created",
+		"auction_id":    auctionID,
+		"lot_id":        lot.ID,
+		"lot_number":    lot.LotNumber,
 		"bid_id":        bid.ID,
 		"amount":        bid.Amount,
-		"bidder_display": lotBidderAlias(bid.UserID),
 		"current_price": currentPrice,
 		"ended_at":      endedAt,
 		"created_at":    bid.CreatedAt,
@@ -175,7 +203,7 @@ func (h *Hub) BroadcastBid(ctx context.Context, auctionID uuid.UUID, bid domain.
 		return
 	}
 	payload := map[string]any{
-		"type":          "bid_placed",
+		"type":          "bid.created",
 		"auction_id":    auctionID,
 		"bid_id":        bid.ID,
 		"amount":        bid.Amount,

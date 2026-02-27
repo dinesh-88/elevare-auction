@@ -17,6 +17,7 @@ import (
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	httptransport "github.com/dinesh-88/elevare-auction/internal/transport/http"
 	"github.com/dinesh-88/elevare-auction/internal/usecase"
+	"github.com/dinesh-88/elevare-auction/internal/worker"
 )
 
 func main() {
@@ -62,7 +63,17 @@ func main() {
 		Notifications: notificationRepo,
 		Preferences:   notificationPrefsRepo,
 	}
-	lotUC := &usecase.LotUseCase{Lots: lotRepo, Auctions: auctionRepo, Bidders: bidderRepo, Broadcaster: hub, Notifier: notificationService, Audit: auditRepo}
+	lotUC := &usecase.LotUseCase{
+		Lots:           lotRepo,
+		Auctions:       auctionRepo,
+		Tenants:        tenantRepo,
+		Users:          userRepo,
+		Bidders:        bidderRepo,
+		Broadcaster:    hub,
+		Notifier:       notificationService,
+		Audit:          auditRepo,
+		DemoTenantSlug: cfg.DemoTenantSlug,
+	}
 	feeUC := &usecase.FeeUseCase{Fees: feeRepo, Audit: auditRepo}
 	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo, Audit: auditRepo, Notifier: notificationService}
 	bidderUC := &usecase.BidderUseCase{Users: userRepo, Bidders: bidderRepo, Auctions: auctionRepo, Audit: auditRepo}
@@ -133,6 +144,26 @@ func main() {
 
 	router := httptransport.NewRouter(h, tenantMW, authMW, hub, cfg.PlatformAdminToken, cfg.UploadsDir, serveLocalUploads)
 	httptransport.StartScheduler(ctx, auctionUC, lotUC, 5*time.Second)
+	bidSimulator := &worker.BidSimulator{
+		Tenants:            tenantRepo,
+		Auctions:           auctionRepo,
+		Lots:               lotRepo,
+		Users:              userRepo,
+		Bidders:            bidderRepo,
+		BidPlacer:          lotUC,
+		DemoTenantSlug:     cfg.DemoTenantSlug,
+		Interval:           cfg.BidSimInterval,
+		IdleThreshold:      cfg.BidSimIdleThreshold,
+		MaxEventsPerMinute: cfg.BidSimMaxEvents,
+		Logger:             log.Default(),
+	}
+	if bidSimulator.Enabled() {
+		go func() {
+			if err := bidSimulator.Run(ctx); err != nil && err != context.Canceled {
+				log.Printf("bid simulator stopped: %v", err)
+			}
+		}()
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/authz"
@@ -13,12 +14,15 @@ import (
 )
 
 type LotUseCase struct {
-	Lots        port.LotRepository
-	Auctions    port.AuctionRepository
-	Bidders     port.BidderRepository
-	Broadcaster port.Broadcaster
-	Notifier    *NotificationService
-	Audit       port.AuditRepository
+	Lots           port.LotRepository
+	Auctions       port.AuctionRepository
+	Tenants        port.TenantRepository
+	Users          port.UserRepository
+	Bidders        port.BidderRepository
+	Broadcaster    port.Broadcaster
+	Notifier       *NotificationService
+	Audit          port.AuditRepository
+	DemoTenantSlug string
 }
 
 type CreateLotInput struct {
@@ -194,6 +198,9 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
 		return nil, err
 	}
+	if err := uc.validateSimulatorTenant(ctx, in.TenantID, in.UserID); err != nil {
+		return nil, err
+	}
 	if uc.Bidders != nil {
 		profile, err := uc.Bidders.EnsureTenantBidder(ctx, in.TenantID, in.UserID)
 		if err != nil {
@@ -271,11 +278,34 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 	}
 	if uc.Broadcaster != nil {
 		uc.Broadcaster.BroadcastLotBid(ctx, res.Lot.ID, res.Bid, res.Lot.CurrentPrice, res.Lot.EndedAt)
+		uc.Broadcaster.BroadcastAuctionBid(ctx, res.Lot.AuctionID, res.Lot, res.Bid, res.Lot.CurrentPrice, res.Lot.EndedAt)
 		if res.WasExtended && res.ExtensionEndTime != nil {
 			uc.Broadcaster.BroadcastLotExtended(ctx, res.Lot.ID, *res.ExtensionEndTime)
 		}
 	}
 	return res, nil
+}
+
+func (uc *LotUseCase) validateSimulatorTenant(ctx context.Context, tenantID, userID uuid.UUID) error {
+	if uc.Users == nil || uc.Tenants == nil {
+		return nil
+	}
+	demoSlug := strings.TrimSpace(uc.DemoTenantSlug)
+	if demoSlug == "" {
+		return nil
+	}
+	user, err := uc.Users.GetByID(ctx, tenantID, userID)
+	if err != nil || user == nil || !strings.EqualFold(strings.TrimSpace(user.Email), domain.DemoBidSimulatorEmail) {
+		return nil
+	}
+	tenant, err := uc.Tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	if !strings.EqualFold(strings.TrimSpace(tenant.Subdomain), demoSlug) {
+		return ErrSimulatorBlocked
+	}
+	return nil
 }
 
 func (uc *LotUseCase) ListBidsByLot(ctx context.Context, tenantID, lotID uuid.UUID, limit int) ([]domain.Bid, error) {

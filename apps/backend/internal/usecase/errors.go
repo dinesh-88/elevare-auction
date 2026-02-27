@@ -12,4 +12,5 @@ var (
 	ErrPendingApproval   = errors.New("pending approval")
 	ErrNotApproved       = errors.New("not approved")
 	ErrBidderSuspended   = errors.New("you are not allowed to bid")
+	ErrSimulatorBlocked  = errors.New("simulator bidder is restricted to the demo tenant")
 )
