@@ -1,7 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-const DEFAULT_MARKETING_HOSTS = ["elevareauctions.com", "www.elevareauctions.com", "localhost", "127.0.0.1"];
+const DEFAULT_MARKETING_HOSTS = [
+  "elevareauctions.com",
+  "www.elevareauctions.com",
+  "login.elevareauctions.com",
+  "localhost",
+  "127.0.0.1"
+];
 
 function normalizeHost(request: NextRequest): string {
   const forwardedHost = request.headers.get("x-forwarded-host");

@@ -1,8 +1,8 @@
 package httptransport
 
 import (
-	"net/url"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -69,6 +69,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	})
 	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/openapi.yaml")))
 	r.Post("/signup", h.PublicTenantSignup)
+	r.Post("/auth/discover-tenant", h.DiscoverTenantLogin)
 
 	r.Route("/platform/admin", func(r chi.Router) {
 		r.Use(middleware.RequirePlatformAdmin(platformAdminToken))

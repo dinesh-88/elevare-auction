@@ -11,9 +11,10 @@ import (
 )
 
 type AuthUseCase struct {
-	Users  port.UserRepository
-	Hasher port.PasswordHasher
-	Tokens port.TokenService
+	Users        port.UserRepository
+	TenantLookup port.UserTenantLookupRepository
+	Hasher       port.PasswordHasher
+	Tokens       port.TokenService
 }
 
 type RegisterInput struct {
@@ -27,6 +28,13 @@ type LoginInput struct {
 	TenantID uuid.UUID
 	Email    string
 	Password string
+}
+
+type TenantLoginMatch struct {
+	TenantID     uuid.UUID
+	TenantName   string
+	Subdomain    string
+	CustomDomain *string
 }
 
 func (uc *AuthUseCase) Register(ctx context.Context, in RegisterInput) (*domain.User, error) {
@@ -92,4 +100,28 @@ func (uc *AuthUseCase) CurrentUser(ctx context.Context, tenantID, userID uuid.UU
 		return nil, ErrValidation
 	}
 	return uc.Users.GetByID(ctx, tenantID, userID)
+}
+
+func (uc *AuthUseCase) DiscoverTenantsByEmail(ctx context.Context, email string) ([]TenantLoginMatch, error) {
+	if uc.TenantLookup == nil {
+		return nil, errors.New("tenant lookup unavailable")
+	}
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	if normalizedEmail == "" || !strings.Contains(normalizedEmail, "@") {
+		return nil, ErrValidation
+	}
+	rows, err := uc.TenantLookup.ListTenantLoginCandidatesByEmail(ctx, normalizedEmail)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TenantLoginMatch, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, TenantLoginMatch{
+			TenantID:     row.TenantID,
+			TenantName:   row.TenantName,
+			Subdomain:    row.Subdomain,
+			CustomDomain: row.CustomDomain,
+		})
+	}
+	return out, nil
 }

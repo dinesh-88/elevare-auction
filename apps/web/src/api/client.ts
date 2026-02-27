@@ -370,6 +370,13 @@ export interface TenantAsset {
   created_at: string;
 }
 
+export interface TenantLoginDiscoveryItem {
+  tenant_id: string;
+  tenant_name: string;
+  host: string;
+  login_url: string;
+}
+
 type JsonRecord = Record<string, unknown>;
 
 type TokenGetter = () => string | null;
@@ -689,6 +696,13 @@ async function requestBinary(path: string, init?: RequestInit): Promise<Blob> {
 }
 
 export const api = {
+  discoverTenantLogin: async (email: string) => {
+    const response = await request<{ items: TenantLoginDiscoveryItem[] }>("/auth/discover-tenant", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return response.items ?? [];
+  },
   tenantSignup: (payload: {
     organization_name: string;
     desired_subdomain: string;

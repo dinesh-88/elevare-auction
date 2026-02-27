@@ -20,23 +20,26 @@ import (
 )
 
 type Handler struct {
-	Auth         *usecase.AuthUseCase
-	Auction      *usecase.AuctionUseCase
-	Lot          *usecase.LotUseCase
-	Fee          *usecase.FeeUseCase
-	Invoice      *usecase.InvoiceUseCase
-	Bidder       *usecase.BidderUseCase
-	Audit        *usecase.AuditUseCase
-	Notification *usecase.NotificationUseCase
-	Site         *usecase.SiteUseCase
-	Asset        *usecase.AssetUseCase
-	Onboarding   *usecase.OnboardingUseCase
-	Storage      port.ObjectStorage
-	PreviewToken string
-	JWTTTL       time.Duration
-	CookieSecure bool
-	AccessCookie string
-	CSRFCookie   string
+	Auth                *usecase.AuthUseCase
+	Auction             *usecase.AuctionUseCase
+	Lot                 *usecase.LotUseCase
+	Fee                 *usecase.FeeUseCase
+	Invoice             *usecase.InvoiceUseCase
+	Bidder              *usecase.BidderUseCase
+	Audit               *usecase.AuditUseCase
+	Notification        *usecase.NotificationUseCase
+	Site                *usecase.SiteUseCase
+	Asset               *usecase.AssetUseCase
+	Onboarding          *usecase.OnboardingUseCase
+	Storage             port.ObjectStorage
+	PreviewToken        string
+	JWTTTL              time.Duration
+	CookieSecure        bool
+	AccessCookie        string
+	CSRFCookie          string
+	TenantAppScheme     string
+	TenantAppBaseDomain string
+	TenantAppPort       string
 }
 
 type lotPublicResponse struct {
@@ -115,6 +118,63 @@ func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
 		"admin_user_id":         admin.ID,
 		"admin_approval_status": admin.ApprovalStatus,
 	})
+}
+
+func (h *Handler) buildTenantLoginURL(match usecase.TenantLoginMatch) string {
+	scheme := strings.TrimSpace(h.TenantAppScheme)
+	if scheme == "" {
+		scheme = "https"
+	}
+	baseDomain := strings.TrimSpace(h.TenantAppBaseDomain)
+	if baseDomain == "" {
+		baseDomain = "elevareauctions.com"
+	}
+	portSuffix := ""
+	if p := strings.TrimSpace(h.TenantAppPort); p != "" {
+		portSuffix = ":" + p
+	}
+	host := ""
+	if match.CustomDomain != nil && strings.TrimSpace(*match.CustomDomain) != "" {
+		host = strings.TrimSpace(*match.CustomDomain)
+	} else {
+		host = fmt.Sprintf("%s.%s", strings.TrimSpace(match.Subdomain), baseDomain)
+	}
+	return fmt.Sprintf("%s://%s%s/login", scheme, host, portSuffix)
+}
+
+func (h *Handler) DiscoverTenantLogin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	matches, err := h.Auth.DiscoverTenantsByEmail(r.Context(), req.Email)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrValidation) {
+			status = http.StatusBadRequest
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	items := make([]map[string]any, 0, len(matches))
+	for _, m := range matches {
+		host := ""
+		if m.CustomDomain != nil && strings.TrimSpace(*m.CustomDomain) != "" {
+			host = strings.TrimSpace(*m.CustomDomain)
+		} else {
+			host = fmt.Sprintf("%s.%s", strings.TrimSpace(m.Subdomain), strings.TrimSpace(h.TenantAppBaseDomain))
+		}
+		items = append(items, map[string]any{
+			"tenant_id":   m.TenantID,
+			"tenant_name": m.TenantName,
+			"host":        host,
+			"login_url":   h.buildTenantLoginURL(m),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (h *Handler) ListTenantRequests(w http.ResponseWriter, r *http.Request) {

@@ -48,7 +48,7 @@ func main() {
 	jwtSvc := &security.JWTService{Secret: []byte(cfg.JWTSecret), TTL: cfg.JWTTTL}
 	hub := wsadapter.NewHub()
 
-	authUC := &usecase.AuthUseCase{Users: userRepo, Hasher: hasher, Tokens: jwtSvc}
+	authUC := &usecase.AuthUseCase{Users: userRepo, TenantLookup: userRepo, Hasher: hasher, Tokens: jwtSvc}
 	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Tenants: tenantRepo, Broadcaster: hub, Audit: auditRepo}
 	notificationService := &usecase.NotificationService{
 		Notifications: notificationRepo,
@@ -104,23 +104,26 @@ func main() {
 	}
 
 	h := &httptransport.Handler{
-		Auth:         authUC,
-		Auction:      auctionUC,
-		Lot:          lotUC,
-		Fee:          feeUC,
-		Invoice:      invoiceUC,
-		Bidder:       bidderUC,
-		Audit:        auditUC,
-		Notification: notificationUC,
-		Site:         siteUC,
-		Asset:        assetUC,
-		Onboarding:   onboardingUC,
-		Storage:      objectStorage,
-		PreviewToken: cfg.SitePreviewToken,
-		JWTTTL:       cfg.JWTTTL,
-		CookieSecure: cfg.CookieSecure,
-		AccessCookie: cfg.AccessTokenCookie,
-		CSRFCookie:   cfg.CSRFCookie,
+		Auth:                authUC,
+		Auction:             auctionUC,
+		Lot:                 lotUC,
+		Fee:                 feeUC,
+		Invoice:             invoiceUC,
+		Bidder:              bidderUC,
+		Audit:               auditUC,
+		Notification:        notificationUC,
+		Site:                siteUC,
+		Asset:               assetUC,
+		Onboarding:          onboardingUC,
+		Storage:             objectStorage,
+		PreviewToken:        cfg.SitePreviewToken,
+		JWTTTL:              cfg.JWTTTL,
+		CookieSecure:        cfg.CookieSecure,
+		AccessCookie:        cfg.AccessTokenCookie,
+		CSRFCookie:          cfg.CSRFCookie,
+		TenantAppScheme:     cfg.TenantAppScheme,
+		TenantAppBaseDomain: cfg.TenantAppBaseDomain,
+		TenantAppPort:       cfg.TenantAppPort,
 	}
 	tenantMW := middleware.TenantMiddleware{Tenants: tenantRepo}
 	authMW := middleware.AuthMiddleware{Tokens: jwtSvc, AccessTokenCookie: cfg.AccessTokenCookie}

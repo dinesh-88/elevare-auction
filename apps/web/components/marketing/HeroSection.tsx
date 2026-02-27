@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 
 export default function HeroSection() {
+  const demoAuctionUrl = process.env.NEXT_PUBLIC_DEMO_AUCTION_URL ?? "https://demo.elevareauctions.com/auctions";
+
   return (
     <section className="bg-neutral-50 py-24">
       <div className="max-w-7xl mx-auto px-6 grid gap-14 items-center lg:grid-cols-2">
@@ -21,12 +23,12 @@ export default function HeroSection() {
             >
               Request a Demo
             </Link>
-            <Link
-              href="/auctions"
+            <a
+              href={demoAuctionUrl}
               className="inline-flex items-center rounded-md border border-brand-900 px-6 py-3 text-sm font-medium text-brand-900 hover:bg-brand-900 hover:text-white transition-colors"
             >
               View Demo Auction
-            </Link>
+            </a>
           </div>
         </div>
 

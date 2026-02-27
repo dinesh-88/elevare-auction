@@ -3,8 +3,10 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -107,4 +109,30 @@ func (r *UserRepo) UpdateEmailVerified(ctx context.Context, tenantID, userID uui
 		return errors.New("user not found")
 	}
 	return nil
+}
+
+func (r *UserRepo) ListTenantLoginCandidatesByEmail(ctx context.Context, email string) ([]port.TenantLoginCandidate, error) {
+	const q = `
+SELECT DISTINCT t.id, t.name, t.subdomain, t.custom_domain
+FROM users u
+JOIN tenants t ON t.id = u.tenant_id
+WHERE lower(u.email) = lower($1)
+  AND t.status = 'ACTIVE'
+  AND u.status = 'ACTIVE'
+ORDER BY t.created_at DESC`
+	rows, err := r.DB.Query(ctx, q, strings.TrimSpace(email))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]port.TenantLoginCandidate, 0)
+	for rows.Next() {
+		var item port.TenantLoginCandidate
+		if err := rows.Scan(&item.TenantID, &item.TenantName, &item.Subdomain, &item.CustomDomain); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }

@@ -35,6 +35,17 @@ type UserRepository interface {
 	UpdateEmailVerified(ctx context.Context, tenantID, userID uuid.UUID, verified bool) error
 }
 
+type TenantLoginCandidate struct {
+	TenantID     uuid.UUID
+	TenantName   string
+	Subdomain    string
+	CustomDomain *string
+}
+
+type UserTenantLookupRepository interface {
+	ListTenantLoginCandidatesByEmail(ctx context.Context, email string) ([]TenantLoginCandidate, error)
+}
+
 type AuctionRepository interface {
 	Create(ctx context.Context, auction *domain.Auction) error
 	ListPublic(ctx context.Context, tenantID uuid.UUID, now time.Time) ([]domain.Auction, error)
