@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { resolveWsBase } from "./wsBase";
 
 interface LotBidEvent {
   bid_id: string;
@@ -22,9 +23,7 @@ export function useLotsSockets(
   useEffect(() => {
     if (!enabled || lotIds.length === 0) return;
 
-    const base =
-      process.env.NEXT_PUBLIC_WS_BASE_URL ??
-      `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:${process.env.NEXT_PUBLIC_WS_PORT ?? "8080"}`;
+    const base = resolveWsBase();
 
     const sockets = lotIds.map((lotId) => {
       const ws = new WebSocket(`${base}/lots/${lotId}/ws`);

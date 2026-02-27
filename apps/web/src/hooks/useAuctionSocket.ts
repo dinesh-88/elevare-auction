@@ -1,22 +1,5 @@
 import { useEffect } from "react";
-
-const adaptWsBaseToCurrentHostname = (base: string) => {
-  if (!base) return base;
-  try {
-    const url = new URL(base);
-    const currentHost = window.location.hostname;
-    const baseHost = url.hostname;
-    const isLocalBase = baseHost === "localhost" || baseHost === "127.0.0.1";
-    const isTenantHost = currentHost.endsWith(".localhost") && currentHost !== "localhost";
-    if (isLocalBase && isTenantHost) {
-      url.hostname = currentHost;
-      return url.toString().replace(/\/+$/, "");
-    }
-    return base;
-  } catch {
-    return base;
-  }
-};
+import { resolveWsBase } from "./wsBase";
 
 interface AuctionStatusEvent {
   auction_id: string;
@@ -43,11 +26,7 @@ export function useAuctionSocket(
   useEffect(() => {
     if (!auctionId || !enabled) return;
 
-    const envBase = process.env.NEXT_PUBLIC_WS_BASE_URL?.trim();
-    const base =
-      envBase && envBase.length > 0
-        ? adaptWsBaseToCurrentHostname(envBase.replace(/\/+$/, ""))
-        : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:${process.env.NEXT_PUBLIC_WS_PORT ?? "8080"}`;
+    const base = resolveWsBase();
 
     const ws = new WebSocket(`${base}/auctions/${auctionId}/ws`);
 
