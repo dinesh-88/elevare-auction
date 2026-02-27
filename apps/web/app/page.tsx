@@ -20,7 +20,7 @@ export default function HomePage() {
         <HeroSection />
 
         <Section>
-          <h2 className="text-3xl md:text-4xl font-semibold text-brand-900">Most Online Auction Platforms Take Control.</h2>
+          <h2 className="font-serif text-3xl font-semibold tracking-tight text-brand-900 md:text-4xl">Most Online Auction Platforms Take Control.</h2>
           <ul className="mt-8 space-y-4 text-lg text-brand-700">
             <li>Your brand becomes secondary.</li>
             <li>Your bidders belong to the platform.</li>
@@ -31,7 +31,7 @@ export default function HomePage() {
         </Section>
 
         <Section background="neutral">
-          <h2 className="text-3xl md:text-4xl font-semibold text-brand-900">Core Capabilities</h2>
+          <h2 className="font-serif text-3xl font-semibold tracking-tight text-brand-900 md:text-4xl">Core Capabilities</h2>
           <p className="mt-4 text-lg text-brand-700">Everything required to operate high-trust online auctions under your own institution.</p>
           <div className="mt-10">
             <FeatureGrid />
@@ -39,7 +39,7 @@ export default function HomePage() {
         </Section>
 
         <Section>
-          <h2 className="text-3xl md:text-4xl font-semibold text-brand-900">Built for Institutional Control</h2>
+          <h2 className="font-serif text-3xl font-semibold tracking-tight text-brand-900 md:text-4xl">Built for Institutional Control</h2>
           <ul className="mt-8 space-y-4 text-lg text-brand-700">
             <li>Bidder approval workflows</li>
             <li>Risk controls and suspension</li>
@@ -49,7 +49,7 @@ export default function HomePage() {
         </Section>
 
         <Section background="neutral">
-          <h2 className="text-3xl md:text-4xl font-semibold text-brand-900">Ready to Run Your Own Branded Auction?</h2>
+          <h2 className="font-serif text-3xl font-semibold tracking-tight text-brand-900 md:text-4xl">Ready to Run Your Own Branded Auction?</h2>
           <div className="mt-8 flex flex-wrap gap-4">
             <Link
               href="/demo"

@@ -25,7 +25,7 @@ export default function ContactPage() {
       <main>
         <Section background="neutral" className="text-center">
           <p className="text-xs uppercase tracking-[0.16em] text-accent-600">Contact</p>
-          <h1 className="mt-4 text-4xl md:text-5xl font-semibold text-brand-900">Arrange a Demonstration</h1>
+          <h1 className="mt-4 font-serif text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-brand-900 md:text-5xl">Arrange a Demonstration</h1>
           <p className="mx-auto mt-6 max-w-3xl text-lg text-brand-700">
             If your institution would value a formal review of the platform, please send your details below and we
             shall arrange a suitable time to discuss implementation, governance, and operational requirements.

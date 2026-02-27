@@ -1,6 +1,19 @@
 import type { Metadata } from "next";
+import { Cormorant_Garamond, Inter } from "next/font/google";
 import AppProviders from "../src/app-providers";
 import "./globals.css";
+
+const fontSerif = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-serif"
+});
+
+const fontSans = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-sans"
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://elevareauctions.com"),
@@ -38,7 +51,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
+      <body className={`${fontSerif.variable} ${fontSans.variable} font-sans`}>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

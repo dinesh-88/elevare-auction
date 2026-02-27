@@ -9,7 +9,7 @@ export default function HeroSection() {
       <div className="max-w-7xl mx-auto px-6 grid gap-14 items-center lg:grid-cols-2">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-accent-600">White-Label Auction Infrastructure</p>
-          <h1 className="mt-4 text-4xl md:text-5xl font-semibold leading-tight text-brand-900">
+          <h1 className="mt-4 font-serif text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-brand-900 md:text-5xl">
             Run Fully Branded Online Auctions — Without Marketplace Fees.
           </h1>
           <p className="mt-6 text-lg text-brand-700 max-w-2xl">

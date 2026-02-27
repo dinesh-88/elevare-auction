@@ -27,7 +27,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
   const year = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-white text-neutral-800 font-body">
+    <div className="min-h-screen bg-white font-sans text-neutral-800">
       <Header
         tenantName={config?.name ?? "Elevare"}
         tenantLogoUrl={config?.branding?.logo_url}
@@ -41,7 +41,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
         <div className="mx-auto w-[min(1440px,96vw)] px-4 py-10 md:px-8 md:py-12">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
             <div className="space-y-2">
-              <p className="font-heading text-lg text-neutral-900">{config?.name ?? "Elevare"}</p>
+              <p className="font-serif text-lg text-neutral-900">{config?.name ?? "Elevare"}</p>
               <p className="text-sm text-neutral-600">Institutional Auction Platform</p>
               {footerText ? <p className="text-sm leading-relaxed text-neutral-600">{footerText}</p> : null}
             </div>

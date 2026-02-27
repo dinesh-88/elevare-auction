@@ -5,8 +5,10 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        heading: ['"Playfair Display"', "serif"],
-        body: ["Inter", "sans-serif"]
+        serif: ["var(--font-serif)"],
+        sans: ["var(--font-sans)"],
+        heading: ["var(--font-serif)"],
+        body: ["var(--font-sans)"]
       },
       colors: {
         brand: {

@@ -15,7 +15,7 @@ export default function Footer() {
     <footer className="bg-brand-900 text-neutral-200">
       <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-sm font-medium text-neutral-100">Elevare Auctions</p>
+          <p className="font-serif text-xl font-semibold tracking-tight text-neutral-100">Elevare Auctions</p>
           <p className="mt-1 text-sm text-neutral-200">Institutional white-label online auction platform</p>
         </div>
         <nav className="flex flex-wrap items-center gap-5 text-sm text-neutral-200">
