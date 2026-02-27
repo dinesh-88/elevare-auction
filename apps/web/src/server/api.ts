@@ -53,3 +53,11 @@ export async function fetchLot(lotID: string) {
 export async function fetchLotBids(lotID: string) {
   return fetchJSON<any[]>(`/lots/${lotID}/bids`);
 }
+
+export async function fetchPublicInstitutions() {
+  return fetchJSON<any[]>("/public/institutions");
+}
+
+export async function fetchPublicInstitution(slug: string) {
+  return fetchJSON<any>(`/public/institutions/${slug}`);
+}

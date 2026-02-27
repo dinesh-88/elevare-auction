@@ -3,6 +3,7 @@ import CapabilitiesSection from "../components/marketing/CapabilitiesSection";
 import ClosingCTASection from "../components/marketing/ClosingCTASection";
 import Footer from "../components/marketing/Footer";
 import HeroSection from "../components/marketing/HeroSection";
+import InstitutionPreviewSection from "../components/marketing/InstitutionPreviewSection";
 import InstitutionalControlsSection from "../components/marketing/InstitutionalControlsSection";
 import Navbar from "../components/marketing/Navbar";
 import ProblemSection from "../components/marketing/ProblemSection";
@@ -22,6 +23,7 @@ export default function HomePage() {
         <ProblemSection />
         <CapabilitiesSection />
         <InstitutionalControlsSection />
+        <InstitutionPreviewSection />
         <ClosingCTASection />
       </main>
       <Footer />

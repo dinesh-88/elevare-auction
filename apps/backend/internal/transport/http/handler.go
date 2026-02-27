@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -86,6 +87,106 @@ type bidHistoryPublicResponse struct {
 	AmountMinor   int64     `json:"amount_minor"`
 	CreatedAt     time.Time `json:"created_at"`
 	BidderDisplay string    `json:"bidder_display"`
+}
+
+type publicInstitutionSummaryResponse struct {
+	ID           uuid.UUID `json:"id"`
+	Slug         string    `json:"slug"`
+	Name         string    `json:"name"`
+	LogoURL      string    `json:"logo_url,omitempty"`
+	Description  string    `json:"description"`
+	WebsiteURL   string    `json:"website_url,omitempty"`
+	ContactEmail string    `json:"contact_email,omitempty"`
+}
+
+type publicInstitutionAuctionResponse struct {
+	ID        uuid.UUID            `json:"id"`
+	Slug      string               `json:"slug"`
+	Title     string               `json:"title"`
+	Status    domain.AuctionStatus `json:"status"`
+	StartTime time.Time            `json:"start_time"`
+	EndTime   time.Time            `json:"end_time"`
+}
+
+type publicInstitutionDetailResponse struct {
+	publicInstitutionSummaryResponse
+	ActiveAuctions    []publicInstitutionAuctionResponse `json:"active_auctions"`
+	CompletedAuctions []publicInstitutionAuctionResponse `json:"completed_auctions"`
+}
+
+func parseJSONMap(raw json.RawMessage) map[string]any {
+	if len(raw) == 0 {
+		return map[string]any{}
+	}
+	out := map[string]any{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return map[string]any{}
+	}
+	return out
+}
+
+func nestedString(input map[string]any, path ...string) string {
+	current := input
+	for idx, segment := range path {
+		value, ok := current[segment]
+		if !ok {
+			return ""
+		}
+		if idx == len(path)-1 {
+			text, _ := value.(string)
+			return strings.TrimSpace(text)
+		}
+		next, ok := value.(map[string]any)
+		if !ok {
+			return ""
+		}
+		current = next
+	}
+	return ""
+}
+
+func publicInstitutionSummaryFromTenant(tenant domain.Tenant) publicInstitutionSummaryResponse {
+	branding := parseJSONMap(tenant.BrandingPublished)
+	if len(branding) == 0 {
+		branding = parseJSONMap(tenant.Branding)
+	}
+	content := parseJSONMap(tenant.ContentPublished)
+	if len(content) == 0 {
+		content = parseJSONMap(tenant.ContentDraft)
+	}
+	logoURL := nestedString(branding, "logo_url")
+	description := nestedString(content, "about", "markdown")
+	if description == "" {
+		description = nestedString(content, "homepage", "hero", "subheadline")
+	}
+	contactEmail := nestedString(content, "contact", "email")
+	if contactEmail == "" {
+		contactEmail = nestedString(content, "footer", "contact_email")
+	}
+	websiteURL := ""
+	if tenant.CustomDomain != nil && strings.TrimSpace(*tenant.CustomDomain) != "" {
+		websiteURL = "https://" + strings.TrimSpace(*tenant.CustomDomain)
+	}
+	return publicInstitutionSummaryResponse{
+		ID:           tenant.ID,
+		Slug:         tenant.Subdomain,
+		Name:         tenant.Name,
+		LogoURL:      logoURL,
+		Description:  description,
+		WebsiteURL:   websiteURL,
+		ContactEmail: contactEmail,
+	}
+}
+
+func institutionAuctionResponse(auction domain.Auction) publicInstitutionAuctionResponse {
+	return publicInstitutionAuctionResponse{
+		ID:        auction.ID,
+		Slug:      auction.ID.String(),
+		Title:     auction.Title,
+		Status:    auction.Status,
+		StartTime: auction.StartTime,
+		EndTime:   auction.EndTime,
+	}
 }
 
 func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
@@ -276,6 +377,71 @@ func (h *Handler) PublicConfig(w http.ResponseWriter, r *http.Request) {
 		"default_currency":       tenant.DefaultCurrency,
 		"require_admin_approval": tenant.RequireAdminApproval,
 		"require_kyc":            tenant.RequireKYC,
+	})
+}
+
+func (h *Handler) ListPublicInstitutions(w http.ResponseWriter, r *http.Request) {
+	tenants, err := h.Onboarding.Tenants.ListByStatus(r.Context(), domain.TenantActive)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp := make([]publicInstitutionSummaryResponse, 0, len(tenants))
+	for i := range tenants {
+		resp = append(resp, publicInstitutionSummaryFromTenant(tenants[i]))
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) GetPublicInstitution(w http.ResponseWriter, r *http.Request) {
+	slug := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "slug")))
+	if slug == "" {
+		http.Error(w, "institution not found", http.StatusNotFound)
+		return
+	}
+	tenants, err := h.Onboarding.Tenants.ListByStatus(r.Context(), domain.TenantActive)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var tenant *domain.Tenant
+	for i := range tenants {
+		if strings.EqualFold(tenants[i].Subdomain, slug) {
+			tenant = &tenants[i]
+			break
+		}
+	}
+	if tenant == nil {
+		http.Error(w, "institution not found", http.StatusNotFound)
+		return
+	}
+	auctions, err := h.Auction.Auctions.ListAdmin(r.Context(), tenant.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	active := make([]publicInstitutionAuctionResponse, 0)
+	completed := make([]publicInstitutionAuctionResponse, 0)
+	for i := range auctions {
+		item := institutionAuctionResponse(auctions[i])
+		if auctions[i].Status == domain.AuctionEnded {
+			completed = append(completed, item)
+			continue
+		}
+		if auctions[i].Status == domain.AuctionLive || auctions[i].Status == domain.AuctionScheduled {
+			active = append(active, item)
+		}
+	}
+	sort.Slice(active, func(i, j int) bool {
+		return active[i].StartTime.Before(active[j].StartTime)
+	})
+	sort.Slice(completed, func(i, j int) bool {
+		return completed[i].EndTime.After(completed[j].EndTime)
+	})
+	writeJSON(w, http.StatusOK, publicInstitutionDetailResponse{
+		publicInstitutionSummaryResponse: publicInstitutionSummaryFromTenant(*tenant),
+		ActiveAuctions:                   active,
+		CompletedAuctions:                completed,
 	})
 }
 

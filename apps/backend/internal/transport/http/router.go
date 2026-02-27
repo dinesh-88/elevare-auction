@@ -71,6 +71,8 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	r.Post("/signup", h.PublicTenantSignup)
 	r.Post("/auth/discover-tenant", h.DiscoverTenantLogin)
 	r.Post("/contact", h.SubmitDemoRequest)
+	r.Get("/public/institutions", h.ListPublicInstitutions)
+	r.Get("/public/institutions/{slug}", h.GetPublicInstitution)
 
 	r.Route("/platform/admin", func(r chi.Router) {
 		r.Use(middleware.RequirePlatformAdmin(platformAdminToken))

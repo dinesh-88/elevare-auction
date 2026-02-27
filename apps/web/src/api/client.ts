@@ -75,6 +75,30 @@ export interface Auction {
   created_at: string;
 }
 
+export interface InstitutionSummary {
+  id: string;
+  slug: string;
+  name: string;
+  logo_url?: string;
+  description: string;
+  website_url?: string;
+  contact_email?: string;
+}
+
+export interface InstitutionAuctionReference {
+  id: string;
+  slug: string;
+  title: string;
+  status: "SCHEDULED" | "LIVE" | "ENDED";
+  start_time: string;
+  end_time: string;
+}
+
+export interface InstitutionProfile extends InstitutionSummary {
+  active_auctions: InstitutionAuctionReference[];
+  completed_auctions: InstitutionAuctionReference[];
+}
+
 export interface AuctionBidderAdminRow {
   user_id: string;
   email: string;
@@ -464,6 +488,42 @@ export function normalizeAuction(raw: unknown): Auction {
     bid_visibility: String(r.bid_visibility ?? r.BidVisibility ?? "PUBLIC") as Auction["bid_visibility"],
     require_bidder_approval: Boolean(r.require_bidder_approval ?? r.RequireBidderApproval ?? false),
     created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
+export function normalizeInstitutionSummary(raw: unknown): InstitutionSummary {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? ""),
+    slug: String(r.slug ?? ""),
+    name: String(r.name ?? ""),
+    logo_url: typeof r.logo_url === "string" ? r.logo_url : undefined,
+    description: String(r.description ?? ""),
+    website_url: typeof r.website_url === "string" ? r.website_url : undefined,
+    contact_email: typeof r.contact_email === "string" ? r.contact_email : undefined,
+  };
+}
+
+export function normalizeInstitutionAuctionReference(raw: unknown): InstitutionAuctionReference {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? ""),
+    slug: String(r.slug ?? ""),
+    title: String(r.title ?? ""),
+    status: String(r.status ?? "SCHEDULED") as InstitutionAuctionReference["status"],
+    start_time: String(r.start_time ?? ""),
+    end_time: String(r.end_time ?? ""),
+  };
+}
+
+export function normalizeInstitutionProfile(raw: unknown): InstitutionProfile {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    ...normalizeInstitutionSummary(raw),
+    active_auctions: Array.isArray(r.active_auctions) ? r.active_auctions.map(normalizeInstitutionAuctionReference) : [],
+    completed_auctions: Array.isArray(r.completed_auctions)
+      ? r.completed_auctions.map(normalizeInstitutionAuctionReference)
+      : [],
   };
 }
 
