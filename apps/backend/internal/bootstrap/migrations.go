@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
@@ -19,11 +19,7 @@ func RunMigrations(databaseURL string) error {
 	}
 
 	migrationsPath := resolveMigrationsPath()
-	dsn := databaseURL
-	noLock := strings.TrimSpace(os.Getenv("MIGRATE_NO_LOCK"))
-	if noLock == "" || strings.EqualFold(noLock, "true") || noLock == "1" {
-		dsn = withQueryParam(databaseURL, "x-no-lock", "true")
-	}
+	dsn := migrateDatabaseURL(databaseURL)
 
 	m, err := migrate.New("file://"+migrationsPath, dsn)
 	if err != nil {
@@ -69,15 +65,14 @@ func resolveMigrationsPath() string {
 	return "/app/migrations"
 }
 
-func withQueryParam(rawURL, key, value string) string {
+func migrateDatabaseURL(rawURL string) string {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
 		return rawURL
 	}
-	query := parsed.Query()
-	if query.Get(key) == "" {
-		query.Set(key, value)
-		parsed.RawQuery = query.Encode()
+	switch strings.ToLower(parsed.Scheme) {
+	case "postgres", "postgresql":
+		parsed.Scheme = "pgx5"
 	}
 	return parsed.String()
 }
