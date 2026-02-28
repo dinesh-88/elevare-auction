@@ -82,12 +82,22 @@ async function fetchCandidates(email: string) {
     cache: "no-store",
   });
 
-  if (!response.ok) {
-    return [] as TenantResolveCandidate[];
+  const text = await response.text();
+  let payload: { items?: TenantResolveCandidate[]; error?: string } | null = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text) as { items?: TenantResolveCandidate[]; error?: string };
+    } catch {
+      payload = { error: text };
+    }
   }
 
-  const payload = (await response.json()) as { items?: TenantResolveCandidate[] };
-  return Array.isArray(payload.items) ? payload.items : [];
+  if (!response.ok) {
+    const message = payload?.error?.trim() || `Institution lookup failed (${response.status}).`;
+    throw new Error(message);
+  }
+
+  return Array.isArray(payload?.items) ? payload!.items : [];
 }
 
 export async function POST(request: NextRequest) {
@@ -107,7 +117,13 @@ export async function POST(request: NextRequest) {
     return finish(NextResponse.json({ error: "Enter a valid email address." }, { status: 400 }));
   }
 
-  const items = await fetchCandidates(email);
+  let items: TenantResolveCandidate[] = [];
+  try {
+    items = await fetchCandidates(email);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unable to resolve your institution.";
+    return finish(NextResponse.json({ error: message }, { status: 502 }));
+  }
   const normalized = items
     .map((item) => ({
       slug: String(item.slug ?? "").trim().toLowerCase(),
