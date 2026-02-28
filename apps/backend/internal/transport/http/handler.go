@@ -297,11 +297,11 @@ func (h *Handler) DiscoverTenantLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	matches, err := h.Auth.DiscoverTenantsByEmail(r.Context(), req.Email)
 	if err != nil {
-		status := http.StatusBadRequest
 		if errors.Is(err, usecase.ErrValidation) {
-			status = http.StatusBadRequest
+			http.Error(w, "invalid email", http.StatusBadRequest)
+			return
 		}
-		http.Error(w, err.Error(), status)
+		http.Error(w, "unable to resolve institution", http.StatusInternalServerError)
 		return
 	}
 	items := make([]map[string]any, 0, len(matches))

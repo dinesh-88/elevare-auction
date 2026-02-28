@@ -93,8 +93,15 @@ async function fetchCandidates(email: string) {
   }
 
   if (!response.ok) {
-    const message = payload?.error?.trim() || `Institution lookup failed (${response.status}).`;
-    throw new Error(message);
+    const safeMessage =
+      response.status === 400
+        ? "Enter a valid email address."
+        : response.status === 404
+          ? "No associated institutions found."
+          : response.status === 429
+            ? "Too many requests. Please try again shortly."
+            : "Unable to resolve your institution right now. Please try again shortly.";
+    throw new Error(safeMessage);
   }
 
   return Array.isArray(payload?.items) ? payload!.items : [];
@@ -121,8 +128,16 @@ export async function POST(request: NextRequest) {
   try {
     items = await fetchCandidates(email);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unable to resolve your institution.";
-    return finish(NextResponse.json({ error: message }, { status: 502 }));
+    const message = err instanceof Error ? err.message : "Unable to resolve your institution right now. Please try again shortly.";
+    const status =
+      message === "Enter a valid email address."
+        ? 400
+        : message === "No associated institutions found."
+          ? 404
+          : message === "Too many requests. Please try again shortly."
+            ? 429
+            : 502;
+    return finish(NextResponse.json({ error: message }, { status }));
   }
   const normalized = items
     .map((item) => ({

@@ -113,13 +113,14 @@ func (r *UserRepo) UpdateEmailVerified(ctx context.Context, tenantID, userID uui
 
 func (r *UserRepo) ListTenantLoginCandidatesByEmail(ctx context.Context, email string) ([]port.TenantLoginCandidate, error) {
 	const q = `
-SELECT DISTINCT t.id, t.name, t.subdomain, t.custom_domain
+SELECT t.id, t.name, t.subdomain, t.custom_domain
 FROM users u
 JOIN tenants t ON t.id = u.tenant_id
 WHERE lower(u.email) = lower($1)
   AND t.status = 'ACTIVE'
   AND u.status = 'ACTIVE'
-ORDER BY t.created_at DESC`
+GROUP BY t.id, t.name, t.subdomain, t.custom_domain
+ORDER BY MAX(t.created_at) DESC`
 	rows, err := r.DB.Query(ctx, q, strings.TrimSpace(email))
 	if err != nil {
 		return nil, err
