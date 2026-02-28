@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import Countdown from "../../components/Countdown";
 import BidHistory from "../../components/BidHistory";
 import BidInput from "../../components/BidInput";
@@ -33,8 +33,10 @@ export default function LotDetail({
   initialRelatedLots?: Lot[];
   initialBids?: LotBidHistory[];
 }) {
-  const { lotId } = useParams();
-  const routeLotID = lotID ?? lotId;
+  const params = useParams<{ id?: string; lotId?: string }>();
+  const navigate = useNavigate();
+  const routeLotID = lotID ?? params.lotId;
+  const routeAuctionSlug = params.id ?? initialAuction?.id ?? "";
   const { isAuthenticated, isAdmin, user } = useAuth();
   const [lot, setLot] = useState<Lot | null>(initialLot ?? null);
   const [auctionCurrency, setAuctionCurrency] = useState(initialAuction?.currency ?? "USD");
@@ -49,6 +51,7 @@ export default function LotDetail({
   const [bidMessage, setBidMessage] = useState<string | null>(null);
   const [requestToBidStatus, setRequestToBidStatus] = useState<"PENDING" | "APPROVED" | "REJECTED" | null>(null);
   const [extendedBadge, setExtendedBadge] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(true);
 
   const applyBidResponse = (raw: unknown) => {
     const record = (raw ?? {}) as Record<string, unknown>;
@@ -139,6 +142,37 @@ export default function LotDetail({
     };
   }, [routeLotID, lot, isAuthenticated]);
 
+  useEffect(() => {
+    if (!lot || !isAuthenticated || isAdmin) {
+      setTermsAccepted(true);
+      return;
+    }
+    let cancelled = false;
+    api
+      .getAuctionTermsStatus(lot.auction_id)
+      .then((status) => {
+        if (cancelled) return;
+        if (!status.has_active_terms) {
+          setTermsAccepted(false);
+          return;
+        }
+        setTermsAccepted(status.accepted);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTermsAccepted(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lot, isAuthenticated, isAdmin]);
+
+  const redirectToTerms = () => {
+    const slug = routeAuctionSlug || lot?.auction_id || "";
+    const returnTo = typeof window !== "undefined" ? window.location.pathname : `/auction/${slug}`;
+    navigate(`/auction/${slug}/terms?returnTo=${encodeURIComponent(returnTo)}`);
+  };
+
   useLotSocket(
     routeLotID,
     (event) => {
@@ -206,6 +240,9 @@ export default function LotDetail({
       if (message.toLowerCase().includes("approval")) {
         setRequestToBidStatus("PENDING");
       }
+      if (message.toLowerCase().includes("terms")) {
+        redirectToTerms();
+      }
       throw new Error(message);
     }
   };
@@ -221,6 +258,9 @@ export default function LotDetail({
       const message = err instanceof Error ? err.message : "Failed to place bid";
       if (message.toLowerCase().includes("approval")) {
         setRequestToBidStatus("PENDING");
+      }
+      if (message.toLowerCase().includes("terms")) {
+        redirectToTerms();
       }
       throw new Error(message);
     }
@@ -357,17 +397,28 @@ export default function LotDetail({
             <div className="border-t border-neutral-200 pt-6">
               {isAuthenticated && !isAdmin && lot.status === "LIVE" && auctionStatus === "LIVE" ? (
                 <>
-                  <p className="mb-1 text-sm text-neutral-500">
-                    Minimum Next Bid: {symbol}{minimumNextBid.toLocaleString()}
-                  </p>
-                  <BidInput minimumNextBid={minimumNextBid} currency={symbol} onQuickBid={placeQuickBid} onMaxBid={placeMaxBid} />
-                  {requestToBidStatus !== "APPROVED" ? (
-                    <div className="mt-3">
-                      <button type="button" className="btn-secondary" onClick={requestToBid}>
-                        {requestToBidStatus === "PENDING" ? "Pending approval" : "Request to bid"}
+                  {termsAccepted ? (
+                    <>
+                      <p className="mb-1 text-sm text-neutral-500">
+                        Minimum Next Bid: {symbol}{minimumNextBid.toLocaleString()}
+                      </p>
+                      <BidInput minimumNextBid={minimumNextBid} currency={symbol} onQuickBid={placeQuickBid} onMaxBid={placeMaxBid} />
+                      {requestToBidStatus !== "APPROVED" ? (
+                        <div className="mt-3">
+                          <button type="button" className="btn-secondary" onClick={requestToBid}>
+                            {requestToBidStatus === "PENDING" ? "Pending approval" : "Request to bid"}
+                          </button>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                      <p className="text-sm text-amber-900">You must accept the active auction terms before placing a bid.</p>
+                      <button type="button" className="btn-brand" onClick={redirectToTerms}>
+                        Review Terms
                       </button>
                     </div>
-                  ) : null}
+                  )}
                 </>
               ) : isAuthenticated && !isAdmin && auctionStatus !== "LIVE" ? (
                 <p className="text-sm text-neutral-500">Bidding will open when the auction goes live.</p>

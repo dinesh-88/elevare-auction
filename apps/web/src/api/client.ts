@@ -75,6 +75,38 @@ export interface Auction {
   created_at: string;
 }
 
+export interface AuctionTerms {
+  id: string;
+  auction_id: string;
+  version_number: number;
+  content_markdown: string;
+  content_hash: string;
+  is_active: boolean;
+  created_at: string;
+  created_by_user_id?: string;
+}
+
+export interface BidderTermsAcceptance {
+  id: string;
+  tenant_id: string;
+  auction_id: string;
+  user_id: string;
+  auction_terms_id: string;
+  terms_version_number: number;
+  content_hash: string;
+  accepted_at: string;
+  accepted_ip?: string;
+  accepted_user_agent?: string;
+  created_at: string;
+}
+
+export interface AuctionTermsStatus {
+  has_active_terms: boolean;
+  accepted: boolean;
+  terms: AuctionTerms | null;
+  acceptance: BidderTermsAcceptance | null;
+}
+
 export interface InstitutionSummary {
   id: string;
   slug: string;
@@ -502,6 +534,52 @@ export function normalizeAuction(raw: unknown): Auction {
   };
 }
 
+function normalizeAuctionTerms(raw: unknown): AuctionTerms {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    auction_id: String(r.auction_id ?? r.AuctionID ?? ""),
+    version_number: Number(r.version_number ?? r.VersionNumber ?? 0),
+    content_markdown: String(r.content_markdown ?? r.ContentMarkdown ?? ""),
+    content_hash: String(r.content_hash ?? r.ContentHash ?? ""),
+    is_active: Boolean(r.is_active ?? r.IsActive),
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+    created_by_user_id:
+      r.created_by_user_id != null || r.CreatedByUserID != null ? String(r.created_by_user_id ?? r.CreatedByUserID ?? "") : undefined,
+  };
+}
+
+function normalizeBidderTermsAcceptance(raw: unknown): BidderTermsAcceptance {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    tenant_id: String(r.tenant_id ?? r.TenantID ?? ""),
+    auction_id: String(r.auction_id ?? r.AuctionID ?? ""),
+    user_id: String(r.user_id ?? r.UserID ?? ""),
+    auction_terms_id: String(r.auction_terms_id ?? r.AuctionTermsID ?? ""),
+    terms_version_number: Number(r.terms_version_number ?? r.TermsVersionNumber ?? 0),
+    content_hash: String(r.content_hash ?? r.ContentHash ?? ""),
+    accepted_at: String(r.accepted_at ?? r.AcceptedAt ?? ""),
+    accepted_ip: r.accepted_ip != null || r.AcceptedIP != null ? String(r.accepted_ip ?? r.AcceptedIP ?? "") : undefined,
+    accepted_user_agent:
+      r.accepted_user_agent != null || r.AcceptedUserAgent != null ? String(r.accepted_user_agent ?? r.AcceptedUserAgent ?? "") : undefined,
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
+function normalizeAuctionTermsStatus(raw: unknown): AuctionTermsStatus {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const hasActiveTerms = Boolean(r.has_active_terms ?? r.hasActiveTerms);
+  const termsRaw = (r.terms ?? null) as unknown;
+  const acceptanceRaw = (r.acceptance ?? null) as unknown;
+  return {
+    has_active_terms: hasActiveTerms,
+    accepted: Boolean(r.accepted ?? false),
+    terms: hasActiveTerms && termsRaw ? normalizeAuctionTerms(termsRaw) : null,
+    acceptance: acceptanceRaw ? normalizeBidderTermsAcceptance(acceptanceRaw) : null,
+  };
+}
+
 export function normalizeInstitutionSummary(raw: unknown): InstitutionSummary {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
@@ -830,6 +908,19 @@ export const api = {
     request<{ status: string; before_version: number; after_version: number }>("/admin/site/publish", { method: "POST" }),
   listAuctions: async () => (await request<unknown[]>("/auctions")).map(normalizeAuction),
   getAuction: async (id: string) => normalizeAuction(await request<unknown>(`/auctions/${id}`)),
+  getActiveAuctionTerms: async (auctionId: string) => {
+    const res = await request<{ has_active_terms: boolean } & Record<string, unknown>>(`/auctions/${auctionId}/terms/active`);
+    if (!res.has_active_terms) return null;
+    return normalizeAuctionTerms(res);
+  },
+  getAuctionTermsStatus: async (auctionId: string) => normalizeAuctionTermsStatus(await request<unknown>(`/auctions/${auctionId}/terms/status`)),
+  acceptAuctionTerms: async (auctionId: string) => {
+    const res = await request<{ acceptance: unknown; terms: unknown }>(`/auctions/${auctionId}/terms/accept`, { method: "POST" });
+    return {
+      acceptance: normalizeBidderTermsAcceptance(res.acceptance),
+      terms: normalizeAuctionTerms(res.terms),
+    };
+  },
   listLotsByAuction: async (auctionId: string) => (await request<unknown[]>(`/auctions/${auctionId}/lots`)).map(normalizeLot),
   getLot: async (lotId: string) => normalizeLot(await request<unknown>(`/lots/${lotId}`)),
   getLotFinancials: (lotId: string) => request<LotFinancials>(`/lots/${lotId}/financials`),
@@ -964,6 +1055,12 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ require_bidder_approval: requireBidderApproval }),
     }),
+  listAuctionTerms: async (auctionId: string) =>
+    ((await request<{ items: unknown[] }>(`/admin/auctions/${auctionId}/terms`)).items ?? []).map(normalizeAuctionTerms),
+  createAuctionTerms: async (auctionId: string, payload: { content_markdown: string; publish?: boolean }) =>
+    normalizeAuctionTerms(await request<unknown>(`/admin/auctions/${auctionId}/terms`, { method: "POST", body: JSON.stringify(payload) })),
+  publishAuctionTerms: (auctionId: string, termsId: string) =>
+    request<{ status: string }>(`/admin/auctions/${auctionId}/terms/${termsId}/publish`, { method: "POST" }),
   listAuctionBidders: async (
     auctionId: string,
     filters?: {

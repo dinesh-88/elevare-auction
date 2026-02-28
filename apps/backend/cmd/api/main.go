@@ -38,6 +38,7 @@ func main() {
 	assetRepo := &postgres.AssetRepo{DB: db}
 	demoRequestRepo := &postgres.DemoRequestRepo{DB: db}
 	auctionRepo := &postgres.AuctionRepo{DB: db, Audit: auditRepo}
+	auctionTermsRepo := &postgres.AuctionTermsRepo{DB: db}
 	lotRepo := &postgres.LotRepo{DB: db, Audit: auditRepo}
 	feeRepo := &postgres.FeeRepo{DB: db}
 	invoiceRepo := &postgres.InvoiceRepo{DB: db, Audit: auditRepo}
@@ -52,6 +53,7 @@ func main() {
 
 	authUC := &usecase.AuthUseCase{Users: userRepo, TenantLookup: userRepo, Hasher: hasher, Tokens: jwtSvc}
 	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Tenants: tenantRepo, Broadcaster: hub, Audit: auditRepo}
+	auctionTermsUC := &usecase.AuctionTermsUseCase{Terms: auctionTermsRepo, Auctions: auctionRepo, Audit: auditRepo}
 	notificationService := &usecase.NotificationService{
 		Notifications: notificationRepo,
 		Jobs:          notificationJobsRepo,
@@ -66,6 +68,7 @@ func main() {
 	lotUC := &usecase.LotUseCase{
 		Lots:           lotRepo,
 		Auctions:       auctionRepo,
+		Terms:          auctionTermsRepo,
 		Tenants:        tenantRepo,
 		Users:          userRepo,
 		Bidders:        bidderRepo,
@@ -119,6 +122,7 @@ func main() {
 	h := &httptransport.Handler{
 		Auth:                authUC,
 		Auction:             auctionUC,
+		Terms:               auctionTermsUC,
 		Lot:                 lotUC,
 		Fee:                 feeUC,
 		Invoice:             invoiceUC,

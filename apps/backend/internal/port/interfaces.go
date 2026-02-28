@@ -63,6 +63,15 @@ type AuctionRepository interface {
 	RunSchedulerTick(ctx context.Context, now time.Time) error
 }
 
+type AuctionTermsRepository interface {
+	ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) ([]domain.AuctionTerms, error)
+	GetActiveByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.AuctionTerms, error)
+	GetAcceptance(ctx context.Context, tenantID, auctionID, userID, auctionTermsID uuid.UUID) (*domain.BidderTermsAcceptance, error)
+	CreateVersion(ctx context.Context, item *domain.AuctionTerms) error
+	PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID) error
+	CreateAcceptance(ctx context.Context, item *domain.BidderTermsAcceptance) error
+}
+
 type LotRepository interface {
 	Create(ctx context.Context, tenantID uuid.UUID, lot *domain.Lot) error
 	Update(ctx context.Context, tenantID uuid.UUID, lot *domain.Lot) error

@@ -16,6 +16,7 @@ import (
 type LotUseCase struct {
 	Lots           port.LotRepository
 	Auctions       port.AuctionRepository
+	Terms          port.AuctionTermsRepository
 	Tenants        port.TenantRepository
 	Users          port.UserRepository
 	Bidders        port.BidderRepository
@@ -210,11 +211,31 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 			return nil, ErrBidderSuspended
 		}
 	}
-	if uc.Auctions != nil && uc.Bidders != nil {
-		lot, err := uc.Lots.GetByID(ctx, in.TenantID, in.LotID)
+	var lot *domain.Lot
+	if uc.Auctions != nil || uc.Terms != nil {
+		var err error
+		lot, err = uc.Lots.GetByID(ctx, in.TenantID, in.LotID)
 		if err != nil {
 			return nil, err
 		}
+	}
+	if uc.Terms != nil {
+		activeTerms, err := uc.Terms.GetActiveByAuction(ctx, in.TenantID, lot.AuctionID)
+		if err != nil {
+			return nil, err
+		}
+		if activeTerms == nil {
+			return nil, ErrTermsUnavailable
+		}
+		acceptance, err := uc.Terms.GetAcceptance(ctx, in.TenantID, lot.AuctionID, in.UserID, activeTerms.ID)
+		if err != nil {
+			return nil, err
+		}
+		if acceptance == nil || acceptance.ContentHash != activeTerms.ContentHash {
+			return nil, ErrTermsRequired
+		}
+	}
+	if uc.Auctions != nil && uc.Bidders != nil {
 		auction, err := uc.Auctions.GetByID(ctx, in.TenantID, lot.AuctionID)
 		if err != nil {
 			return nil, err

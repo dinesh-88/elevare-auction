@@ -24,6 +24,7 @@ import (
 type Handler struct {
 	Auth                *usecase.AuthUseCase
 	Auction             *usecase.AuctionUseCase
+	Terms               *usecase.AuctionTermsUseCase
 	Lot                 *usecase.LotUseCase
 	Fee                 *usecase.FeeUseCase
 	Invoice             *usecase.InvoiceUseCase
@@ -1541,7 +1542,9 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, usecase.ErrPendingApproval),
 			errors.Is(err, usecase.ErrNotApproved),
 			errors.Is(err, usecase.ErrBidderSuspended),
-			errors.Is(err, usecase.ErrSimulatorBlocked):
+			errors.Is(err, usecase.ErrSimulatorBlocked),
+			errors.Is(err, usecase.ErrTermsRequired),
+			errors.Is(err, usecase.ErrTermsUnavailable):
 			http.Error(w, err.Error(), http.StatusForbidden)
 		default:
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1558,6 +1561,166 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 			"created_at":   res.Bid.CreatedAt,
 		},
 	})
+}
+
+func (h *Handler) GetActiveAuctionTerms(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Terms.GetActive(r.Context(), tenant.ID, auctionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if item == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"has_active_terms": false,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"has_active_terms": true,
+		"id":               item.ID,
+		"auction_id":       item.AuctionID,
+		"version_number":   item.VersionNumber,
+		"content_markdown": item.ContentMarkdown,
+		"content_hash":     item.ContentHash,
+		"is_active":        item.IsActive,
+		"created_at":       item.CreatedAt,
+	})
+}
+
+func (h *Handler) GetAuctionTermsStatus(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	active, acceptance, err := h.Terms.GetBidderStatus(r.Context(), tenant.ID, auctionID, claims.UserID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if active == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"has_active_terms": false,
+			"accepted":         false,
+		})
+		return
+	}
+	accepted := acceptance != nil && acceptance.ContentHash == active.ContentHash
+	writeJSON(w, http.StatusOK, map[string]any{
+		"has_active_terms": true,
+		"accepted":         accepted,
+		"terms": map[string]any{
+			"id":               active.ID,
+			"auction_id":       active.AuctionID,
+			"version_number":   active.VersionNumber,
+			"content_markdown": active.ContentMarkdown,
+			"content_hash":     active.ContentHash,
+			"is_active":        active.IsActive,
+			"created_at":       active.CreatedAt,
+		},
+		"acceptance": acceptance,
+	})
+}
+
+func (h *Handler) AcceptAuctionTerms(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		http.Error(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	if claims.Role != domain.RoleBidder {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	meta, _ := middleware.RequestMetaFromContext(r.Context())
+	item, active, err := h.Terms.AcceptActive(r.Context(), tenant.ID, auctionID, claims.UserID, time.Now().UTC(), meta.IP, meta.UserAgent)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrTermsUnavailable) {
+			status = http.StatusForbidden
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"acceptance": item,
+		"terms":      active,
+	})
+}
+
+func (h *Handler) ListAuctionTerms(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	items, err := h.Terms.ListByAuction(r.Context(), tenant.ID, auctionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *Handler) CreateAuctionTerms(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		ContentMarkdown string `json:"content_markdown"`
+		Publish         bool   `json:"publish"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Terms.CreateVersion(r.Context(), tenant.ID, auctionID, req.ContentMarkdown, req.Publish)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) PublishAuctionTerms(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	auctionTermsID, err := uuid.Parse(chi.URLParam(r, "termsId"))
+	if err != nil {
+		http.Error(w, "invalid terms id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Terms.PublishVersion(r.Context(), tenant.ID, auctionID, auctionTermsID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "PUBLISHED"})
 }
 
 func (h *Handler) RequestToBid(w http.ResponseWriter, r *http.Request) {

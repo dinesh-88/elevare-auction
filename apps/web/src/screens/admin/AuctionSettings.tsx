@@ -105,9 +105,14 @@ export default function AuctionSettings() {
           <h1 className="section-title">Auction Settings</h1>
           <p className="section-copy">Configure soft close behaviour for this auction.</p>
         </div>
-        <Link className="btn-secondary" to={`/admin/auctions/${auction.id}/lots`}>
-          Back to Lots
-        </Link>
+        <div className="flex gap-2">
+          <Link className="btn-secondary" to={`/admin/auctions/${auction.id}/terms`}>
+            Manage Terms
+          </Link>
+          <Link className="btn-secondary" to={`/admin/auctions/${auction.id}/lots`}>
+            Back to Lots
+          </Link>
+        </div>
       </header>
 
       {error ? <p className="error mb-3">{error}</p> : null}

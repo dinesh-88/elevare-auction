@@ -147,6 +147,32 @@ type Auction struct {
 	CreatedAt               time.Time
 }
 
+type AuctionTerms struct {
+	ID              uuid.UUID
+	TenantID        uuid.UUID
+	AuctionID       uuid.UUID
+	VersionNumber   int
+	ContentMarkdown string
+	ContentHash     string
+	IsActive        bool
+	CreatedByUserID uuid.UUID
+	CreatedAt       time.Time
+}
+
+type BidderTermsAcceptance struct {
+	ID                 uuid.UUID
+	TenantID           uuid.UUID
+	AuctionID          uuid.UUID
+	UserID             uuid.UUID
+	AuctionTermsID     uuid.UUID
+	TermsVersionNumber int
+	ContentHash        string
+	AcceptedAt         time.Time
+	AcceptedIP         string
+	AcceptedUserAgent  string
+	CreatedAt          time.Time
+}
+
 type TenantBidderStatus string
 
 const (

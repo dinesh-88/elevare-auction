@@ -15,4 +15,6 @@ var (
 	ErrSimulatorBlocked  = errors.New("simulator bidder is restricted to the demo tenant")
 	ErrBidLimitExceeded  = errors.New("Your bid exceeds your authorised limit.")
 	ErrDepositNeeded     = errors.New("A deposit is required before bidding.")
+	ErrTermsUnavailable  = errors.New("active auction terms are not available")
+	ErrTermsRequired     = errors.New("auction terms must be accepted before bidding")
 )
