@@ -175,6 +175,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.With(authz.Require(domain.PermissionFeesManage)).Get("/taxes/assignments", h.ListTaxAssignments)
 			r.With(authz.Require(domain.PermissionFeesManage)).Post("/taxes/assignments", h.CreateTaxAssignment)
 			r.With(authz.Require(domain.PermissionFeesManage)).Delete("/taxes/assignments/{id}", h.DeleteTaxAssignment)
+			r.With(authz.Require(domain.PermissionAuctionStart)).Post("/simulator/trigger", h.TriggerBidSimulation)
 			r.With(authz.Require(domain.PermissionInvoiceMarkPaid)).Patch("/invoices/{invoiceId}/status", h.UpdateInvoiceStatus)
 			r.With(authz.Require(domain.PermissionInvoiceView)).Get("/auctions/{auctionId}/settlement-summary", h.GetAuctionSettlementSummary)
 			r.With(authz.Require(domain.PermissionInvoiceView)).Get("/auctions/{auctionId}/invoices", h.ListAuctionInvoices)

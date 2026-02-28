@@ -17,6 +17,7 @@ import (
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/dinesh-88/elevare-auction/internal/usecase"
+	"github.com/dinesh-88/elevare-auction/internal/worker"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -36,6 +37,7 @@ type Handler struct {
 	Asset               *usecase.AssetUseCase
 	Onboarding          *usecase.OnboardingUseCase
 	DemoRequest         *usecase.DemoRequestUseCase
+	Simulator           *worker.BidSimulator
 	Storage             port.ObjectStorage
 	PreviewToken        string
 	JWTTTL              time.Duration
@@ -2073,6 +2075,23 @@ func (h *Handler) DeleteTaxAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "DELETED"})
+}
+
+func (h *Handler) TriggerBidSimulation(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	if h.Simulator == nil {
+		writeErrorText(w, "bid simulator unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.Simulator.TriggerForTenant(r.Context(), tenant); err != nil {
+		status := http.StatusBadRequest
+		if strings.Contains(strings.ToLower(err.Error()), "restricted to the configured demo tenant") {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "TRIGGERED"})
 }
 
 func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {

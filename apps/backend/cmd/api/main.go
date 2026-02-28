@@ -126,6 +126,20 @@ func main() {
 		log.Fatalf("unsupported STORAGE_PROVIDER: %s", cfg.StorageProvider)
 	}
 
+	bidSimulator := &worker.BidSimulator{
+		Tenants:            tenantRepo,
+		Auctions:           auctionRepo,
+		Terms:              auctionTermsRepo,
+		Lots:               lotRepo,
+		Users:              userRepo,
+		Bidders:            bidderRepo,
+		BidPlacer:          lotUC,
+		DemoTenantSlug:     cfg.DemoTenantSlug,
+		Interval:           cfg.BidSimInterval,
+		IdleThreshold:      cfg.BidSimIdleThreshold,
+		MaxEventsPerMinute: cfg.BidSimMaxEvents,
+		Logger:             log.Default(),
+	}
 	h := &httptransport.Handler{
 		Auth:                authUC,
 		Auction:             auctionUC,
@@ -141,6 +155,7 @@ func main() {
 		Asset:               assetUC,
 		Onboarding:          onboardingUC,
 		DemoRequest:         demoRequestUC,
+		Simulator:           bidSimulator,
 		Storage:             objectStorage,
 		PreviewToken:        cfg.SitePreviewToken,
 		JWTTTL:              cfg.JWTTTL,
@@ -156,19 +171,6 @@ func main() {
 
 	router := httptransport.NewRouter(h, tenantMW, authMW, hub, cfg.PlatformAdminToken, cfg.UploadsDir, serveLocalUploads)
 	httptransport.StartScheduler(ctx, auctionUC, lotUC, 5*time.Second)
-	bidSimulator := &worker.BidSimulator{
-		Tenants:            tenantRepo,
-		Auctions:           auctionRepo,
-		Lots:               lotRepo,
-		Users:              userRepo,
-		Bidders:            bidderRepo,
-		BidPlacer:          lotUC,
-		DemoTenantSlug:     cfg.DemoTenantSlug,
-		Interval:           cfg.BidSimInterval,
-		IdleThreshold:      cfg.BidSimIdleThreshold,
-		MaxEventsPerMinute: cfg.BidSimMaxEvents,
-		Logger:             log.Default(),
-	}
 	if bidSimulator.Enabled() {
 		go func() {
 			if err := bidSimulator.Run(ctx); err != nil && err != context.Canceled {

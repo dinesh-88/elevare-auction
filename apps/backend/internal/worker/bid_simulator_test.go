@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
 )
@@ -47,7 +48,9 @@ func (f *fakeBidSimTenantRepo) PublishSiteDraft(ctx context.Context, tenantID uu
 }
 
 type fakeBidSimAuctionRepo struct {
-	auctions []domain.Auction
+	auctions          []domain.Auction
+	updateCalls       int
+	updateStatusCalls int
 }
 
 func (f *fakeBidSimAuctionRepo) Create(ctx context.Context, auction *domain.Auction) error {
@@ -63,13 +66,27 @@ func (f *fakeBidSimAuctionRepo) GetByID(ctx context.Context, tenantID, auctionID
 	return nil, errors.New("unused")
 }
 func (f *fakeBidSimAuctionRepo) Update(ctx context.Context, auction *domain.Auction) error {
-	return errors.New("unused")
+	f.updateCalls++
+	for i := range f.auctions {
+		if f.auctions[i].ID == auction.ID {
+			f.auctions[i] = *auction
+			return nil
+		}
+	}
+	return nil
 }
 func (f *fakeBidSimAuctionRepo) Delete(ctx context.Context, tenantID, auctionID uuid.UUID) error {
 	return errors.New("unused")
 }
 func (f *fakeBidSimAuctionRepo) UpdateStatus(ctx context.Context, tenantID, auctionID uuid.UUID, status domain.AuctionStatus) error {
-	return errors.New("unused")
+	f.updateStatusCalls++
+	for i := range f.auctions {
+		if f.auctions[i].ID == auctionID {
+			f.auctions[i].Status = status
+			return nil
+		}
+	}
+	return nil
 }
 func (f *fakeBidSimAuctionRepo) UpdateRequireBidderApproval(ctx context.Context, tenantID, auctionID uuid.UUID, required bool) error {
 	return errors.New("unused")
@@ -79,9 +96,10 @@ func (f *fakeBidSimAuctionRepo) RunSchedulerTick(ctx context.Context, now time.T
 }
 
 type fakeBidSimLotRepo struct {
-	lots       []domain.Lot
-	bidsByLot  map[uuid.UUID][]domain.Bid
-	bidsCalled int
+	lots                []domain.Lot
+	bidsByLot           map[uuid.UUID][]domain.Bid
+	bidsCalled          int
+	onAuctionStartCalls int
 }
 
 func (f *fakeBidSimLotRepo) Create(ctx context.Context, tenantID uuid.UUID, lot *domain.Lot) error {
@@ -109,7 +127,24 @@ func (f *fakeBidSimLotRepo) End(ctx context.Context, tenantID, lotID uuid.UUID, 
 	return nil, errors.New("unused")
 }
 func (f *fakeBidSimLotRepo) OnAuctionStart(ctx context.Context, tenantID, auctionID uuid.UUID, now time.Time) error {
-	return errors.New("unused")
+	f.onAuctionStartCalls++
+	for i := range f.lots {
+		if f.lots[i].AuctionID != auctionID {
+			continue
+		}
+		if f.lots[i].Status == domain.LotEnded {
+			continue
+		}
+		if f.lots[i].Status == domain.LotPending || f.lots[i].Status == domain.LotPaused {
+			f.lots[i].Status = domain.LotLive
+			f.lots[i].StartedAt = ptrTime(now)
+			if f.lots[i].EndedAt == nil {
+				f.lots[i].EndedAt = ptrTime(now.Add(time.Minute))
+			}
+			break
+		}
+	}
+	return nil
 }
 func (f *fakeBidSimLotRepo) PlaceBidTx(ctx context.Context, in port.PlaceLotBidTxInput) (*port.PlaceLotBidTxResult, error) {
 	return nil, errors.New("unused")
@@ -197,14 +232,59 @@ func (f *fakeBidSimBidderRepo) ListAuctionBidders(ctx context.Context, tenantID,
 }
 
 type fakeBidPlacer struct {
-	calls int
-	last  port.PlaceLotBidTxInput
+	calls      int
+	last       port.PlaceLotBidTxInput
+	lastClaims *port.TokenClaims
 }
 
 func (f *fakeBidPlacer) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) (*port.PlaceLotBidTxResult, error) {
 	f.calls++
 	f.last = in
+	if claims, ok := middleware.ClaimsFromContext(ctx); ok {
+		f.lastClaims = claims
+	}
 	return &port.PlaceLotBidTxResult{}, nil
+}
+
+type fakeBidSimTermsRepo struct {
+	activeByLocale map[domain.Locale]*domain.AuctionTerms
+	acceptances    map[string]*domain.BidderTermsAcceptance
+	createCalls    int
+}
+
+func (f *fakeBidSimTermsRepo) ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID, locale domain.Locale) ([]domain.AuctionTerms, error) {
+	return nil, errors.New("unused")
+}
+func (f *fakeBidSimTermsRepo) GetActiveByAuction(ctx context.Context, tenantID, auctionID uuid.UUID, locale domain.Locale) (*domain.AuctionTerms, error) {
+	if f.activeByLocale == nil {
+		return nil, nil
+	}
+	return f.activeByLocale[locale], nil
+}
+func (f *fakeBidSimTermsRepo) GetAcceptance(ctx context.Context, tenantID, auctionID, userID, auctionTermsID uuid.UUID) (*domain.BidderTermsAcceptance, error) {
+	if f.acceptances == nil {
+		return nil, nil
+	}
+	return f.acceptances[acceptanceKey(auctionID, userID, auctionTermsID)], nil
+}
+func (f *fakeBidSimTermsRepo) CreateVersion(ctx context.Context, item *domain.AuctionTerms) error {
+	return errors.New("unused")
+}
+func (f *fakeBidSimTermsRepo) PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID, locale domain.Locale) error {
+	return errors.New("unused")
+}
+func (f *fakeBidSimTermsRepo) CreateAcceptance(ctx context.Context, item *domain.BidderTermsAcceptance) error {
+	f.createCalls++
+	if f.acceptances == nil {
+		f.acceptances = map[string]*domain.BidderTermsAcceptance{}
+	}
+	copy := *item
+	f.acceptances[acceptanceKey(item.AuctionID, item.UserID, item.AuctionTermsID)] = &copy
+	return nil
+}
+
+func acceptanceKey(auctionID, userID, termsID uuid.UUID) string {
+	return auctionID.String() + ":" + userID.String() + ":" + termsID.String()
 }
 
 func TestBidSimulator_ProcessOnceNoopWithoutDemoTenant(t *testing.T) {
@@ -230,9 +310,10 @@ func TestBidSimulator_ProcessOnceNoopWhenNoLiveAuction(t *testing.T) {
 	tenantID := uuid.New()
 	tenants := &fakeBidSimTenantRepo{tenant: &domain.Tenant{ID: tenantID, Subdomain: "demo"}}
 	placer := &fakeBidPlacer{}
+	auctions := &fakeBidSimAuctionRepo{auctions: []domain.Auction{{ID: uuid.New(), TenantID: tenantID, Status: domain.AuctionScheduled}}}
 	sim := &BidSimulator{
 		Tenants:        tenants,
-		Auctions:       &fakeBidSimAuctionRepo{auctions: []domain.Auction{{ID: uuid.New(), TenantID: tenantID, Status: domain.AuctionScheduled}}},
+		Auctions:       auctions,
 		Lots:           &fakeBidSimLotRepo{},
 		Users:          &fakeBidSimUserRepo{},
 		Bidders:        &fakeBidSimBidderRepo{},
@@ -246,6 +327,9 @@ func TestBidSimulator_ProcessOnceNoopWhenNoLiveAuction(t *testing.T) {
 	}
 	if placer.calls != 0 {
 		t.Fatal("expected no bid placement")
+	}
+	if auctions.updateStatusCalls != 1 {
+		t.Fatalf("expected simulator to promote a demo auction, got %d status updates", auctions.updateStatusCalls)
 	}
 }
 
@@ -315,6 +399,107 @@ func TestBidSimulator_UsesPlaceBidApplicationFlow(t *testing.T) {
 	}
 	if placer.last.Amount == nil || *placer.last.Amount != 650 {
 		t.Fatalf("expected reserve-respecting bid amount, got %+v", placer.last.Amount)
+	}
+	if placer.lastClaims == nil {
+		t.Fatal("expected simulator claims in bid context")
+	}
+	if placer.lastClaims.TenantID != tenantID || placer.lastClaims.Role != domain.RoleBidder {
+		t.Fatalf("unexpected claims: %+v", placer.lastClaims)
+	}
+	if placer.lastClaims.Locale != domain.LocaleEnglish {
+		t.Fatalf("expected english locale, got %s", placer.lastClaims.Locale)
+	}
+}
+
+func TestBidSimulator_AcceptsActiveTermsBeforeBidding(t *testing.T) {
+	now := time.Unix(4_000, 0).UTC()
+	tenantID := uuid.New()
+	auctionID := uuid.New()
+	lotID := uuid.New()
+	termsID := uuid.New()
+	placer := &fakeBidPlacer{}
+	terms := &fakeBidSimTermsRepo{
+		activeByLocale: map[domain.Locale]*domain.AuctionTerms{
+			domain.LocaleFrench: {
+				ID:            termsID,
+				TenantID:      tenantID,
+				AuctionID:     auctionID,
+				Locale:        domain.LocaleFrench,
+				VersionNumber: 3,
+				ContentHash:   "hash-fr",
+				IsActive:      true,
+			},
+		},
+	}
+	sim := &BidSimulator{
+		Tenants: &fakeBidSimTenantRepo{tenant: &domain.Tenant{ID: tenantID, Subdomain: "demo"}},
+		Auctions: &fakeBidSimAuctionRepo{auctions: []domain.Auction{{
+			ID: auctionID, TenantID: tenantID, Status: domain.AuctionLive, EndTime: now.Add(time.Hour),
+		}}},
+		Terms: terms,
+		Lots: &fakeBidSimLotRepo{
+			lots:      []domain.Lot{{ID: lotID, AuctionID: auctionID, LotNumber: "7", Status: domain.LotLive, CurrentPrice: 500, MinIncrement: 50, EndedAt: ptrTime(now.Add(time.Minute))}},
+			bidsByLot: map[uuid.UUID][]domain.Bid{},
+		},
+		Users:          &fakeBidSimUserRepo{},
+		Bidders:        &fakeBidSimBidderRepo{},
+		BidPlacer:      placer,
+		DemoTenantSlug: "demo",
+		Now:            func() time.Time { return now },
+	}
+
+	if err := sim.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("ProcessOnce failed: %v", err)
+	}
+	if terms.createCalls != 1 {
+		t.Fatalf("expected one terms acceptance, got %d", terms.createCalls)
+	}
+	if placer.calls != 1 {
+		t.Fatalf("expected one bid placement, got %d", placer.calls)
+	}
+	if placer.lastClaims == nil || placer.lastClaims.Locale != domain.LocaleFrench {
+		t.Fatalf("expected french claims locale, got %+v", placer.lastClaims)
+	}
+}
+
+func TestBidSimulator_StartsPendingLotWhenNoLiveLots(t *testing.T) {
+	now := time.Unix(5_000, 0).UTC()
+	tenantID := uuid.New()
+	auctionID := uuid.New()
+	lotID := uuid.New()
+	placer := &fakeBidPlacer{}
+	lots := &fakeBidSimLotRepo{
+		lots: []domain.Lot{{
+			ID:           lotID,
+			AuctionID:    auctionID,
+			LotNumber:    "9",
+			Status:       domain.LotPending,
+			CurrentPrice: 100,
+			MinIncrement: 10,
+		}},
+		bidsByLot: map[uuid.UUID][]domain.Bid{},
+	}
+	sim := &BidSimulator{
+		Tenants: &fakeBidSimTenantRepo{tenant: &domain.Tenant{ID: tenantID, Subdomain: "demo"}},
+		Auctions: &fakeBidSimAuctionRepo{auctions: []domain.Auction{{
+			ID: auctionID, TenantID: tenantID, Status: domain.AuctionLive, EndTime: now.Add(time.Hour),
+		}}},
+		Lots:           lots,
+		Users:          &fakeBidSimUserRepo{},
+		Bidders:        &fakeBidSimBidderRepo{},
+		BidPlacer:      placer,
+		DemoTenantSlug: "demo",
+		Now:            func() time.Time { return now },
+	}
+
+	if err := sim.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("ProcessOnce failed: %v", err)
+	}
+	if lots.onAuctionStartCalls != 1 {
+		t.Fatalf("expected lot activation, got %d", lots.onAuctionStartCalls)
+	}
+	if placer.calls != 1 {
+		t.Fatalf("expected bid placement after lot activation, got %d", placer.calls)
 	}
 }
 
