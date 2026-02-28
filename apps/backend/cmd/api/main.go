@@ -13,6 +13,7 @@ import (
 	"github.com/dinesh-88/elevare-auction/internal/adapter/repo/postgres"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/security"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/storage"
+	"github.com/dinesh-88/elevare-auction/internal/bootstrap"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	httptransport "github.com/dinesh-88/elevare-auction/internal/transport/http"
@@ -25,6 +26,10 @@ func main() {
 	defer stop()
 
 	cfg := httptransport.LoadConfig()
+
+	if err := bootstrap.RunMigrations(cfg.DatabaseURL); err != nil {
+		log.Fatalf("migration failed: %v", err)
+	}
 
 	db, err := postgres.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
