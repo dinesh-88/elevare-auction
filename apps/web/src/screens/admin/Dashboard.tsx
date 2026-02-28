@@ -158,9 +158,9 @@ export default function Dashboard() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">Review Legal Terms</p>
                   <p className="mt-2 text-sm text-neutral-700">Confirm the legal wording and support contacts captured during activation.</p>
                 </Link>
-                <Link className="rounded-2xl border border-neutral-200 bg-white p-4 text-left transition hover:border-neutral-300" to="/admin/settings">
+                <Link className="rounded-2xl border border-neutral-200 bg-white p-4 text-left transition hover:border-neutral-300" to="/admin/staff">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">Invite Staff</p>
-                  <p className="mt-2 text-sm text-neutral-700">Use settings as the operational handoff point while staff access setup is finalized.</p>
+                  <p className="mt-2 text-sm text-neutral-700">Send role-based invitations and keep a single primary owner in place.</p>
                 </Link>
               </div>
             </section>

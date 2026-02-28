@@ -11,6 +11,7 @@ import (
 type AuthMiddleware struct {
 	Tokens            port.TokenService
 	AccessTokenCookie string
+	Permissions       port.PermissionRepository
 }
 
 func (m AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
@@ -43,6 +44,11 @@ func (m AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 		if !ok || claims.TenantID != tenant.ID {
 			writeError(w, "cross-tenant token", http.StatusUnauthorized)
 			return
+		}
+		if m.Permissions != nil {
+			if role, err := m.Permissions.GetEffectiveRole(r.Context(), claims.TenantID, claims.UserID); err == nil && role != "" {
+				claims.Role = role
+			}
 		}
 		next.ServeHTTP(w, r.WithContext(WithClaims(r.Context(), claims)))
 	})

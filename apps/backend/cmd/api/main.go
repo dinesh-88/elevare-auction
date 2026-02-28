@@ -14,6 +14,7 @@ import (
 	"github.com/dinesh-88/elevare-auction/internal/adapter/repo/postgres"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/security"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/storage"
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/bootstrap"
 	emailtpl "github.com/dinesh-88/elevare-auction/internal/email"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
@@ -49,6 +50,7 @@ func main() {
 	lotRepo := &postgres.LotRepo{DB: db, Audit: auditRepo}
 	feeRepo := &postgres.FeeRepo{DB: db}
 	taxRepo := &postgres.TaxRepo{DB: db}
+	staffRepo := &postgres.StaffRepo{DB: db}
 	emailOutboxRepo := &postgres.EmailOutboxRepo{DB: db}
 	invoiceRepo := &postgres.InvoiceRepo{DB: db, Audit: auditRepo}
 	notificationRepo := &postgres.NotificationRepo{DB: db}
@@ -115,6 +117,7 @@ func main() {
 	taxUC := &usecase.TaxUseCase{Taxes: taxRepo, Audit: auditRepo}
 	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo, Audit: auditRepo, Notifier: notificationService}
 	bidderUC := &usecase.BidderUseCase{Users: userRepo, Bidders: bidderRepo, Auctions: auctionRepo, Audit: auditRepo}
+	staffUC := &usecase.StaffUseCase{Staff: staffRepo, Users: userRepo, Hasher: hasher, Tokens: jwtSvc, EmailOutbox: emailOutboxSvc}
 	auditUC := &usecase.AuditUseCase{Audit: auditRepo}
 	siteUC := &usecase.SiteUseCase{Tenants: tenantRepo}
 	assetUC := &usecase.AssetUseCase{Assets: assetRepo}
@@ -177,6 +180,7 @@ func main() {
 		Tax:                 taxUC,
 		Invoice:             invoiceUC,
 		Bidder:              bidderUC,
+		Staff:               staffUC,
 		Audit:               auditUC,
 		Notification:        notificationUC,
 		EmailOutbox:         emailOutboxSvc,
@@ -197,7 +201,8 @@ func main() {
 		InternalEmailSecret: cfg.InternalEmailSecret,
 	}
 	tenantMW := middleware.TenantMiddleware{Tenants: tenantRepo}
-	authMW := middleware.AuthMiddleware{Tokens: jwtSvc, AccessTokenCookie: cfg.AccessTokenCookie}
+	authz.SetPermissionChecker(staffRepo)
+	authMW := middleware.AuthMiddleware{Tokens: jwtSvc, AccessTokenCookie: cfg.AccessTokenCookie, Permissions: staffRepo}
 
 	router := httptransport.NewRouter(h, tenantMW, authMW, hub, cfg.PlatformAdminToken, cfg.UploadsDir, serveLocalUploads)
 	httptransport.StartScheduler(ctx, auctionUC, lotUC, 5*time.Second)

@@ -31,6 +31,7 @@ type Handler struct {
 	Tax                 *usecase.TaxUseCase
 	Invoice             *usecase.InvoiceUseCase
 	Bidder              *usecase.BidderUseCase
+	Staff               *usecase.StaffUseCase
 	Audit               *usecase.AuditUseCase
 	Notification        *usecase.NotificationUseCase
 	EmailOutbox         *usecase.EmailOutboxService
@@ -88,6 +89,27 @@ type authUserResponse struct {
 	ApprovalStatus domain.ApprovalStatus `json:"approval_status"`
 	KYCStatus      domain.KYCStatus      `json:"kyc_status"`
 	CreatedAt      time.Time             `json:"created_at"`
+}
+
+type tenantUserResponse struct {
+	ID             uuid.UUID   `json:"id"`
+	TenantID       uuid.UUID   `json:"tenant_id"`
+	UserID         uuid.UUID   `json:"user_id"`
+	Role           domain.Role `json:"role"`
+	IsPrimaryOwner bool        `json:"is_primary_owner"`
+	InvitedBy      *uuid.UUID  `json:"invited_by,omitempty"`
+	CreatedAt      time.Time   `json:"created_at"`
+}
+
+type tenantInvitationResponse struct {
+	ID         uuid.UUID   `json:"id"`
+	TenantID   uuid.UUID   `json:"tenant_id"`
+	Email      string      `json:"email"`
+	Role       domain.Role `json:"role"`
+	ExpiresAt  time.Time   `json:"expires_at"`
+	AcceptedAt *time.Time  `json:"accepted_at,omitempty"`
+	InvitedBy  *uuid.UUID  `json:"invited_by,omitempty"`
+	CreatedAt  time.Time   `json:"created_at"`
 }
 
 type bidHistoryPublicResponse struct {
@@ -703,6 +725,31 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "verified"})
 }
 
+func (h *Handler) AcceptTenantInvitation(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	var req struct {
+		Token    string `json:"token"`
+		Password string `json:"password"`
+		Locale   string `json:"locale"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	token, user, err := h.Staff.AcceptInvitation(r.Context(), usecase.AcceptInvitationInput{
+		TenantID: tenant.ID,
+		Token:    req.Token,
+		Password: req.Password,
+		Locale:   req.Locale,
+	})
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	h.setSessionCookies(w, token)
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "user": toAuthUserResponse(user)})
+}
+
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	var req struct {
@@ -744,6 +791,75 @@ func (h *Handler) Session(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": toAuthUserResponse(user)})
+}
+
+func (h *Handler) ListStaff(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	users, invitations, err := h.Staff.List(r.Context(), tenant.ID)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	userRows := make([]tenantUserResponse, 0, len(users))
+	for _, item := range users {
+		userRows = append(userRows, toTenantUserResponse(item))
+	}
+	inviteRows := make([]tenantInvitationResponse, 0, len(invitations))
+	for _, item := range invitations {
+		inviteRows = append(inviteRows, toTenantInvitationResponse(item))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": userRows, "invitations": inviteRows})
+}
+
+func (h *Handler) CreateStaffInvitation(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		Email      string      `json:"email"`
+		Role       domain.Role `json:"role"`
+		InviteBase string      `json:"invite_base"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	item, _, err := h.Staff.Invite(r.Context(), usecase.InviteStaffInput{
+		TenantID:   tenant.ID,
+		Email:      req.Email,
+		Role:       req.Role,
+		InvitedBy:  claims.UserID,
+		InviteBase: req.InviteBase,
+	})
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, toTenantInvitationResponse(*item))
+}
+
+func (h *Handler) UpdateStaffRole(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	tenantUserID, err := uuid.Parse(chi.URLParam(r, "tenantUserId"))
+	if err != nil {
+		writeErrorText(w, "invalid staff id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Role domain.Role `json:"role"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	if err := h.Staff.UpdateRole(r.Context(), tenant.ID, tenantUserID, req.Role); err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
@@ -2437,6 +2553,31 @@ func toAuthUserResponse(user *domain.User) authUserResponse {
 		ApprovalStatus: user.ApprovalStatus,
 		KYCStatus:      user.KYCStatus,
 		CreatedAt:      user.CreatedAt,
+	}
+}
+
+func toTenantUserResponse(item domain.TenantUser) tenantUserResponse {
+	return tenantUserResponse{
+		ID:             item.ID,
+		TenantID:       item.TenantID,
+		UserID:         item.UserID,
+		Role:           item.Role,
+		IsPrimaryOwner: item.IsPrimaryOwner,
+		InvitedBy:      item.InvitedBy,
+		CreatedAt:      item.CreatedAt,
+	}
+}
+
+func toTenantInvitationResponse(item domain.TenantInvitation) tenantInvitationResponse {
+	return tenantInvitationResponse{
+		ID:         item.ID,
+		TenantID:   item.TenantID,
+		Email:      item.Email,
+		Role:       item.Role,
+		ExpiresAt:  item.ExpiresAt,
+		AcceptedAt: item.AcceptedAt,
+		InvitedBy:  item.InvitedBy,
+		CreatedAt:  item.CreatedAt,
 	}
 }
 

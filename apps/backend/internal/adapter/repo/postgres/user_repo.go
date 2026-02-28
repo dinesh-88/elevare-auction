@@ -36,8 +36,10 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())`
 
 func (r *UserRepo) GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*domain.User, error) {
 	const q = `
-SELECT id, tenant_id, email, password_hash, locale, role, status, email_verified, approval_status, kyc_status, created_at
-FROM users WHERE tenant_id = $1 AND email = $2`
+SELECT u.id, u.tenant_id, u.email, u.password_hash, u.locale, COALESCE(tu.role, u.role) AS role, u.status, u.email_verified, u.approval_status, u.kyc_status, u.created_at
+FROM users u
+LEFT JOIN tenant_users tu ON tu.tenant_id = u.tenant_id AND tu.user_id = u.id
+WHERE u.tenant_id = $1 AND u.email = $2`
 	var u domain.User
 	err := r.DB.QueryRow(ctx, q, tenantID, email).Scan(
 		&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Locale, &u.Role, &u.Status, &u.EmailVerified, &u.ApprovalStatus, &u.KYCStatus, &u.CreatedAt,
@@ -53,8 +55,10 @@ FROM users WHERE tenant_id = $1 AND email = $2`
 
 func (r *UserRepo) GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error) {
 	const q = `
-SELECT id, tenant_id, email, password_hash, locale, role, status, email_verified, approval_status, kyc_status, created_at
-FROM users WHERE tenant_id = $1 AND id = $2`
+SELECT u.id, u.tenant_id, u.email, u.password_hash, u.locale, COALESCE(tu.role, u.role) AS role, u.status, u.email_verified, u.approval_status, u.kyc_status, u.created_at
+FROM users u
+LEFT JOIN tenant_users tu ON tu.tenant_id = u.tenant_id AND tu.user_id = u.id
+WHERE u.tenant_id = $1 AND u.id = $2`
 	var u domain.User
 	err := r.DB.QueryRow(ctx, q, tenantID, userID).Scan(
 		&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Locale, &u.Role, &u.Status, &u.EmailVerified, &u.ApprovalStatus, &u.KYCStatus, &u.CreatedAt,
@@ -115,6 +119,18 @@ func (r *UserRepo) UpdateApproval(ctx context.Context, tenantID, userID uuid.UUI
 func (r *UserRepo) UpdateEmailVerified(ctx context.Context, tenantID, userID uuid.UUID, verified bool) error {
 	const q = `UPDATE users SET email_verified = $3 WHERE tenant_id = $1 AND id = $2`
 	ct, err := r.DB.Exec(ctx, q, tenantID, userID, verified)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
+}
+
+func (r *UserRepo) UpdateRole(ctx context.Context, tenantID, userID uuid.UUID, role domain.Role) error {
+	const q = `UPDATE users SET role = $3 WHERE tenant_id = $1 AND id = $2`
+	ct, err := r.DB.Exec(ctx, q, tenantID, userID, role)
 	if err != nil {
 		return err
 	}

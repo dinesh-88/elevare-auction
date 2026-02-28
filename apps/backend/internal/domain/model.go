@@ -13,6 +13,7 @@ const (
 	RoleAdmin      Role = "ADMIN"
 	RoleStaff      Role = "STAFF"
 	RoleAccounting Role = "ACCOUNTING"
+	RoleViewer     Role = "VIEWER"
 	RoleBidder     Role = "BIDDER"
 )
 
@@ -153,6 +154,28 @@ type User struct {
 	ApprovalStatus ApprovalStatus
 	KYCStatus      KYCStatus
 	CreatedAt      time.Time
+}
+
+type TenantUser struct {
+	ID             uuid.UUID
+	TenantID       uuid.UUID
+	UserID         uuid.UUID
+	Role           Role
+	IsPrimaryOwner bool
+	InvitedBy      *uuid.UUID
+	CreatedAt      time.Time
+}
+
+type TenantInvitation struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	Email      string
+	Role       Role
+	TokenHash  string
+	InvitedBy  *uuid.UUID
+	ExpiresAt  time.Time
+	AcceptedAt *time.Time
+	CreatedAt  time.Time
 }
 
 const DemoBidSimulatorEmail = "simulator@elevare.local"

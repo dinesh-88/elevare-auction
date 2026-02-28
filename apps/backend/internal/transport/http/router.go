@@ -101,6 +101,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Post("/register", h.Register)
 			r.Post("/login", h.Login)
 			r.Post("/verify-email", h.VerifyEmail)
+			r.Post("/invitations/accept", h.AcceptTenantInvitation)
 			r.With(authMW.RequireAuth, csrfMW).Post("/logout", h.Logout)
 			r.With(authMW.RequireAuth).Get("/session", h.Session)
 		})
@@ -126,7 +127,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(authMW.RequireAuth)
-			r.Use(middleware.RequireAnyRole(domain.RoleOwner, domain.RoleAdmin, domain.RoleStaff, domain.RoleAccounting))
+			r.Use(middleware.RequireAnyRole(domain.RoleOwner, domain.RoleAdmin, domain.RoleStaff, domain.RoleAccounting, domain.RoleViewer))
 			r.Use(csrfMW)
 			onboardingComplete := middleware.RequireOnboardingComplete()
 			r.With(authz.Require(domain.PermissionSiteEdit)).Get("/onboarding", h.GetInstitutionOnboarding)
@@ -195,6 +196,9 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.With(authz.Require(domain.PermissionBidderSuspend)).Put("/bidders/{userId}", h.UpdateBidderProfile)
 			r.With(authz.Require(domain.PermissionBidderApprove)).Patch("/bidders/{id}/approve", h.ApproveBidder)
 			r.With(authz.Require(domain.PermissionBidderSuspend)).Patch("/bidders/{id}/reject", h.RejectBidder)
+			r.With(authz.Require(domain.PermissionRoleManage)).Get("/staff", h.ListStaff)
+			r.With(authz.Require(domain.PermissionRoleManage)).Post("/staff/invitations", h.CreateStaffInvitation)
+			r.With(authz.Require(domain.PermissionRoleManage)).Patch("/staff/{tenantUserId}", h.UpdateStaffRole)
 		})
 	})
 

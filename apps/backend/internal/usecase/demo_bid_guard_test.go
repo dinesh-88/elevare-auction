@@ -120,6 +120,9 @@ func (f *fakeDemoGuardUserRepo) UpdateApproval(ctx context.Context, tenantID, us
 func (f *fakeDemoGuardUserRepo) UpdateEmailVerified(ctx context.Context, tenantID, userID uuid.UUID, verified bool) error {
 	return errors.New("unused")
 }
+func (f *fakeDemoGuardUserRepo) UpdateRole(ctx context.Context, tenantID, userID uuid.UUID, role domain.Role) error {
+	return errors.New("unused")
+}
 
 type noopDemoGuardBroadcaster struct{}
 

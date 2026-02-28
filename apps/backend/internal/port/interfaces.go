@@ -41,6 +41,7 @@ type UserRepository interface {
 	UpdateLocale(ctx context.Context, tenantID, userID uuid.UUID, locale domain.Locale) error
 	UpdateApproval(ctx context.Context, tenantID, userID uuid.UUID, status domain.ApprovalStatus) error
 	UpdateEmailVerified(ctx context.Context, tenantID, userID uuid.UUID, verified bool) error
+	UpdateRole(ctx context.Context, tenantID, userID uuid.UUID, role domain.Role) error
 }
 
 type TenantLoginCandidate struct {
@@ -52,6 +53,25 @@ type TenantLoginCandidate struct {
 
 type UserTenantLookupRepository interface {
 	ListTenantLoginCandidatesByEmail(ctx context.Context, email string) ([]TenantLoginCandidate, error)
+}
+
+type PermissionRepository interface {
+	HasPermission(ctx context.Context, tenantID, userID uuid.UUID, permission domain.Permission) (bool, error)
+	GetEffectiveRole(ctx context.Context, tenantID, userID uuid.UUID) (domain.Role, error)
+}
+
+type StaffRepository interface {
+	PermissionRepository
+	CreateTenantUser(ctx context.Context, item *domain.TenantUser) error
+	ListTenantUsers(ctx context.Context, tenantID uuid.UUID) ([]domain.TenantUser, error)
+	GetTenantUserByID(ctx context.Context, tenantID, tenantUserID uuid.UUID) (*domain.TenantUser, error)
+	GetTenantUserByUserID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.TenantUser, error)
+	UpdateTenantUserRole(ctx context.Context, tenantID, tenantUserID uuid.UUID, role domain.Role) error
+
+	CreateInvitation(ctx context.Context, item *domain.TenantInvitation) error
+	ListInvitations(ctx context.Context, tenantID uuid.UUID) ([]domain.TenantInvitation, error)
+	GetInvitationByTokenHash(ctx context.Context, tenantID uuid.UUID, tokenHash string) (*domain.TenantInvitation, error)
+	MarkInvitationAccepted(ctx context.Context, tenantID, invitationID uuid.UUID, acceptedAt time.Time) error
 }
 
 type AuctionRepository interface {

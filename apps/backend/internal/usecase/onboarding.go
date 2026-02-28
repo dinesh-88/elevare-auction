@@ -97,7 +97,7 @@ func (uc *OnboardingUseCase) PublicSignup(ctx context.Context, in TenantSignupIn
 		TenantID:       tenant.ID,
 		Email:          email,
 		PasswordHash:   hash,
-		Role:           domain.RoleAdmin,
+		Role:           domain.RoleOwner,
 		Status:         domain.UserStatusActive,
 		EmailVerified:  false,
 		ApprovalStatus: domain.ApprovalPending,

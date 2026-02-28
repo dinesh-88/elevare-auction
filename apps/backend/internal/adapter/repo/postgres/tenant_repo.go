@@ -116,11 +116,18 @@ INSERT INTO tenants (
 
 	const insUser = `
 INSERT INTO users (id, tenant_id, email, password_hash, role, status, email_verified, approval_status, kyc_status, created_at)
-VALUES ($1,$2,$3,$4,'ADMIN','ACTIVE',$5,$6,'NONE',now())`
+VALUES ($1,$2,$3,$4,'OWNER','ACTIVE',$5,$6,'NONE',now())`
 	if _, err := tx.Exec(ctx, insUser,
 		in.AdminUserID, in.TenantID, in.AdminEmail, in.AdminPasswordHash, in.AdminEmailVerified, in.AdminApprovalStatus,
 	); err != nil {
 		return mapDBError(err, "A user with this email already exists.")
+	}
+
+	const insTenantUser = `
+INSERT INTO tenant_users (id, tenant_id, user_id, role, is_primary_owner, created_at)
+VALUES (gen_random_uuid(), $1, $2, 'OWNER', true, now())`
+	if _, err := tx.Exec(ctx, insTenantUser, in.TenantID, in.AdminUserID); err != nil {
+		return mapDBError(err, "")
 	}
 
 	return mapDBError(tx.Commit(ctx), "")

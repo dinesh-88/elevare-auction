@@ -197,6 +197,9 @@ func (f *fakeBidSimUserRepo) UpdateApproval(ctx context.Context, tenantID, userI
 func (f *fakeBidSimUserRepo) UpdateEmailVerified(ctx context.Context, tenantID, userID uuid.UUID, verified bool) error {
 	return errors.New("unused")
 }
+func (f *fakeBidSimUserRepo) UpdateRole(ctx context.Context, tenantID, userID uuid.UUID, role domain.Role) error {
+	return errors.New("unused")
+}
 
 type fakeBidSimBidderRepo struct {
 	ensureCalls   int

@@ -1,4 +1,4 @@
-export type Role = "OWNER" | "ADMIN" | "STAFF" | "ACCOUNTING" | "BIDDER";
+export type Role = "OWNER" | "ADMIN" | "STAFF" | "ACCOUNTING" | "VIEWER" | "BIDDER";
 export type TenantStatus = "PENDING" | "ACTIVE" | "REJECTED";
 export type OnboardingStatus = "not_started" | "in_progress" | "completed";
 
@@ -479,6 +479,27 @@ export interface TenantAsset {
   created_at: string;
 }
 
+export interface TenantStaffUser {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  role: Exclude<Role, "BIDDER">;
+  is_primary_owner: boolean;
+  invited_by?: string | null;
+  created_at: string;
+}
+
+export interface TenantStaffInvitation {
+  id: string;
+  tenant_id: string;
+  email: string;
+  role: Exclude<Role, "OWNER" | "BIDDER">;
+  expires_at: string;
+  accepted_at?: string | null;
+  invited_by?: string | null;
+  created_at: string;
+}
+
 export interface TenantLoginDiscoveryItem {
   tenant_id: string;
   tenant_name: string;
@@ -865,6 +886,33 @@ function normalizeTenantAsset(raw: unknown): TenantAsset {
     size_bytes: r.size_bytes != null ? Number(r.size_bytes) : undefined,
     mime: r.mime != null ? String(r.mime) : undefined,
     created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
+function normalizeTenantStaffUser(raw: unknown): TenantStaffUser {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? ""),
+    tenant_id: String(r.tenant_id ?? ""),
+    user_id: String(r.user_id ?? ""),
+    role: String(r.role ?? "STAFF") as TenantStaffUser["role"],
+    is_primary_owner: Boolean(r.is_primary_owner ?? false),
+    invited_by: r.invited_by != null ? String(r.invited_by) : null,
+    created_at: String(r.created_at ?? ""),
+  };
+}
+
+function normalizeTenantStaffInvitation(raw: unknown): TenantStaffInvitation {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? ""),
+    tenant_id: String(r.tenant_id ?? ""),
+    email: String(r.email ?? ""),
+    role: String(r.role ?? "STAFF") as TenantStaffInvitation["role"],
+    expires_at: String(r.expires_at ?? ""),
+    accepted_at: r.accepted_at != null ? String(r.accepted_at) : null,
+    invited_by: r.invited_by != null ? String(r.invited_by) : null,
+    created_at: String(r.created_at ?? ""),
   };
 }
 
@@ -1309,6 +1357,17 @@ export const api = {
     const qs = params.toString();
     return (await request<unknown[]>(`/admin/assets${qs ? `?${qs}` : ""}`)).map(normalizeTenantAsset);
   },
+  listStaff: async () => {
+    const res = await request<{ users: unknown[]; invitations: unknown[] }>("/admin/staff");
+    return {
+      users: (res.users ?? []).map(normalizeTenantStaffUser),
+      invitations: (res.invitations ?? []).map(normalizeTenantStaffInvitation),
+    };
+  },
+  inviteStaff: async (payload: { email: string; role: "ADMIN" | "STAFF" | "ACCOUNTING" | "VIEWER"; invite_base: string }) =>
+    normalizeTenantStaffInvitation(await request<unknown>("/admin/staff/invitations", { method: "POST", body: JSON.stringify(payload) })),
+  updateStaffRole: (tenantUserId: string, role: "ADMIN" | "STAFF" | "ACCOUNTING" | "VIEWER") =>
+    request<JsonRecord>(`/admin/staff/${tenantUserId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
   listFeeComponents: async (activeOnly = true) =>
     (await request<unknown[]>(`/admin/fees/components?active_only=${activeOnly}`)).map(normalizeFeeComponent),
   createFeeComponent: async (payload: {

@@ -26,7 +26,8 @@ const (
 	PermissionSiteEdit    Permission = "site:edit"
 	PermissionSitePublish Permission = "site:publish"
 
-	PermissionAuditView Permission = "audit:view"
+	PermissionAuditView  Permission = "audit:view"
+	PermissionRoleManage Permission = "role:manage"
 )
 
 var allTenantPermissions = []Permission{
@@ -47,6 +48,7 @@ var allTenantPermissions = []Permission{
 	PermissionSiteEdit,
 	PermissionSitePublish,
 	PermissionAuditView,
+	PermissionRoleManage,
 }
 
 var RolePermissions = map[Role]map[Permission]struct{}{
@@ -54,6 +56,7 @@ var RolePermissions = map[Role]map[Permission]struct{}{
 	RoleAdmin:      permissionSet(allTenantPermissions...),
 	RoleStaff:      permissionSet(PermissionAuctionCreate, PermissionAuctionUpdate, PermissionAuctionStart, PermissionAuctionEnd, PermissionLotCreate, PermissionLotUpdate, PermissionLotReorder, PermissionLotStart, PermissionLotEnd, PermissionBidderApprove, PermissionSiteEdit),
 	RoleAccounting: permissionSet(PermissionInvoiceView, PermissionInvoiceMarkPaid, PermissionAuditView),
+	RoleViewer:     permissionSet(),
 	RoleBidder:     permissionSet(),
 }
 

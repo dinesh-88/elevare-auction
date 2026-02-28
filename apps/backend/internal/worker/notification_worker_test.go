@@ -73,6 +73,9 @@ func (f *fakeWorkerUsersRepo) UpdateApproval(ctx context.Context, tenantID, user
 func (f *fakeWorkerUsersRepo) UpdateEmailVerified(ctx context.Context, tenantID, userID uuid.UUID, verified bool) error {
 	return errors.New("unused")
 }
+func (f *fakeWorkerUsersRepo) UpdateRole(ctx context.Context, tenantID, userID uuid.UUID, role domain.Role) error {
+	return errors.New("unused")
+}
 
 type fakeEmailSender struct {
 	err   error
