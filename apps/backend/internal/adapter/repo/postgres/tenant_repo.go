@@ -107,7 +107,7 @@ INSERT INTO tenants (
 	if _, err := tx.Exec(ctx, insTenant,
 		in.TenantID, in.TenantName, in.Subdomain, in.Country, in.EstimatedAuctionVolume, in.RequireAdminApproval, in.RequireKYC,
 	); err != nil {
-		return err
+		return mapDBError(err, "An institution with this subdomain already exists.")
 	}
 
 	const insUser = `
@@ -116,10 +116,10 @@ VALUES ($1,$2,$3,$4,'ADMIN','ACTIVE',$5,$6,'NONE',now())`
 	if _, err := tx.Exec(ctx, insUser,
 		in.AdminUserID, in.TenantID, in.AdminEmail, in.AdminPasswordHash, in.AdminEmailVerified, in.AdminApprovalStatus,
 	); err != nil {
-		return err
+		return mapDBError(err, "A user with this email already exists.")
 	}
 
-	return tx.Commit(ctx)
+	return mapDBError(tx.Commit(ctx), "")
 }
 
 func (r *TenantRepo) ListByStatus(ctx context.Context, status domain.TenantStatus) ([]domain.Tenant, error) {

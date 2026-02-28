@@ -206,7 +206,7 @@ func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
 		EstimatedAuctionVolume *int   `json:"estimated_auction_volume"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	tenant, admin, err := h.Onboarding.PublicSignup(r.Context(), usecase.TenantSignupInput{
@@ -218,7 +218,7 @@ func (h *Handler) PublicTenantSignup(w http.ResponseWriter, r *http.Request) {
 		EstimatedAuctionVolume: req.EstimatedAuctionVolume,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -237,11 +237,11 @@ func (h *Handler) SubmitDemoRequest(w http.ResponseWriter, r *http.Request) {
 		Message     string `json:"message"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	if h.DemoRequest == nil {
-		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+		writeErrorText(w, "service unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	item, err := h.DemoRequest.Submit(r.Context(), usecase.SubmitDemoRequestInput{
@@ -255,7 +255,7 @@ func (h *Handler) SubmitDemoRequest(w http.ResponseWriter, r *http.Request) {
 		if !errors.Is(err, usecase.ErrValidation) {
 			status = http.StatusInternalServerError
 		}
-		http.Error(w, err.Error(), status)
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -292,16 +292,16 @@ func (h *Handler) DiscoverTenantLogin(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	matches, err := h.Auth.DiscoverTenantsByEmail(r.Context(), req.Email)
 	if err != nil {
 		if errors.Is(err, usecase.ErrValidation) {
-			http.Error(w, "invalid email", http.StatusBadRequest)
+			writeErrorText(w, "invalid email", http.StatusBadRequest)
 			return
 		}
-		http.Error(w, "unable to resolve institution", http.StatusInternalServerError)
+		writeErrorText(w, "unable to resolve institution", http.StatusInternalServerError)
 		return
 	}
 	items := make([]map[string]any, 0, len(matches))
@@ -327,7 +327,7 @@ func (h *Handler) ListTenantRequests(w http.ResponseWriter, r *http.Request) {
 	status := domain.TenantStatus(r.URL.Query().Get("status"))
 	tenants, err := h.Onboarding.ListTenantRequests(r.Context(), status)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, tenants)
@@ -336,11 +336,11 @@ func (h *Handler) ListTenantRequests(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ApproveTenant(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid tenant id", http.StatusBadRequest)
+		writeErrorText(w, "invalid tenant id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Onboarding.ApproveTenant(r.Context(), tenantID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ACTIVE"})
@@ -349,11 +349,11 @@ func (h *Handler) ApproveTenant(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RejectTenant(w http.ResponseWriter, r *http.Request) {
 	tenantID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid tenant id", http.StatusBadRequest)
+		writeErrorText(w, "invalid tenant id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Onboarding.RejectTenant(r.Context(), tenantID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "REJECTED"})
@@ -362,7 +362,7 @@ func (h *Handler) RejectTenant(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PublicConfig(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := middleware.TenantFromContext(r.Context())
 	if !ok {
-		http.Error(w, "tenant missing", http.StatusInternalServerError)
+		writeErrorText(w, "tenant missing", http.StatusInternalServerError)
 		return
 	}
 	preview := strings.TrimSpace(r.URL.Query().Get("previewToken"))
@@ -391,7 +391,7 @@ func (h *Handler) PublicConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListPublicInstitutions(w http.ResponseWriter, r *http.Request) {
 	tenants, err := h.Onboarding.Tenants.ListByStatus(r.Context(), domain.TenantActive)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	resp := make([]publicInstitutionSummaryResponse, 0, len(tenants))
@@ -404,12 +404,12 @@ func (h *Handler) ListPublicInstitutions(w http.ResponseWriter, r *http.Request)
 func (h *Handler) GetPublicInstitution(w http.ResponseWriter, r *http.Request) {
 	slug := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "slug")))
 	if slug == "" {
-		http.Error(w, "institution not found", http.StatusNotFound)
+		writeErrorText(w, "institution not found", http.StatusNotFound)
 		return
 	}
 	tenants, err := h.Onboarding.Tenants.ListByStatus(r.Context(), domain.TenantActive)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	var tenant *domain.Tenant
@@ -420,12 +420,12 @@ func (h *Handler) GetPublicInstitution(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if tenant == nil {
-		http.Error(w, "institution not found", http.StatusNotFound)
+		writeErrorText(w, "institution not found", http.StatusNotFound)
 		return
 	}
 	auctions, err := h.Auction.Auctions.ListAdmin(r.Context(), tenant.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	active := make([]publicInstitutionAuctionResponse, 0)
@@ -456,7 +456,7 @@ func (h *Handler) GetPublicInstitution(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetPublicFeaturedAuction(w http.ResponseWriter, r *http.Request) {
 	tenants, err := h.Onboarding.Tenants.ListByStatus(r.Context(), domain.TenantActive)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	var selectedTenant *domain.Tenant
@@ -464,7 +464,7 @@ func (h *Handler) GetPublicFeaturedAuction(w http.ResponseWriter, r *http.Reques
 	for i := range tenants {
 		auctions, listErr := h.Auction.Auctions.ListAdmin(r.Context(), tenants[i].ID)
 		if listErr != nil {
-			http.Error(w, listErr.Error(), http.StatusInternalServerError)
+			writeErrorText(w, listErr.Error(), http.StatusInternalServerError)
 			return
 		}
 		for j := range auctions {
@@ -484,7 +484,7 @@ func (h *Handler) GetPublicFeaturedAuction(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	if selectedTenant == nil || selectedAuction == nil {
-		http.Error(w, "featured auction not found", http.StatusNotFound)
+		writeErrorText(w, "featured auction not found", http.StatusNotFound)
 		return
 	}
 	writeJSON(w, http.StatusOK, publicFeaturedAuctionResponse{
@@ -497,7 +497,7 @@ func (h *Handler) ListAuctions(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctions, err := h.Auction.ListPublic(r.Context(), tenant.ID, time.Now().UTC())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, auctions)
@@ -507,12 +507,12 @@ func (h *Handler) GetAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	auction, err := h.Auction.Get(r.Context(), tenant.ID, auctionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeErrorText(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	writeJSON(w, http.StatusOK, auction)
@@ -522,12 +522,12 @@ func (h *Handler) ListLotsByAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	lots, err := h.Lot.ListByAuction(r.Context(), tenant.ID, auctionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	resp := make([]lotPublicResponse, 0, len(lots))
@@ -541,12 +541,12 @@ func (h *Handler) GetLot(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 	lot, err := h.Lot.GetByID(r.Context(), tenant.ID, lotID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeErrorText(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	writeJSON(w, http.StatusOK, toLotPublicResponse(*lot))
@@ -556,35 +556,35 @@ func (h *Handler) GetLotFinancials(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	if claims.Role != domain.RoleBidder {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeErrorText(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 	lot, err := h.Lot.GetByID(r.Context(), tenant.ID, lotID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeErrorText(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
 	isAdmin := domain.HasPermission(claims.Role, domain.PermissionInvoiceView)
 	isWinner := lot.WinnerUserID != nil && claims.UserID == *lot.WinnerUserID
 	if !isAdmin && !isWinner {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeErrorText(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
 	var snapshot domain.LotFinancialSnapshot
 	if len(lot.FinancialData) > 0 {
 		if err := json.Unmarshal(lot.FinancialData, &snapshot); err != nil {
-			http.Error(w, "invalid financial snapshot", http.StatusInternalServerError)
+			writeErrorText(w, "invalid financial snapshot", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -606,12 +606,12 @@ func (h *Handler) ListLotBids(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 	bids, err := h.Lot.ListBidsByLot(r.Context(), tenant.ID, lotID, 100)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, toPublicBidHistory(bids))
@@ -638,12 +638,12 @@ func (h *Handler) ListMyWinningLots(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	lots, err := h.Lot.ListWonByUser(r.Context(), tenant.ID, claims.UserID, 200)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	resp := make([]lotPublicResponse, 0, len(lots))
@@ -660,7 +660,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	user, err := h.Auth.Register(r.Context(), usecase.RegisterInput{
@@ -670,7 +670,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Role:     domain.RoleBidder,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"user_id": user.ID, "approval_status": user.ApprovalStatus})
@@ -682,16 +682,16 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		UserID string `json:"user_id"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	uid, err := uuid.Parse(req.UserID)
 	if err != nil {
-		http.Error(w, "invalid user_id", http.StatusBadRequest)
+		writeErrorText(w, "invalid user_id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Auth.VerifyEmail(r.Context(), tenant.ID, uid); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "verified"})
@@ -704,7 +704,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	token, user, err := h.Auth.Login(r.Context(), usecase.LoginInput{TenantID: tenant.ID, Email: req.Email, Password: req.Password})
@@ -713,7 +713,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, usecase.ErrValidation) {
 			status = http.StatusBadRequest
 		}
-		http.Error(w, err.Error(), status)
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	h.setSessionCookies(w, token)
@@ -729,12 +729,12 @@ func (h *Handler) Session(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	user, err := h.Auth.CurrentUser(r.Context(), tenant.ID, claims.UserID)
 	if err != nil {
-		http.Error(w, "session not found", http.StatusUnauthorized)
+		writeErrorText(w, "session not found", http.StatusUnauthorized)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": toAuthUserResponse(user)})
@@ -762,7 +762,7 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		RequireBidderApproval   bool                 `json:"require_bidder_approval"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	a, err := h.Auction.Create(r.Context(), usecase.CreateAuctionInput{
@@ -786,7 +786,7 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		RequireBidderApproval:   req.RequireBidderApproval,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, a)
@@ -796,7 +796,7 @@ func (h *Handler) CreateLot(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
@@ -810,7 +810,7 @@ func (h *Handler) CreateLot(w http.ResponseWriter, r *http.Request) {
 		MinIncrement  int64           `json:"min_increment"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	lot, err := h.Lot.Create(r.Context(), usecase.CreateLotInput{
@@ -826,7 +826,7 @@ func (h *Handler) CreateLot(w http.ResponseWriter, r *http.Request) {
 		MinIncrement:  req.MinIncrement,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, lot)
@@ -836,7 +836,7 @@ func (h *Handler) UpdateLot(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
@@ -850,7 +850,7 @@ func (h *Handler) UpdateLot(w http.ResponseWriter, r *http.Request) {
 		MinIncrement  int64           `json:"min_increment"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	lot, err := h.Lot.Update(r.Context(), tenant.ID, lotID, usecase.CreateLotInput{
@@ -865,7 +865,7 @@ func (h *Handler) UpdateLot(w http.ResponseWriter, r *http.Request) {
 		MinIncrement:  req.MinIncrement,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, lot)
@@ -875,11 +875,11 @@ func (h *Handler) DeleteLot(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Lot.Delete(r.Context(), tenant.ID, lotID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "DELETED"})
@@ -889,27 +889,27 @@ func (h *Handler) ReorderLots(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
 		LotIDs []string `json:"lot_ids"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	ids := make([]uuid.UUID, 0, len(req.LotIDs))
 	for _, raw := range req.LotIDs {
 		id, err := uuid.Parse(raw)
 		if err != nil {
-			http.Error(w, "invalid lot id in list", http.StatusBadRequest)
+			writeErrorText(w, "invalid lot id in list", http.StatusBadRequest)
 			return
 		}
 		ids = append(ids, id)
 	}
 	if err := h.Lot.Reorder(r.Context(), tenant.ID, auctionID, ids); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "REORDERED"})
@@ -919,11 +919,11 @@ func (h *Handler) StartLot(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Lot.Start(r.Context(), tenant.ID, lotID, time.Now().UTC()); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "LIVE"})
@@ -933,11 +933,11 @@ func (h *Handler) EndLot(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Lot.End(r.Context(), tenant.ID, lotID, time.Now().UTC()); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ENDED"})
@@ -947,7 +947,7 @@ func (h *Handler) ListAdminAuctions(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctions, err := h.Auction.ListAdmin(r.Context(), tenant.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, auctions)
@@ -957,7 +957,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
@@ -980,7 +980,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		RequireBidderApproval   *bool                `json:"require_bidder_approval"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	requireBidderApproval := false
@@ -1013,7 +1013,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		RequireBidderApproval:   requireBidderApproval,
 	}, auctionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, a)
@@ -1023,11 +1023,11 @@ func (h *Handler) DeleteAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Auction.Delete(r.Context(), tenant.ID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "DELETED"})
@@ -1037,11 +1037,11 @@ func (h *Handler) StartAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Auction.Start(r.Context(), tenant.ID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	_ = h.Lot.OnAuctionStart(r.Context(), tenant.ID, id, time.Now().UTC())
@@ -1052,11 +1052,11 @@ func (h *Handler) PauseAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Auction.Pause(r.Context(), tenant.ID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "PAUSED"})
@@ -1066,11 +1066,11 @@ func (h *Handler) EndAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Auction.End(r.Context(), tenant.ID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ENDED"})
@@ -1080,7 +1080,7 @@ func (h *Handler) ListBidders(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	users, err := h.Bidder.List(r.Context(), tenant.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, users)
@@ -1090,7 +1090,7 @@ func (h *Handler) ListAuctionBidders(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	filter := port.ListAuctionBiddersFilter{}
@@ -1100,7 +1100,7 @@ func (h *Handler) ListAuctionBidders(w http.ResponseWriter, r *http.Request) {
 		case domain.ApprovalPending, domain.ApprovalApproved, domain.ApprovalRejected:
 			filter.Status = &status
 		default:
-			http.Error(w, "invalid status", http.StatusBadRequest)
+			writeErrorText(w, "invalid status", http.StatusBadRequest)
 			return
 		}
 	}
@@ -1110,14 +1110,14 @@ func (h *Handler) ListAuctionBidders(w http.ResponseWriter, r *http.Request) {
 		case domain.AuctionBidderRiskLow, domain.AuctionBidderRiskMedium, domain.AuctionBidderRiskHigh:
 			filter.RiskLevel = &risk
 		default:
-			http.Error(w, "invalid risk level", http.StatusBadRequest)
+			writeErrorText(w, "invalid risk level", http.StatusBadRequest)
 			return
 		}
 	}
 	if raw := strings.TrimSpace(r.URL.Query().Get("deposit_required")); raw != "" {
 		value, parseErr := strconv.ParseBool(raw)
 		if parseErr != nil {
-			http.Error(w, "invalid deposit_required", http.StatusBadRequest)
+			writeErrorText(w, "invalid deposit_required", http.StatusBadRequest)
 			return
 		}
 		filter.DepositRequired = &value
@@ -1132,13 +1132,13 @@ func (h *Handler) ListAuctionBidders(w http.ResponseWriter, r *http.Request) {
 			domain.AuctionBidderDepositWaived:
 			filter.DepositStatus = &status
 		default:
-			http.Error(w, "invalid deposit status", http.StatusBadRequest)
+			writeErrorText(w, "invalid deposit status", http.StatusBadRequest)
 			return
 		}
 	}
 	rows, err := h.Bidder.ListAuctionBidders(r.Context(), tenant.ID, auctionID, filter)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)
@@ -1149,17 +1149,17 @@ func (h *Handler) ApproveAuctionBidder(w http.ResponseWriter, r *http.Request) {
 	claims, _ := middleware.ClaimsFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
 	if err != nil {
-		http.Error(w, "invalid user id", http.StatusBadRequest)
+		writeErrorText(w, "invalid user id", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Bidder.ApproveAuctionBidder(r.Context(), tenant.ID, auctionID, userID, claims.UserID, time.Now().UTC())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -1169,12 +1169,12 @@ func (h *Handler) UpdateAuctionBidderApproval(w http.ResponseWriter, r *http.Req
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
 	if err != nil {
-		http.Error(w, "invalid user id", http.StatusBadRequest)
+		writeErrorText(w, "invalid user id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
@@ -1186,14 +1186,14 @@ func (h *Handler) UpdateAuctionBidderApproval(w http.ResponseWriter, r *http.Req
 		InternalNotes      *string `json:"internal_notes"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	riskLevel := domain.AuctionBidderRiskLevel(strings.ToLower(strings.TrimSpace(req.RiskLevel)))
 	switch riskLevel {
 	case domain.AuctionBidderRiskLow, domain.AuctionBidderRiskMedium, domain.AuctionBidderRiskHigh:
 	default:
-		http.Error(w, "invalid risk level", http.StatusBadRequest)
+		writeErrorText(w, "invalid risk level", http.StatusBadRequest)
 		return
 	}
 	depositStatus := domain.AuctionBidderDepositStatus(strings.ToLower(strings.TrimSpace(req.DepositStatus)))
@@ -1204,15 +1204,15 @@ func (h *Handler) UpdateAuctionBidderApproval(w http.ResponseWriter, r *http.Req
 		domain.AuctionBidderDepositReceived,
 		domain.AuctionBidderDepositWaived:
 	default:
-		http.Error(w, "invalid deposit status", http.StatusBadRequest)
+		writeErrorText(w, "invalid deposit status", http.StatusBadRequest)
 		return
 	}
 	if req.MaxBidLimitMinor != nil && *req.MaxBidLimitMinor < 0 {
-		http.Error(w, "invalid max bid limit", http.StatusBadRequest)
+		writeErrorText(w, "invalid max bid limit", http.StatusBadRequest)
 		return
 	}
 	if req.DepositAmountMinor != nil && *req.DepositAmountMinor < 0 {
-		http.Error(w, "invalid deposit amount", http.StatusBadRequest)
+		writeErrorText(w, "invalid deposit amount", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Bidder.UpdateAuctionBidderApproval(r.Context(), tenant.ID, auctionID, userID, port.UpdateAuctionBidderApprovalInput{
@@ -1224,7 +1224,7 @@ func (h *Handler) UpdateAuctionBidderApproval(w http.ResponseWriter, r *http.Req
 		InternalNotes:      req.InternalNotes,
 	}, time.Now().UTC())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -1235,17 +1235,17 @@ func (h *Handler) RejectAuctionBidder(w http.ResponseWriter, r *http.Request) {
 	claims, _ := middleware.ClaimsFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
 	if err != nil {
-		http.Error(w, "invalid user id", http.StatusBadRequest)
+		writeErrorText(w, "invalid user id", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Bidder.RejectAuctionBidder(r.Context(), tenant.ID, auctionID, userID, claims.UserID, time.Now().UTC())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -1255,11 +1255,11 @@ func (h *Handler) ApproveBidder(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Bidder.Approve(r.Context(), tenant.ID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "APPROVED"})
@@ -1269,11 +1269,11 @@ func (h *Handler) RejectBidder(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Bidder.Reject(r.Context(), tenant.ID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "REJECTED"})
@@ -1283,12 +1283,12 @@ func (h *Handler) GetBidderProfile(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
 	if err != nil {
-		http.Error(w, "invalid user id", http.StatusBadRequest)
+		writeErrorText(w, "invalid user id", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Bidder.GetProfile(r.Context(), tenant.ID, userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -1298,7 +1298,7 @@ func (h *Handler) UpdateBidderProfile(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	userID, err := uuid.Parse(chi.URLParam(r, "userId"))
 	if err != nil {
-		http.Error(w, "invalid user id", http.StatusBadRequest)
+		writeErrorText(w, "invalid user id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
@@ -1314,7 +1314,7 @@ func (h *Handler) UpdateBidderProfile(w http.ResponseWriter, r *http.Request) {
 		Country       *string                       `json:"country"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	input := port.UpdateTenantBidderInput{
@@ -1335,7 +1335,7 @@ func (h *Handler) UpdateBidderProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := h.Bidder.UpdateProfile(r.Context(), tenant.ID, userID, input)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -1345,18 +1345,18 @@ func (h *Handler) UpdateAuctionBidderSettings(w http.ResponseWriter, r *http.Req
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
 		RequireBidderApproval bool `json:"require_bidder_approval"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	if err := h.Auction.UpdateRequireBidderApproval(r.Context(), tenant.ID, auctionID, req.RequireBidderApproval); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -1369,7 +1369,7 @@ func (h *Handler) GetTenantSettings(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	current, err := h.Onboarding.Tenants.GetByID(r.Context(), tenant.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -1383,16 +1383,16 @@ func (h *Handler) UpdateTenantSettings(w http.ResponseWriter, r *http.Request) {
 		DefaultCurrency string `json:"default_currency"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	currency := strings.ToUpper(strings.TrimSpace(req.DefaultCurrency))
 	if len(currency) != 3 {
-		http.Error(w, "invalid currency", http.StatusBadRequest)
+		writeErrorText(w, "invalid currency", http.StatusBadRequest)
 		return
 	}
 	if err := h.Onboarding.Tenants.UpdateDefaultCurrency(r.Context(), tenant.ID, currency); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"default_currency": currency})
@@ -1402,7 +1402,7 @@ func (h *Handler) GetSite(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	item, err := h.Site.Get(r.Context(), tenant.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -1422,14 +1422,14 @@ func (h *Handler) UpdateSiteDraft(w http.ResponseWriter, r *http.Request) {
 		Content  json.RawMessage `json:"content"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	if err := h.Site.UpdateDraft(r.Context(), tenant.ID, usecase.SiteDraftInput{
 		Branding: req.Branding,
 		Content:  req.Content,
 	}); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "DRAFT_SAVED"})
@@ -1439,7 +1439,7 @@ func (h *Handler) PublishSite(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	beforeVersion, afterVersion, err := h.Site.Publish(r.Context(), tenant.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -1468,7 +1468,7 @@ func (h *Handler) RegisterAsset(w http.ResponseWriter, r *http.Request) {
 		MIME      string `json:"mime"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Asset.Register(r.Context(), usecase.RegisterAssetInput{
@@ -1481,7 +1481,7 @@ func (h *Handler) RegisterAsset(w http.ResponseWriter, r *http.Request) {
 		MIME:      req.MIME,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
@@ -1493,7 +1493,7 @@ func (h *Handler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	limit := parsePositiveIntOrDefault(r.URL.Query().Get("limit"), 100)
 	items, err := h.Asset.List(r.Context(), tenant.ID, kind, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -1503,16 +1503,16 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	if claims.Role != domain.RoleBidder {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeErrorText(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
@@ -1521,7 +1521,7 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 		MaxBidMinor    *int64 `json:"max_bid_minor"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	bidAmount := req.BidAmountMinor
@@ -1545,9 +1545,9 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, usecase.ErrSimulatorBlocked),
 			errors.Is(err, usecase.ErrTermsRequired),
 			errors.Is(err, usecase.ErrTermsUnavailable):
-			http.Error(w, err.Error(), http.StatusForbidden)
+			writeErrorText(w, err.Error(), http.StatusForbidden)
 		default:
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeErrorText(w, err.Error(), http.StatusBadRequest)
 		}
 		return
 	}
@@ -1567,12 +1567,12 @@ func (h *Handler) GetActiveAuctionTerms(w http.ResponseWriter, r *http.Request) 
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Terms.GetActive(r.Context(), tenant.ID, auctionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if item == nil {
@@ -1597,17 +1597,17 @@ func (h *Handler) GetAuctionTermsStatus(w http.ResponseWriter, r *http.Request) 
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	active, acceptance, err := h.Terms.GetBidderStatus(r.Context(), tenant.ID, auctionID, claims.UserID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if active == nil {
@@ -1638,16 +1638,16 @@ func (h *Handler) AcceptAuctionTerms(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	if claims.Role != domain.RoleBidder {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeErrorText(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	meta, _ := middleware.RequestMetaFromContext(r.Context())
@@ -1657,7 +1657,7 @@ func (h *Handler) AcceptAuctionTerms(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, usecase.ErrTermsUnavailable) {
 			status = http.StatusForbidden
 		}
-		http.Error(w, err.Error(), status)
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -1670,12 +1670,12 @@ func (h *Handler) ListAuctionTerms(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	items, err := h.Terms.ListByAuction(r.Context(), tenant.ID, auctionID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -1685,7 +1685,7 @@ func (h *Handler) CreateAuctionTerms(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
@@ -1693,12 +1693,12 @@ func (h *Handler) CreateAuctionTerms(w http.ResponseWriter, r *http.Request) {
 		Publish         bool   `json:"publish"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Terms.CreateVersion(r.Context(), tenant.ID, auctionID, req.ContentMarkdown, req.Publish)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
@@ -1708,16 +1708,16 @@ func (h *Handler) PublishAuctionTerms(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	auctionTermsID, err := uuid.Parse(chi.URLParam(r, "termsId"))
 	if err != nil {
-		http.Error(w, "invalid terms id", http.StatusBadRequest)
+		writeErrorText(w, "invalid terms id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Terms.PublishVersion(r.Context(), tenant.ID, auctionID, auctionTermsID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "PUBLISHED"})
@@ -1727,17 +1727,17 @@ func (h *Handler) RequestToBid(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Bidder.RequestToBid(r.Context(), tenant.ID, auctionID, claims.UserID, time.Now().UTC())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -1752,7 +1752,7 @@ func (h *Handler) ListFeeComponents(w http.ResponseWriter, r *http.Request) {
 	activeOnly := r.URL.Query().Get("active_only") != "false"
 	items, err := h.Fee.ListComponents(r.Context(), tenant.ID, activeOnly)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -1768,7 +1768,7 @@ func (h *Handler) CreateFeeComponent(w http.ResponseWriter, r *http.Request) {
 		Taxable         bool                      `json:"taxable"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Fee.CreateComponent(r.Context(), usecase.CreateFeeComponentInput{
@@ -1780,7 +1780,7 @@ func (h *Handler) CreateFeeComponent(w http.ResponseWriter, r *http.Request) {
 		Taxable:         req.Taxable,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
@@ -1790,7 +1790,7 @@ func (h *Handler) UpdateFeeComponent(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	componentID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid fee component id", http.StatusBadRequest)
+		writeErrorText(w, "invalid fee component id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
@@ -1801,7 +1801,7 @@ func (h *Handler) UpdateFeeComponent(w http.ResponseWriter, r *http.Request) {
 		Taxable         bool                      `json:"taxable"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Fee.UpdateComponent(r.Context(), tenant.ID, componentID, usecase.CreateFeeComponentInput{
@@ -1813,7 +1813,7 @@ func (h *Handler) UpdateFeeComponent(w http.ResponseWriter, r *http.Request) {
 		Taxable:         req.Taxable,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -1823,11 +1823,11 @@ func (h *Handler) DeleteFeeComponent(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	componentID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid fee component id", http.StatusBadRequest)
+		writeErrorText(w, "invalid fee component id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Fee.DeactivateComponent(r.Context(), tenant.ID, componentID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "DEACTIVATED"})
@@ -1838,12 +1838,12 @@ func (h *Handler) ListFeeAssignments(w http.ResponseWriter, r *http.Request) {
 	scopeType := domain.FeeScopeType(r.URL.Query().Get("scope_type"))
 	scopeID, err := uuid.Parse(r.URL.Query().Get("scope_id"))
 	if err != nil {
-		http.Error(w, "invalid scope_id", http.StatusBadRequest)
+		writeErrorText(w, "invalid scope_id", http.StatusBadRequest)
 		return
 	}
 	items, err := h.Fee.ListAssignments(r.Context(), tenant.ID, scopeType, scopeID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -1857,17 +1857,17 @@ func (h *Handler) CreateFeeAssignment(w http.ResponseWriter, r *http.Request) {
 		FeeComponentID string              `json:"fee_component_id"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	scopeID, err := uuid.Parse(req.ScopeID)
 	if err != nil {
-		http.Error(w, "invalid scope_id", http.StatusBadRequest)
+		writeErrorText(w, "invalid scope_id", http.StatusBadRequest)
 		return
 	}
 	feeComponentID, err := uuid.Parse(req.FeeComponentID)
 	if err != nil {
-		http.Error(w, "invalid fee_component_id", http.StatusBadRequest)
+		writeErrorText(w, "invalid fee_component_id", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Fee.CreateAssignment(r.Context(), usecase.CreateFeeAssignmentInput{
@@ -1877,7 +1877,7 @@ func (h *Handler) CreateFeeAssignment(w http.ResponseWriter, r *http.Request) {
 		FeeComponentID: feeComponentID,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
@@ -1887,11 +1887,11 @@ func (h *Handler) DeleteFeeAssignment(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	assignmentID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid assignment id", http.StatusBadRequest)
+		writeErrorText(w, "invalid assignment id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Fee.DeleteAssignment(r.Context(), tenant.ID, assignmentID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "DELETED"})
@@ -1902,7 +1902,7 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	limit := parsePositiveIntOrDefault(r.URL.Query().Get("limit"), 200)
 	logs, err := h.Audit.ListByTenant(r.Context(), tenant.ID, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, logs)
@@ -1913,13 +1913,13 @@ func (h *Handler) ListAuditLogsByEntity(w http.ResponseWriter, r *http.Request) 
 	entityType := strings.TrimSpace(r.URL.Query().Get("type"))
 	entityID, err := uuid.Parse(r.URL.Query().Get("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 	limit := parsePositiveIntOrDefault(r.URL.Query().Get("limit"), 200)
 	logs, err := h.Audit.ListByEntity(r.Context(), tenant.ID, entityType, entityID, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, logs)
@@ -1929,7 +1929,7 @@ func (h *Handler) ListLotAuditLogs(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 
@@ -1939,7 +1939,7 @@ func (h *Handler) ListLotAuditLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	cursorCreatedAt, cursorID, err := decodeAuditCursor(strings.TrimSpace(r.URL.Query().Get("cursor")))
 	if err != nil {
-		http.Error(w, "invalid cursor", http.StatusBadRequest)
+		writeErrorText(w, "invalid cursor", http.StatusBadRequest)
 		return
 	}
 
@@ -1947,7 +1947,7 @@ func (h *Handler) ListLotAuditLogs(w http.ResponseWriter, r *http.Request) {
 	if rawActor := strings.TrimSpace(r.URL.Query().Get("actor_user_id")); rawActor != "" {
 		id, parseErr := uuid.Parse(rawActor)
 		if parseErr != nil {
-			http.Error(w, "invalid actor_user_id", http.StatusBadRequest)
+			writeErrorText(w, "invalid actor_user_id", http.StatusBadRequest)
 			return
 		}
 		actorUserID = &id
@@ -1955,12 +1955,12 @@ func (h *Handler) ListLotAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	from, err := parseISODateTime(strings.TrimSpace(r.URL.Query().Get("from")), false)
 	if err != nil {
-		http.Error(w, "invalid from", http.StatusBadRequest)
+		writeErrorText(w, "invalid from", http.StatusBadRequest)
 		return
 	}
 	to, err := parseISODateTime(strings.TrimSpace(r.URL.Query().Get("to")), true)
 	if err != nil {
-		http.Error(w, "invalid to", http.StatusBadRequest)
+		writeErrorText(w, "invalid to", http.StatusBadRequest)
 		return
 	}
 
@@ -1976,13 +1976,13 @@ func (h *Handler) ListLotAuditLogs(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, usecase.ErrForbidden):
-			http.Error(w, err.Error(), http.StatusForbidden)
+			writeErrorText(w, err.Error(), http.StatusForbidden)
 		case errors.Is(err, usecase.ErrUnauthorized):
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			writeErrorText(w, err.Error(), http.StatusUnauthorized)
 		case errors.Is(err, usecase.ErrValidation):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeErrorText(w, err.Error(), http.StatusBadRequest)
 		default:
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeErrorText(w, err.Error(), http.StatusBadRequest)
 		}
 		return
 	}

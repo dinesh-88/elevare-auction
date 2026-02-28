@@ -30,7 +30,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())`
 		asset.SizeBytes,
 		asset.MIME,
 	)
-	return err
+	return mapDBError(err, "This asset could not be saved.")
 }
 
 func (r *AssetRepo) ListByKind(ctx context.Context, tenantID uuid.UUID, kind string, limit int) ([]domain.TenantAsset, error) {
@@ -53,7 +53,7 @@ WHERE tenant_id = $1`
 	}
 	rows, err := r.DB.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, mapDBError(err, "")
 	}
 	defer rows.Close()
 

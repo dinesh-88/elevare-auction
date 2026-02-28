@@ -449,6 +449,26 @@ type JsonRecord = Record<string, unknown>;
 type TokenGetter = () => string | null;
 let getToken: TokenGetter = () => null;
 
+export class ApiError extends Error {
+  code: string;
+  status: number;
+  requestId: string | null;
+  debug?: string | null;
+
+  constructor(params: { message: string; code?: string; status: number; requestId?: string | null; debug?: string | null }) {
+    super(params.message);
+    this.name = "ApiError";
+    this.code = params.code ?? "internal_error";
+    this.status = params.status;
+    this.requestId = params.requestId ?? null;
+    this.debug = params.debug ?? null;
+  }
+}
+
+export function isApiError(value: unknown): value is ApiError {
+  return value instanceof ApiError;
+}
+
 export const setAuthTokenGetter = (fn: TokenGetter) => {
   getToken = fn;
 };
@@ -806,8 +826,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const bodyRecord = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
-    const message = typeof body === "string" ? body : (bodyRecord?.error as string) || text || "Request failed";
-    throw new Error(message);
+    const requestId = res.headers.get("X-Request-ID") || (typeof bodyRecord?.request_id === "string" ? bodyRecord.request_id : null);
+    const code = typeof bodyRecord?.error === "string" ? bodyRecord.error : "internal_error";
+    const message =
+      typeof bodyRecord?.message === "string"
+        ? bodyRecord.message
+        : typeof body === "string" && body.trim()
+          ? body
+          : "Something went wrong. Please try again.";
+    const debug = typeof bodyRecord?.debug === "string" ? bodyRecord.debug : null;
+    throw new ApiError({ message, code, status: res.status, requestId, debug });
   }
 
   return body as T;
@@ -833,8 +861,16 @@ async function requestWithToken<T>(path: string, bearerToken: string, init?: Req
 
   if (!res.ok) {
     const bodyRecord = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
-    const message = typeof body === "string" ? body : (bodyRecord?.error as string) || text || "Request failed";
-    throw new Error(message);
+    const requestId = res.headers.get("X-Request-ID") || (typeof bodyRecord?.request_id === "string" ? bodyRecord.request_id : null);
+    const code = typeof bodyRecord?.error === "string" ? bodyRecord.error : "internal_error";
+    const message =
+      typeof bodyRecord?.message === "string"
+        ? bodyRecord.message
+        : typeof body === "string" && body.trim()
+          ? body
+          : "Something went wrong. Please try again.";
+    const debug = typeof bodyRecord?.debug === "string" ? bodyRecord.debug : null;
+    throw new ApiError({ message, code, status: res.status, requestId, debug });
   }
 
   return body as T;
@@ -852,7 +888,25 @@ async function requestBinary(path: string, init?: RequestInit): Promise<Blob> {
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: "include" });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || "Request failed");
+    let body: unknown = null;
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text;
+      }
+    }
+    const bodyRecord = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+    const requestId = res.headers.get("X-Request-ID") || (typeof bodyRecord?.request_id === "string" ? bodyRecord.request_id : null);
+    const code = typeof bodyRecord?.error === "string" ? bodyRecord.error : "internal_error";
+    const message =
+      typeof bodyRecord?.message === "string"
+        ? bodyRecord.message
+        : typeof body === "string" && body.trim()
+          ? body
+          : "Something went wrong. Please try again.";
+    const debug = typeof bodyRecord?.debug === "string" ? bodyRecord.debug : null;
+    throw new ApiError({ message, code, status: res.status, requestId, debug });
   }
   return res.blob();
 }

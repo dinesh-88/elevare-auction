@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import ErrorMessage from "../../components/common/ErrorMessage";
 
 type ResolvedTenant = {
   slug: string;
@@ -11,6 +12,7 @@ export default function LoginHubPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [matches, setMatches] = useState<ResolvedTenant[]>([]);
 
   const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
@@ -28,10 +30,12 @@ export default function LoginHubPage() {
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+    setErrorCode(null);
     setMatches([]);
 
     if (!normalizedEmail) {
       setError("Enter your email address.");
+      setErrorCode("validation_error");
       return;
     }
 
@@ -47,12 +51,14 @@ export default function LoginHubPage() {
       });
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
+        message?: string;
         redirect_url?: string;
         tenants?: ResolvedTenant[];
       };
 
       if (!response.ok) {
-        setError(payload.error ?? "Unable to resolve your institution.");
+        setErrorCode(payload.error ?? "internal_error");
+        setError(payload.message ?? "Something went wrong. Please try again.");
         return;
       }
 
@@ -66,8 +72,10 @@ export default function LoginHubPage() {
         return;
       }
 
+      setErrorCode("not_found");
       setError("No associated institutions found.");
     } catch {
+      setErrorCode("internal_error");
       setError("Unable to resolve your institution.");
     } finally {
       setLoading(false);
@@ -106,7 +114,7 @@ export default function LoginHubPage() {
             >
               {loading ? "Resolving..." : "Continue"}
             </button>
-            {error ? <p className="text-sm text-red-700">{error}</p> : null}
+            {error ? <ErrorMessage code={errorCode} message={error} /> : null}
           </form>
         </section>
 

@@ -21,21 +21,21 @@ func (h *Handler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	invoiceID, err := uuid.Parse(chi.URLParam(r, "invoiceId"))
 	if err != nil {
-		http.Error(w, "invalid invoice id", http.StatusBadRequest)
+		writeErrorText(w, "invalid invoice id", http.StatusBadRequest)
 		return
 	}
 	inv, err := h.Invoice.GetAuthorized(r.Context(), tenant.ID, invoiceID, claims.UserID, claims.Role)
 	if err != nil {
 		if err == usecase.ErrForbidden {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			writeErrorText(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeErrorText(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	writeJSON(w, http.StatusOK, inv)
@@ -45,26 +45,26 @@ func (h *Handler) DownloadInvoicePDF(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	invoiceID, err := uuid.Parse(chi.URLParam(r, "invoiceId"))
 	if err != nil {
-		http.Error(w, "invalid invoice id", http.StatusBadRequest)
+		writeErrorText(w, "invalid invoice id", http.StatusBadRequest)
 		return
 	}
 	inv, err := h.Invoice.GetAuthorized(r.Context(), tenant.ID, invoiceID, claims.UserID, claims.Role)
 	if err != nil {
 		if err == usecase.ErrForbidden {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			writeErrorText(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeErrorText(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	pdfBytes, err := buildInvoicePDF(tenant.Name, inv)
 	if err != nil {
-		http.Error(w, "failed to generate pdf", http.StatusInternalServerError)
+		writeErrorText(w, "failed to generate pdf", http.StatusInternalServerError)
 		return
 	}
 	filename := strings.ReplaceAll(inv.InvoiceNumber, " ", "_") + ".pdf"
@@ -78,14 +78,14 @@ func (h *Handler) UpdateInvoiceStatus(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	invoiceID, err := uuid.Parse(chi.URLParam(r, "invoiceId"))
 	if err != nil {
-		http.Error(w, "invalid invoice id", http.StatusBadRequest)
+		writeErrorText(w, "invalid invoice id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
 		Status domain.InvoiceStatus `json:"status"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	if err := h.Invoice.UpdateStatus(r.Context(), tenant.ID, invoiceID, req.Status); err != nil {
@@ -93,7 +93,7 @@ func (h *Handler) UpdateInvoiceStatus(w http.ResponseWriter, r *http.Request) {
 		if err == usecase.ErrForbidden {
 			status = http.StatusForbidden
 		}
-		http.Error(w, err.Error(), status)
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": string(req.Status)})
@@ -103,14 +103,14 @@ func (h *Handler) MarkInvoicePaid(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	invoiceID, err := uuid.Parse(chi.URLParam(r, "invoiceId"))
 	if err != nil {
-		http.Error(w, "invalid invoice id", http.StatusBadRequest)
+		writeErrorText(w, "invalid invoice id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
 		PaymentReference *string `json:"payment_reference"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	inv, err := h.Invoice.MarkPaid(r.Context(), tenant.ID, invoiceID, req.PaymentReference, time.Now().UTC())
@@ -119,7 +119,7 @@ func (h *Handler) MarkInvoicePaid(w http.ResponseWriter, r *http.Request) {
 		if err == usecase.ErrForbidden {
 			status = http.StatusForbidden
 		}
-		http.Error(w, err.Error(), status)
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusOK, inv)
@@ -129,14 +129,14 @@ func (h *Handler) CancelInvoice(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	invoiceID, err := uuid.Parse(chi.URLParam(r, "invoiceId"))
 	if err != nil {
-		http.Error(w, "invalid invoice id", http.StatusBadRequest)
+		writeErrorText(w, "invalid invoice id", http.StatusBadRequest)
 		return
 	}
 	var req struct {
 		Reason string `json:"reason"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	inv, err := h.Invoice.Cancel(r.Context(), tenant.ID, invoiceID, req.Reason, time.Now().UTC())
@@ -145,7 +145,7 @@ func (h *Handler) CancelInvoice(w http.ResponseWriter, r *http.Request) {
 		if err == usecase.ErrForbidden {
 			status = http.StatusForbidden
 		}
-		http.Error(w, err.Error(), status)
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusOK, inv)
@@ -155,12 +155,12 @@ func (h *Handler) GenerateLotInvoice(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
-		http.Error(w, "invalid lot id", http.StatusBadRequest)
+		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 		return
 	}
 	inv, err := h.Invoice.GenerateForLot(r.Context(), tenant.ID, lotID, time.Now().UTC())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, inv)
@@ -170,7 +170,7 @@ func (h *Handler) GetAuctionSettlementSummary(w http.ResponseWriter, r *http.Req
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	summary, err := h.Invoice.GetAuctionSettlementSummary(r.Context(), tenant.ID, auctionID)
@@ -179,7 +179,7 @@ func (h *Handler) GetAuctionSettlementSummary(w http.ResponseWriter, r *http.Req
 		if err == usecase.ErrForbidden {
 			status = http.StatusForbidden
 		}
-		http.Error(w, err.Error(), status)
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
@@ -189,12 +189,12 @@ func (h *Handler) ListAuctionInvoices(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	filter, err := parseInvoiceListFilter(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	rows, total, err := h.Invoice.ListAuctionInvoices(r.Context(), tenant.ID, auctionID, filter)
@@ -203,7 +203,7 @@ func (h *Handler) ListAuctionInvoices(w http.ResponseWriter, r *http.Request) {
 		if err == usecase.ErrForbidden {
 			status = http.StatusForbidden
 		}
-		http.Error(w, err.Error(), status)
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -218,12 +218,12 @@ func (h *Handler) ExportAuctionSettlementCSV(w http.ResponseWriter, r *http.Requ
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
 	if err != nil {
-		http.Error(w, "invalid auction id", http.StatusBadRequest)
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
 	statusFilter, err := parseInvoicePaymentStatus(strings.TrimSpace(r.URL.Query().Get("status")))
 	if err != nil {
-		http.Error(w, "invalid status", http.StatusBadRequest)
+		writeErrorText(w, "invalid status", http.StatusBadRequest)
 		return
 	}
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
@@ -250,7 +250,7 @@ func (h *Handler) ExportAuctionSettlementCSV(w http.ResponseWriter, r *http.Requ
 		"cancel_reason",
 	}
 	if err := csvWriter.Write(header); err != nil {
-		http.Error(w, "failed writing csv", http.StatusInternalServerError)
+		writeErrorText(w, "failed writing csv", http.StatusInternalServerError)
 		return
 	}
 
@@ -297,12 +297,12 @@ func (h *Handler) ExportAuctionSettlementCSV(w http.ResponseWriter, r *http.Requ
 		if err == usecase.ErrForbidden {
 			statusCode = http.StatusForbidden
 		}
-		http.Error(w, err.Error(), statusCode)
+		writeErrorText(w, err.Error(), statusCode)
 		return
 	}
 	csvWriter.Flush()
 	if err := csvWriter.Error(); err != nil {
-		http.Error(w, "failed writing csv", http.StatusInternalServerError)
+		writeErrorText(w, "failed writing csv", http.StatusInternalServerError)
 		return
 	}
 	h.Invoice.AuditCSVExport(r.Context(), tenant.ID, auctionID)

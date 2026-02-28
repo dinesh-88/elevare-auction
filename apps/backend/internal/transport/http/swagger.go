@@ -13,7 +13,7 @@ func ServeOpenAPISpec() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data, err := fs.ReadFile(swaggerFS, "swagger/openapi.yaml")
 		if err != nil {
-			http.Error(w, "openapi spec not found", http.StatusInternalServerError)
+			writeErrorText(w, "openapi spec not found", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/yaml")

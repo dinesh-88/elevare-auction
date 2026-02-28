@@ -22,7 +22,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())`
 		component.ID, component.TenantID, component.Name, component.CalculationType,
 		component.Value, component.AppliesTo, component.Taxable, component.Active,
 	)
-	return err
+	return mapDBError(err, "A fee component with these details already exists.")
 }
 
 func (r *FeeRepo) UpdateComponent(ctx context.Context, component *domain.FeeComponent) error {
@@ -111,7 +111,7 @@ func (r *FeeRepo) CreateAssignment(ctx context.Context, tenantID uuid.UUID, assi
 INSERT INTO fee_assignments (id, scope_type, scope_id, fee_component_id, created_at)
 VALUES ($1,$2,$3,$4,now())`
 	_, err := r.DB.Exec(ctx, q, assignment.ID, assignment.ScopeType, assignment.ScopeID, assignment.FeeComponentID)
-	return err
+	return mapDBError(err, "This fee is already assigned to that scope.")
 }
 
 func (r *FeeRepo) ListAssignments(ctx context.Context, tenantID uuid.UUID, scopeType domain.FeeScopeType, scopeID uuid.UUID) ([]domain.FeeAssignment, error) {

@@ -32,12 +32,12 @@ func (h *Handler) UploadLotImage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UploadAsset(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := middleware.TenantFromContext(r.Context())
 	if !ok {
-		http.Error(w, "tenant missing", http.StatusInternalServerError)
+		writeErrorText(w, "tenant missing", http.StatusInternalServerError)
 		return
 	}
 	kind := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("kind")))
 	if kind != "logo" && kind != "banner" && kind != "image" {
-		http.Error(w, "invalid kind", http.StatusBadRequest)
+		writeErrorText(w, "invalid kind", http.StatusBadRequest)
 		return
 	}
 	fileURL, sizeBytes, mime, err := h.storeImageFile(w, r, "assets/"+kind)
@@ -45,7 +45,7 @@ func (h *Handler) UploadAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if kind != "logo" && mime == "image/svg+xml" {
-		http.Error(w, "svg is allowed only for logo", http.StatusBadRequest)
+		writeErrorText(w, "svg is allowed only for logo", http.StatusBadRequest)
 		return
 	}
 	item, err := h.Asset.Register(r.Context(), usecase.RegisterAssetInput{
@@ -56,7 +56,7 @@ func (h *Handler) UploadAsset(w http.ResponseWriter, r *http.Request) {
 		MIME:      mime,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
@@ -73,22 +73,22 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request, scope stri
 func (h *Handler) storeImageFile(w http.ResponseWriter, r *http.Request, scope string) (string, int64, string, error) {
 	tenant, ok := middleware.TenantFromContext(r.Context())
 	if !ok {
-		http.Error(w, "tenant missing", http.StatusInternalServerError)
+		writeErrorText(w, "tenant missing", http.StatusInternalServerError)
 		return "", 0, "", errors.New("tenant missing")
 	}
 	if h.Storage == nil {
-		http.Error(w, "storage not configured", http.StatusInternalServerError)
+		writeErrorText(w, "storage not configured", http.StatusInternalServerError)
 		return "", 0, "", errors.New("storage not configured")
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		http.Error(w, "invalid multipart payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid multipart payload", http.StatusBadRequest)
 		return "", 0, "", err
 	}
 	file, fileHeader, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "file field is required", http.StatusBadRequest)
+		writeErrorText(w, "file field is required", http.StatusBadRequest)
 		return "", 0, "", err
 	}
 	defer file.Close()
@@ -96,17 +96,17 @@ func (h *Handler) storeImageFile(w http.ResponseWriter, r *http.Request, scope s
 	header := make([]byte, 512)
 	n, err := file.Read(header)
 	if err != nil && err != io.EOF {
-		http.Error(w, "failed to read file", http.StatusBadRequest)
+		writeErrorText(w, "failed to read file", http.StatusBadRequest)
 		return "", 0, "", err
 	}
 	contentType := http.DetectContentType(header[:n])
 	ext, ok := allowedImageTypes[contentType]
 	if !ok {
-		http.Error(w, "unsupported file type", http.StatusBadRequest)
+		writeErrorText(w, "unsupported file type", http.StatusBadRequest)
 		return "", 0, "", errors.New("unsupported file type")
 	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		http.Error(w, "failed to process file", http.StatusBadRequest)
+		writeErrorText(w, "failed to process file", http.StatusBadRequest)
 		return "", 0, "", err
 	}
 
@@ -115,7 +115,7 @@ func (h *Handler) storeImageFile(w http.ResponseWriter, r *http.Request, scope s
 	urlPath, err := h.Storage.Put(r.Context(), key, contentType, file, fileHeader.Size)
 	if err != nil {
 		log.Printf("upload failed (scope=%s, key=%s): %v", scope, key, err)
-		http.Error(w, "failed to upload file: "+err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, "failed to upload file: "+err.Error(), http.StatusInternalServerError)
 		return "", 0, "", err
 	}
 	return urlPath, fileHeader.Size, contentType, nil

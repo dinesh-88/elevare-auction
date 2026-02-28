@@ -3,6 +3,8 @@ package httptransport
 import (
 	"encoding/json"
 	"net/http"
+
+	errmiddleware "github.com/dinesh-88/elevare-auction/internal/http/middleware"
 )
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -13,4 +15,12 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func decodeJSON(r *http.Request, dst any) error {
 	return json.NewDecoder(r.Body).Decode(dst)
+}
+
+func WriteError(w http.ResponseWriter, err error) {
+	errmiddleware.WriteError(w, err)
+}
+
+func writeErrorText(w http.ResponseWriter, message string, status int) {
+	errmiddleware.WriteMessage(w, status, message)
 }

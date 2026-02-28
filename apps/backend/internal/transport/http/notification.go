@@ -19,7 +19,7 @@ func (h *Handler) ListMyNotifications(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	limit := 50
@@ -30,13 +30,13 @@ func (h *Handler) ListMyNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	cursorCreatedAt, cursorID, err := parseNotificationCursor(r.URL.Query().Get("cursor"))
 	if err != nil {
-		http.Error(w, "invalid cursor", http.StatusBadRequest)
+		writeErrorText(w, "invalid cursor", http.StatusBadRequest)
 		return
 	}
 
 	rows, err := h.Notification.ListForUser(r.Context(), tenant.ID, claims.UserID, limit, cursorCreatedAt, cursorID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	nextCursor := ""
@@ -51,16 +51,16 @@ func (h *Handler) MarkMyNotificationRead(w http.ResponseWriter, r *http.Request)
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "invalid notification id", http.StatusBadRequest)
+		writeErrorText(w, "invalid notification id", http.StatusBadRequest)
 		return
 	}
 	if err := h.Notification.MarkRead(r.Context(), tenant.ID, claims.UserID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeErrorText(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -70,11 +70,11 @@ func (h *Handler) MarkAllMyNotificationsRead(w http.ResponseWriter, r *http.Requ
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	if err := h.Notification.MarkAllRead(r.Context(), tenant.ID, claims.UserID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -84,12 +84,12 @@ func (h *Handler) GetMyNotificationPreferences(w http.ResponseWriter, r *http.Re
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	prefs, err := h.Notification.GetPreferences(r.Context(), tenant.ID, claims.UserID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": prefs})
@@ -99,7 +99,7 @@ func (h *Handler) UpdateMyNotificationPreferences(w http.ResponseWriter, r *http
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
-		http.Error(w, "claims missing", http.StatusUnauthorized)
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
 	var req struct {
@@ -110,7 +110,7 @@ func (h *Handler) UpdateMyNotificationPreferences(w http.ResponseWriter, r *http
 		} `json:"items"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	in := make([]usecase.NotificationPreferenceInput, 0, len(req.Items))
@@ -126,7 +126,7 @@ func (h *Handler) UpdateMyNotificationPreferences(w http.ResponseWriter, r *http
 		if err == usecase.ErrValidation || err == usecase.ErrForbidden {
 			status = http.StatusBadRequest
 		}
-		http.Error(w, err.Error(), status)
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

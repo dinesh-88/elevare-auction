@@ -72,7 +72,7 @@ func (r *AuctionTermsRepo) CreateVersion(ctx context.Context, item *domain.Aucti
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, `SELECT 1 FROM auctions WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, item.TenantID, item.AuctionID); err != nil {
-		return err
+		return mapDBError(err, "")
 	}
 	if err := tx.QueryRow(ctx, `
 SELECT COALESCE(MAX(version_number), 0) + 1
@@ -88,10 +88,10 @@ INSERT INTO auction_terms (
   $1, $2, $3, $4, $5, $6,
   $7, $8, now()
 )`, item.ID, item.TenantID, item.AuctionID, item.VersionNumber, item.ContentMarkdown, item.ContentHash, item.IsActive, item.CreatedByUserID); err != nil {
-		return err
+		return mapDBError(err, "A conflicting terms version already exists.")
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return err
+		return mapDBError(err, "")
 	}
 	item.CreatedAt = time.Now().UTC()
 	return nil
@@ -145,7 +145,7 @@ INSERT INTO bidder_terms_acceptance (
   $7, $8, $9, $10, $11
 )
 ON CONFLICT (auction_id, user_id, auction_terms_id) DO NOTHING`, item.ID, item.TenantID, item.AuctionID, item.UserID, item.AuctionTermsID, item.TermsVersionNumber, item.ContentHash, item.AcceptedAt, nullIfEmpty(item.AcceptedIP), nullIfEmpty(item.AcceptedUserAgent), item.CreatedAt)
-	return err
+	return mapDBError(err, "")
 }
 
 func scanAuctionTerms(row pgx.Row) (*domain.AuctionTerms, error) {

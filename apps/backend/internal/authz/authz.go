@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	errmiddleware "github.com/dinesh-88/elevare-auction/internal/http/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 )
 
@@ -28,7 +29,7 @@ func Require(permission domain.Permission) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			uc, ok := middleware.UserContextFromContext(r.Context())
 			if !ok || !Can(uc.Role, permission) {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				errmiddleware.WriteMessage(w, http.StatusForbidden, "forbidden")
 				return
 			}
 			next.ServeHTTP(w, r)

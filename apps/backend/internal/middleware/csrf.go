@@ -18,12 +18,12 @@ func RequireCSRFCookieHeader(csrfCookieName string) func(http.Handler) http.Hand
 			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 				c, err := r.Cookie(cookieName)
 				if err != nil || strings.TrimSpace(c.Value) == "" {
-					http.Error(w, "missing csrf cookie", http.StatusForbidden)
+					writeError(w, "missing csrf cookie", http.StatusForbidden)
 					return
 				}
 				headerToken := strings.TrimSpace(r.Header.Get("X-CSRF-Token"))
 				if headerToken == "" || headerToken != strings.TrimSpace(c.Value) {
-					http.Error(w, "invalid csrf token", http.StatusForbidden)
+					writeError(w, "invalid csrf token", http.StatusForbidden)
 					return
 				}
 			}

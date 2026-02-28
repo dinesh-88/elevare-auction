@@ -13,8 +13,12 @@ func CaptureRequestMeta(next http.Handler) http.Handler {
 		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 			ip = host
 		}
+		requestID := chimiddleware.GetReqID(r.Context())
+		if requestID != "" {
+			w.Header().Set("X-Request-ID", requestID)
+		}
 		meta := RequestMeta{
-			RequestID: chimiddleware.GetReqID(r.Context()),
+			RequestID: requestID,
 			IP:        ip,
 			UserAgent: r.UserAgent(),
 		}

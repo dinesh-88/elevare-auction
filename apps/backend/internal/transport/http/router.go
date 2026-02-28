@@ -9,6 +9,7 @@ import (
 	wsadapter "github.com/dinesh-88/elevare-auction/internal/adapter/broadcaster/ws"
 	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	errmiddleware "github.com/dinesh-88/elevare-auction/internal/http/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -22,7 +23,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	r.Use(chimiddleware.RealIP)
 	r.Use(middleware.CaptureRequestMeta)
 	r.Use(chimiddleware.Logger)
-	r.Use(chimiddleware.Recoverer)
+	r.Use(errmiddleware.ErrorMiddleware)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{
 			"http://localhost:5173",

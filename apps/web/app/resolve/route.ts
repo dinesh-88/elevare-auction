@@ -20,6 +20,11 @@ type TenantResolveCandidate = {
   login_url?: string;
 };
 
+type ResolveErrorBody = {
+  error: string;
+  message: string;
+};
+
 const rateLimitBuckets = new Map<string, RateLimitBucket>();
 
 function resolveApiBase() {
@@ -27,7 +32,37 @@ function resolveApiBase() {
   if (fromServer) return trimTrailingSlash(fromServer);
   const fromPublic = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (fromPublic) return trimTrailingSlash(fromPublic);
-  return "http://localhost:8080";
+  return "";
+}
+
+function resolveApiBaseFromRequest(request: NextRequest) {
+  const configured = resolveApiBase();
+  if (configured) return configured;
+
+  const forwardedHost = request.headers.get("x-forwarded-host")?.trim();
+  const rawHost = forwardedHost || request.headers.get("host")?.trim() || "";
+  const host = rawHost.split(",")[0]?.trim() || "";
+  const protocol = request.headers.get("x-forwarded-proto")?.trim() || "https";
+
+  if (!host) {
+    return "http://localhost:8080";
+  }
+
+  const hostname = host.split(":")[0] ?? host;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return "http://localhost:8080";
+  }
+  if (hostname.endsWith(".localhost")) {
+    return `${protocol}://api.localhost:8080`;
+  }
+
+  const parts = hostname.split(".");
+  if (parts.length >= 2) {
+    parts[0] = "api";
+    return `${protocol}://${parts.join(".")}`;
+  }
+
+  return `${protocol}://api.${hostname}`;
 }
 
 function resolveTenantBase(slug: string) {
@@ -71,8 +106,8 @@ function isRateLimited(key: string, nowMs: number) {
   return false;
 }
 
-async function fetchCandidates(email: string) {
-  const response = await fetch(`${resolveApiBase()}/auth/discover-tenant`, {
+async function fetchCandidates(request: NextRequest, email: string) {
+  const response = await fetch(`${resolveApiBaseFromRequest(request)}/auth/discover-tenant`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -115,20 +150,38 @@ export async function POST(request: NextRequest) {
   };
 
   if (isRateLimited(clientKey(request), startedAt)) {
-    return finish(NextResponse.json({ error: "Too many requests. Please try again shortly." }, { status: 429 }));
+    return finish(
+      NextResponse.json<ResolveErrorBody>(
+        { error: "rate_limited", message: "Too many requests. Please try again shortly." },
+        { status: 429 },
+      ),
+    );
   }
 
   const payload = (await request.json().catch(() => ({}))) as { email?: string };
   const email = payload.email?.trim().toLowerCase() ?? "";
   if (!emailPattern.test(email)) {
-    return finish(NextResponse.json({ error: "Enter a valid email address." }, { status: 400 }));
+    return finish(
+      NextResponse.json<ResolveErrorBody>(
+        { error: "validation_error", message: "Enter a valid email address." },
+        { status: 400 },
+      ),
+    );
   }
 
   let items: TenantResolveCandidate[] = [];
   try {
-    items = await fetchCandidates(email);
+    items = await fetchCandidates(request, email);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unable to resolve your institution right now. Please try again shortly.";
+    const code =
+      message === "Enter a valid email address."
+        ? "validation_error"
+        : message === "No associated institutions found."
+          ? "not_found"
+          : message === "Too many requests. Please try again shortly."
+            ? "rate_limited"
+            : "internal_error";
     const status =
       message === "Enter a valid email address."
         ? 400
@@ -137,7 +190,7 @@ export async function POST(request: NextRequest) {
           : message === "Too many requests. Please try again shortly."
             ? 429
             : 502;
-    return finish(NextResponse.json({ error: message }, { status }));
+    return finish(NextResponse.json<ResolveErrorBody>({ error: code, message }, { status }));
   }
   const normalized = items
     .map((item) => ({
@@ -147,7 +200,12 @@ export async function POST(request: NextRequest) {
     .filter((item) => item.slug && item.name);
 
   if (normalized.length === 0) {
-    return finish(NextResponse.json({ error: "No associated institutions found." }, { status: 404 }));
+    return finish(
+      NextResponse.json<ResolveErrorBody>(
+        { error: "not_found", message: "No associated institutions found." },
+        { status: 404 },
+      ),
+    );
   }
 
   if (normalized.length === 1) {

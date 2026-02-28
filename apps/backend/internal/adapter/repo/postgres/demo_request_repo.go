@@ -16,5 +16,5 @@ func (r *DemoRequestRepo) Create(ctx context.Context, item *domain.DemoRequest) 
 INSERT INTO demo_requests (id, name, institution, email, message, created_at)
 VALUES ($1, $2, $3, $4, $5, $6)`
 	_, err := r.DB.Exec(ctx, q, item.ID, item.Name, item.Institution, item.Email, item.Message, item.CreatedAt)
-	return err
+	return mapDBError(err, "Your request could not be submitted.")
 }

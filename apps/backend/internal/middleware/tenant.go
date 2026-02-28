@@ -48,7 +48,7 @@ func (m TenantMiddleware) Resolve(next http.Handler) http.Handler {
 
 		tenant, err := m.Tenants.GetByHost(r.Context(), host)
 		if err != nil || tenant == nil {
-			http.Error(w, "tenant not found", http.StatusNotFound)
+			writeError(w, "tenant not found", http.StatusNotFound)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(WithTenant(r.Context(), tenant)))

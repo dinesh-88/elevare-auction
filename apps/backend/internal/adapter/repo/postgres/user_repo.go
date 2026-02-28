@@ -30,7 +30,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())`
 	_, err := r.DB.Exec(ctx, q,
 		user.ID, user.TenantID, user.Email, user.PasswordHash, user.Role, status, user.EmailVerified, user.ApprovalStatus, user.KYCStatus,
 	)
-	return err
+	return mapDBError(err, "A user with this email already exists.")
 }
 
 func (r *UserRepo) GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*domain.User, error) {
@@ -123,7 +123,7 @@ GROUP BY t.id, t.name, t.subdomain, t.custom_domain
 ORDER BY MAX(t.created_at) DESC`
 	rows, err := r.DB.Query(ctx, q, strings.TrimSpace(email))
 	if err != nil {
-		return nil, err
+		return nil, mapDBError(err, "")
 	}
 	defer rows.Close()
 

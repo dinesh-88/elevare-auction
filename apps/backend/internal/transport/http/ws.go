@@ -16,7 +16,7 @@ func AuctionWS(hub *wsadapter.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		auctionID, err := uuid.Parse(chi.URLParam(r, "id"))
 		if err != nil {
-			http.Error(w, "invalid auction id", http.StatusBadRequest)
+			writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 			return
 		}
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
@@ -46,7 +46,7 @@ func LotWS(hub *wsadapter.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lotID, err := uuid.Parse(chi.URLParam(r, "id"))
 		if err != nil {
-			http.Error(w, "invalid lot id", http.StatusBadRequest)
+			writeErrorText(w, "invalid lot id", http.StatusBadRequest)
 			return
 		}
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
