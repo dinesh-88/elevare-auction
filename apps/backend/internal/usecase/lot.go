@@ -203,6 +203,9 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 	if err := uc.validateSimulatorTenant(ctx, in.TenantID, in.UserID); err != nil {
 		return nil, err
 	}
+	if err := authz.Authorize(ctx, domain.PermissionBidPlace); err != nil {
+		return nil, ErrForbidden
+	}
 	if uc.Bidders != nil {
 		profile, err := uc.Bidders.EnsureTenantBidder(ctx, in.TenantID, in.UserID)
 		if err != nil {

@@ -176,7 +176,7 @@ func (uc *InvoiceUseCase) Cancel(ctx context.Context, tenantID, invoiceID uuid.U
 	return uc.Invoices.Cancel(ctx, tenantID, invoiceID, reason, now)
 }
 
-func (uc *InvoiceUseCase) GetAuthorized(ctx context.Context, tenantID, invoiceID, userID uuid.UUID, role domain.Role) (*domain.Invoice, error) {
+func (uc *InvoiceUseCase) GetAuthorized(ctx context.Context, tenantID, invoiceID, userID uuid.UUID) (*domain.Invoice, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
 	}
@@ -184,13 +184,13 @@ func (uc *InvoiceUseCase) GetAuthorized(ctx context.Context, tenantID, invoiceID
 	if err != nil {
 		return nil, err
 	}
-	if domain.HasPermission(role, domain.PermissionInvoiceView) || inv.WinnerUserID == userID {
+	if authz.HasPermission(ctx, userID, tenantID, domain.PermissionInvoiceView) || inv.WinnerUserID == userID {
 		return inv, nil
 	}
 	return nil, ErrForbidden
 }
 
-func (uc *InvoiceUseCase) GetByLotAuthorized(ctx context.Context, tenantID, lotID, userID uuid.UUID, role domain.Role) (*domain.Invoice, error) {
+func (uc *InvoiceUseCase) GetByLotAuthorized(ctx context.Context, tenantID, lotID, userID uuid.UUID) (*domain.Invoice, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func (uc *InvoiceUseCase) GetByLotAuthorized(ctx context.Context, tenantID, lotI
 	if err != nil {
 		return nil, err
 	}
-	if domain.HasPermission(role, domain.PermissionInvoiceView) || inv.WinnerUserID == userID {
+	if authz.HasPermission(ctx, userID, tenantID, domain.PermissionInvoiceView) || inv.WinnerUserID == userID {
 		return inv, nil
 	}
 	return nil, ErrForbidden

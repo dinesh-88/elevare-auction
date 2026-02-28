@@ -5,16 +5,18 @@ import "github.com/google/uuid"
 type Permission string
 
 const (
-	PermissionAuctionCreate Permission = "auction:create"
-	PermissionAuctionUpdate Permission = "auction:update"
-	PermissionAuctionStart  Permission = "auction:start"
-	PermissionAuctionEnd    Permission = "auction:end"
+	PermissionAuctionCreate      Permission = "auction:create"
+	PermissionAuctionUpdate      Permission = "auction:update"
+	PermissionAuctionStart       Permission = "auction:start"
+	PermissionAuctionEnd         Permission = "auction:end"
+	PermissionAuctionTermsAccept Permission = "auction_terms:accept"
 
 	PermissionLotCreate  Permission = "lot:create"
 	PermissionLotUpdate  Permission = "lot:update"
 	PermissionLotReorder Permission = "lot:reorder"
 	PermissionLotStart   Permission = "lot:start"
 	PermissionLotEnd     Permission = "lot:end"
+	PermissionBidPlace   Permission = "bid:place"
 
 	PermissionFeesManage      Permission = "fees:manage"
 	PermissionInvoiceView     Permission = "invoice:view"
@@ -26,11 +28,12 @@ const (
 	PermissionSiteEdit    Permission = "site:edit"
 	PermissionSitePublish Permission = "site:publish"
 
-	PermissionAuditView  Permission = "audit:view"
-	PermissionRoleManage Permission = "role:manage"
+	PermissionStaffInvite Permission = "staff:invite"
+	PermissionAuditView   Permission = "audit:view"
+	PermissionRoleManage  Permission = "role:manage"
 )
 
-var allTenantPermissions = []Permission{
+var ownerTenantPermissions = []Permission{
 	PermissionAuctionCreate,
 	PermissionAuctionUpdate,
 	PermissionAuctionStart,
@@ -47,17 +50,39 @@ var allTenantPermissions = []Permission{
 	PermissionBidderSuspend,
 	PermissionSiteEdit,
 	PermissionSitePublish,
+	PermissionStaffInvite,
 	PermissionAuditView,
 	PermissionRoleManage,
 }
 
+var adminTenantPermissions = []Permission{
+	PermissionAuctionCreate,
+	PermissionAuctionUpdate,
+	PermissionAuctionStart,
+	PermissionAuctionEnd,
+	PermissionLotCreate,
+	PermissionLotUpdate,
+	PermissionLotReorder,
+	PermissionLotStart,
+	PermissionLotEnd,
+	PermissionFeesManage,
+	PermissionInvoiceView,
+	PermissionInvoiceMarkPaid,
+	PermissionBidderApprove,
+	PermissionBidderSuspend,
+	PermissionSiteEdit,
+	PermissionSitePublish,
+	PermissionStaffInvite,
+	PermissionAuditView,
+}
+
 var RolePermissions = map[Role]map[Permission]struct{}{
-	RoleOwner:      permissionSet(allTenantPermissions...),
-	RoleAdmin:      permissionSet(allTenantPermissions...),
+	RoleOwner:      permissionSet(ownerTenantPermissions...),
+	RoleAdmin:      permissionSet(adminTenantPermissions...),
 	RoleStaff:      permissionSet(PermissionAuctionCreate, PermissionAuctionUpdate, PermissionAuctionStart, PermissionAuctionEnd, PermissionLotCreate, PermissionLotUpdate, PermissionLotReorder, PermissionLotStart, PermissionLotEnd, PermissionBidderApprove, PermissionSiteEdit),
 	RoleAccounting: permissionSet(PermissionInvoiceView, PermissionInvoiceMarkPaid, PermissionAuditView),
 	RoleViewer:     permissionSet(),
-	RoleBidder:     permissionSet(),
+	RoleBidder:     permissionSet(PermissionAuctionTermsAccept, PermissionBidPlace),
 }
 
 func permissionSet(perms ...Permission) map[Permission]struct{} {

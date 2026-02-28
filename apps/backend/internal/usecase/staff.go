@@ -42,7 +42,7 @@ func (uc *StaffUseCase) List(ctx context.Context, tenantID uuid.UUID) ([]domain.
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, nil, err
 	}
-	if err := authz.Authorize(ctx, domain.PermissionRoleManage); err != nil {
+	if err := authz.Authorize(ctx, domain.PermissionStaffInvite); err != nil {
 		return nil, nil, ErrForbidden
 	}
 	users, err := uc.Staff.ListTenantUsers(ctx, tenantID)
@@ -60,7 +60,7 @@ func (uc *StaffUseCase) Invite(ctx context.Context, in InviteStaffInput) (*domai
 	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
 		return nil, "", err
 	}
-	if err := authz.Authorize(ctx, domain.PermissionRoleManage); err != nil {
+	if err := authz.Authorize(ctx, domain.PermissionStaffInvite); err != nil {
 		return nil, "", ErrForbidden
 	}
 	email := strings.ToLower(strings.TrimSpace(in.Email))
@@ -196,6 +196,9 @@ func (uc *StaffUseCase) UpdateRole(ctx context.Context, tenantID, tenantUserID u
 	current, err := uc.Staff.GetTenantUserByID(ctx, tenantID, tenantUserID)
 	if err != nil {
 		return err
+	}
+	if current.Role == domain.RoleOwner {
+		return errors.New("owner cannot be changed without ownership transfer")
 	}
 	if current.IsPrimaryOwner {
 		return errors.New("primary owner cannot be changed without ownership transfer")

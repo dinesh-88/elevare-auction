@@ -167,3 +167,25 @@ func TestAcceptActiveTerms_CapturesImmutableAcceptance(t *testing.T) {
 		t.Fatalf("expected request metadata to be stored, got %#v", item)
 	}
 }
+
+func TestAcceptActiveTerms_RejectsNonBidderRoles(t *testing.T) {
+	tenantID := uuid.New()
+	auctionID := uuid.New()
+	userID := uuid.New()
+	termsRepo := &fakeAuctionTermsRepo{
+		active: &domain.AuctionTerms{
+			ID:            uuid.New(),
+			TenantID:      tenantID,
+			AuctionID:     auctionID,
+			VersionNumber: 1,
+			ContentHash:   "hash-d",
+			IsActive:      true,
+		},
+	}
+	uc := &AuctionTermsUseCase{Terms: termsRepo}
+
+	_, _, err := uc.AcceptActive(authCtx(tenantID, domain.RoleViewer), tenantID, auctionID, userID, "en", time.Now().UTC(), "127.0.0.1", "test-agent")
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}

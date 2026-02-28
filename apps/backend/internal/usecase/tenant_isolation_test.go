@@ -191,7 +191,7 @@ func TestInvoiceGetAuthorizedCrossTenantForbiddenBeforeRepo(t *testing.T) {
 	repo := &fakeInvoiceRepo{}
 	uc := &InvoiceUseCase{Invoices: repo}
 
-	_, err := uc.GetAuthorized(authCtx(tenantA, domain.RoleAdmin), tenantB, uuid.New(), uuid.New(), domain.RoleAdmin)
+	_, err := uc.GetAuthorized(authCtx(tenantA, domain.RoleAdmin), tenantB, uuid.New(), uuid.New())
 	if err != ErrForbidden {
 		t.Fatalf("expected ErrForbidden, got %v", err)
 	}

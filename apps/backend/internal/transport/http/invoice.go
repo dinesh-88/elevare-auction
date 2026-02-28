@@ -29,7 +29,7 @@ func (h *Handler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 		writeErrorText(w, "invalid invoice id", http.StatusBadRequest)
 		return
 	}
-	inv, err := h.Invoice.GetAuthorized(r.Context(), tenant.ID, invoiceID, claims.UserID, claims.Role)
+	inv, err := h.Invoice.GetAuthorized(r.Context(), tenant.ID, invoiceID, claims.UserID)
 	if err != nil {
 		if err == usecase.ErrForbidden {
 			writeErrorText(w, "forbidden", http.StatusForbidden)
@@ -53,7 +53,7 @@ func (h *Handler) DownloadInvoicePDF(w http.ResponseWriter, r *http.Request) {
 		writeErrorText(w, "invalid invoice id", http.StatusBadRequest)
 		return
 	}
-	inv, err := h.Invoice.GetAuthorized(r.Context(), tenant.ID, invoiceID, claims.UserID, claims.Role)
+	inv, err := h.Invoice.GetAuthorized(r.Context(), tenant.ID, invoiceID, claims.UserID)
 	if err != nil {
 		if err == usecase.ErrForbidden {
 			writeErrorText(w, "forbidden", http.StatusForbidden)

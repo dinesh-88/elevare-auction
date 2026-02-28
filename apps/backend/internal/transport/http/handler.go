@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
@@ -587,10 +588,6 @@ func (h *Handler) GetLotFinancials(w http.ResponseWriter, r *http.Request) {
 		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
-	if claims.Role != domain.RoleBidder {
-		writeErrorText(w, "forbidden", http.StatusForbidden)
-		return
-	}
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
 		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
@@ -602,7 +599,7 @@ func (h *Handler) GetLotFinancials(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isAdmin := domain.HasPermission(claims.Role, domain.PermissionInvoiceView)
+	isAdmin := authz.HasPermission(r.Context(), claims.UserID, tenant.ID, domain.PermissionInvoiceView)
 	isWinner := lot.WinnerUserID != nil && claims.UserID == *lot.WinnerUserID
 	if !isAdmin && !isWinner {
 		writeErrorText(w, "forbidden", http.StatusForbidden)
@@ -617,7 +614,7 @@ func (h *Handler) GetLotFinancials(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var invoiceID *uuid.UUID
-	if inv, err := h.Invoice.GetByLotAuthorized(r.Context(), tenant.ID, lot.ID, claims.UserID, claims.Role); err == nil {
+	if inv, err := h.Invoice.GetByLotAuthorized(r.Context(), tenant.ID, lot.ID, claims.UserID); err == nil {
 		invoiceID = &inv.ID
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -1695,10 +1692,6 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 		writeErrorText(w, "claims missing", http.StatusUnauthorized)
 		return
 	}
-	if claims.Role != domain.RoleBidder {
-		writeErrorText(w, "forbidden", http.StatusForbidden)
-		return
-	}
 	lotID, err := uuid.Parse(chi.URLParam(r, "lotId"))
 	if err != nil {
 		writeErrorText(w, "invalid lot id", http.StatusBadRequest)
@@ -1831,10 +1824,6 @@ func (h *Handler) AcceptAuctionTerms(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.ClaimsFromContext(r.Context())
 	if !ok {
 		writeErrorText(w, "claims missing", http.StatusUnauthorized)
-		return
-	}
-	if claims.Role != domain.RoleBidder {
-		writeErrorText(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))

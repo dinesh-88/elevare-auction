@@ -281,6 +281,22 @@ func TestPlaceBid_RejectsSuspendedBidder(t *testing.T) {
 	}
 }
 
+func TestPlaceBid_RejectsNonBidderRoles(t *testing.T) {
+	tenantID := uuid.New()
+	auctionID := uuid.New()
+	lotRepo := &fakeBidderApprovalLotRepo{lot: domain.Lot{AuctionID: auctionID}}
+	auctionRepo := &fakeBidderApprovalAuctionRepo{auction: domain.Auction{RequireBidderApproval: false}}
+	bidderRepo := &fakeBidderApprovalRepo{}
+	uc := &LotUseCase{Lots: lotRepo, Auctions: auctionRepo, Bidders: bidderRepo}
+
+	_, err := uc.PlaceBid(authCtx(tenantID, domain.RoleViewer), port.PlaceLotBidTxInput{
+		TenantID: tenantID, LotID: uuid.New(), UserID: uuid.New(), Amount: int64Ptr(100), Now: time.Now().UTC(),
+	})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
 func TestPlaceBid_RejectsAmountAboveAuthorisedLimit(t *testing.T) {
 	tenantID := uuid.New()
 	auctionID := uuid.New()

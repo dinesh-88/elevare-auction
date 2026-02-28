@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import AdminSidebar from "../../src/components/AdminSidebar";
 import { api } from "../../src/api/client";
 import { useAuth } from "../../src/hooks/useAuth";
+import { stripLocalePrefix } from "../../src/i18n/config";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { loading, isAuthenticated, isAdmin } = useAuth();
@@ -25,7 +26,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     let cancelled = false;
-    const exempt = pathname === "/admin/onboarding" || pathname === "/admin/settings";
+    const normalizedPath = stripLocalePrefix(pathname ?? "/");
+    const exempt = normalizedPath === "/admin/onboarding" || normalizedPath === "/admin/settings";
 
     if (loading || !isAuthenticated || !isAdmin) {
       setCheckingOnboarding(true);

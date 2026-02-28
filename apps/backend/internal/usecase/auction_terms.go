@@ -168,6 +168,9 @@ func (uc *AuctionTermsUseCase) AcceptActive(ctx context.Context, tenantID, aucti
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, nil, err
 	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionTermsAccept); err != nil {
+		return nil, nil, ErrForbidden
+	}
 	if !domain.IsSupportedLocale(locale) {
 		return nil, nil, ErrValidation
 	}
