@@ -35,7 +35,7 @@ func (uc *InvoiceUseCase) GenerateForLot(ctx context.Context, tenantID, lotID uu
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
 	}
-	if err := authz.Authorize(ctx, domain.PermissionInvoiceMarkPaid); err != nil {
+	if err := authz.Authorize(ctx, domain.PermissionInvoiceSend); err != nil {
 		return nil, ErrForbidden
 	}
 	inv, err := uc.Invoices.GenerateForLot(ctx, tenantID, lotID, now)

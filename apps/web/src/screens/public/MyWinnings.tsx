@@ -22,7 +22,13 @@ export default function MyWinnings() {
       .finally(() => setLoading(false));
   }, [authLoading, isAuthenticated, isAdmin]);
 
-  if (authLoading) return null;
+  if (authLoading) {
+    return (
+      <section className="mx-auto max-w-[1440px] px-4 py-10 md:px-8 md:py-12">
+        <p className="text-sm text-neutral-500">Loading your account...</p>
+      </section>
+    );
+  }
   if (!isAuthenticated || isAdmin) return <Navigate to="/" replace />;
   const symbol = currencySymbol(config?.default_currency);
 

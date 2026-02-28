@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type TenantStaffInvitation, type TenantStaffUser } from "../../api/client";
 import ElevareButton from "../../components/ui/ElevareButton";
+import { useAuth } from "../../hooks/useAuth";
 
 const inviteRoles = ["ADMIN", "STAFF", "ACCOUNTING", "VIEWER"] as const;
 
 export default function Staff() {
+  const { user } = useAuth();
   const [users, setUsers] = useState<TenantStaffUser[]>([]);
   const [invitations, setInvitations] = useState<TenantStaffInvitation[]>([]);
   const [email, setEmail] = useState("");
@@ -15,9 +17,10 @@ export default function Staff() {
   const [message, setMessage] = useState<string | null>(null);
 
   const inviteBase = useMemo(() => {
-    if (typeof window === "undefined") return "/register";
-    return `${window.location.origin}/register`;
+    if (typeof window === "undefined") return "/accept-invite";
+    return `${window.location.origin}/accept-invite`;
   }, []);
+  const isOwner = user?.role === "OWNER";
 
   const load = async () => {
     setLoading(true);
@@ -67,12 +70,36 @@ export default function Staff() {
     }
   };
 
+  const revokeInvitation = async (invitationId: string) => {
+    setError(null);
+    setMessage(null);
+    try {
+      await api.revokeStaffInvitation(invitationId);
+      setMessage("Invitation revoked.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to revoke invitation");
+    }
+  };
+
+  const removeUser = async (tenantUserId: string) => {
+    setError(null);
+    setMessage(null);
+    try {
+      await api.removeStaffUser(tenantUserId);
+      setMessage("Staff member removed.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove staff member");
+    }
+  };
+
   return (
     <section className="page-shell">
       <header className="section-head">
         <div>
           <h1 className="section-title">Staff & Roles</h1>
-          <p className="section-copy">Primary ownership stays singular. Owners can invite staff and adjust non-owner roles here.</p>
+          <p className="section-copy">Primary ownership stays singular. Invite staff here, and only the owner can change or remove existing staff accounts.</p>
         </div>
       </header>
 
@@ -86,23 +113,33 @@ export default function Staff() {
               <div key={user.id} className="rounded-2xl border border-neutral-200 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-neutral-900">{user.is_primary_owner ? "Primary Owner" : `User ${user.user_id.slice(0, 8)}`}</p>
+                    <p className="text-sm font-semibold text-neutral-900">
+                      {user.is_primary_owner ? "Primary Owner" : user.email.split("@")[0] || "Team Member"}
+                    </p>
+                    <p className="text-sm text-neutral-700">{user.email}</p>
                     <p className="text-xs text-neutral-500">Added {new Date(user.created_at).toLocaleDateString()}</p>
                   </div>
                   {user.is_primary_owner ? (
                     <span className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-semibold text-white">OWNER</span>
+                  ) : !isOwner ? (
+                    <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-700">{user.role}</span>
                   ) : (
-                    <select
-                      className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                      value={user.role}
-                      onChange={(e) => void updateRole(user.id, e.target.value as (typeof inviteRoles)[number])}
-                    >
-                      {inviteRoles.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                        value={user.role}
+                        onChange={(e) => void updateRole(user.id, e.target.value as (typeof inviteRoles)[number])}
+                      >
+                        {inviteRoles.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="btn-ghost" type="button" onClick={() => void removeUser(user.id)}>
+                        Remove
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -142,8 +179,11 @@ export default function Staff() {
                 <div key={invite.id} className="rounded-2xl border border-neutral-200 p-4">
                   <p className="text-sm font-semibold text-neutral-900">{invite.email}</p>
                   <p className="mt-1 text-xs text-neutral-500">
-                    {invite.role} • {invite.accepted_at ? "Accepted" : `Expires ${new Date(invite.expires_at).toLocaleDateString()}`}
+                    {invite.role} • Sent {new Date(invite.created_at).toLocaleDateString()} • Expires {new Date(invite.expires_at).toLocaleDateString()}
                   </p>
+                  <button className="btn-ghost mt-3" type="button" onClick={() => void revokeInvitation(invite.id)}>
+                    Revoke
+                  </button>
                 </div>
               ))}
             </div>

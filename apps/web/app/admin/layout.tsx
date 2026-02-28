@@ -59,7 +59,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [loading, isAdmin, isAuthenticated, pathname, router]);
 
   if (loading || !isAuthenticated || !isAdmin || checkingOnboarding) {
-    return null;
+    if (isAuthenticated && isAdmin) {
+      return (
+        <div className="admin-shell">
+          <AdminSidebar />
+          <main className="admin-main page-shell">
+            <section className="panel">
+              <p className="text-sm text-neutral-500">Loading admin workspace...</p>
+            </section>
+          </main>
+        </div>
+      );
+    }
+
+    return (
+      <main className="page-shell">
+        <section className="panel">
+          <p className="text-sm text-neutral-500">Loading...</p>
+        </section>
+      </main>
+    );
   }
 
   return (

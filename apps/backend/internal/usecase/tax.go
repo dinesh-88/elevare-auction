@@ -26,7 +26,7 @@ func (uc *TaxUseCase) CreateRule(ctx context.Context, in CreateTaxRuleInput) (*d
 	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
 		return nil, err
 	}
-	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+	if err := authz.Authorize(ctx, domain.PermissionVATManage); err != nil {
 		return nil, ErrForbidden
 	}
 	if in.TenantID == uuid.Nil || in.Name == "" || in.RatePercent < 0 {
@@ -49,7 +49,7 @@ func (uc *TaxUseCase) UpdateRule(ctx context.Context, tenantID, ruleID uuid.UUID
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
 	}
-	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+	if err := authz.Authorize(ctx, domain.PermissionVATManage); err != nil {
 		return nil, ErrForbidden
 	}
 	current, err := uc.Taxes.GetRuleByID(ctx, tenantID, ruleID)
@@ -78,7 +78,7 @@ func (uc *TaxUseCase) DeactivateRule(ctx context.Context, tenantID, ruleID uuid.
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return err
 	}
-	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+	if err := authz.Authorize(ctx, domain.PermissionVATManage); err != nil {
 		return ErrForbidden
 	}
 	return uc.Taxes.DeactivateRule(ctx, tenantID, ruleID)
@@ -95,7 +95,7 @@ func (uc *TaxUseCase) CreateAssignment(ctx context.Context, in CreateTaxAssignme
 	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
 		return nil, err
 	}
-	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+	if err := authz.Authorize(ctx, domain.PermissionVATManage); err != nil {
 		return nil, ErrForbidden
 	}
 	if in.TenantID == uuid.Nil || in.ScopeID == uuid.Nil || in.TaxRuleID == uuid.Nil {
@@ -154,7 +154,7 @@ func (uc *TaxUseCase) DeleteAssignment(ctx context.Context, tenantID, assignment
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return err
 	}
-	if err := authz.Authorize(ctx, domain.PermissionFeesManage); err != nil {
+	if err := authz.Authorize(ctx, domain.PermissionVATManage); err != nil {
 		return ErrForbidden
 	}
 	if err := uc.Taxes.DeleteAssignment(ctx, tenantID, assignmentID); err != nil {

@@ -96,6 +96,7 @@ type tenantUserResponse struct {
 	ID             uuid.UUID   `json:"id"`
 	TenantID       uuid.UUID   `json:"tenant_id"`
 	UserID         uuid.UUID   `json:"user_id"`
+	Email          string      `json:"email"`
 	Role           domain.Role `json:"role"`
 	IsPrimaryOwner bool        `json:"is_primary_owner"`
 	InvitedBy      *uuid.UUID  `json:"invited_by,omitempty"`
@@ -799,7 +800,13 @@ func (h *Handler) ListStaff(w http.ResponseWriter, r *http.Request) {
 	}
 	userRows := make([]tenantUserResponse, 0, len(users))
 	for _, item := range users {
-		userRows = append(userRows, toTenantUserResponse(item))
+		row := toTenantUserResponse(item)
+		if h.Staff != nil && h.Staff.Users != nil {
+			if user, userErr := h.Staff.Users.GetByID(r.Context(), tenant.ID, item.UserID); userErr == nil && user != nil {
+				row.Email = user.Email
+			}
+		}
+		userRows = append(userRows, row)
 	}
 	inviteRows := make([]tenantInvitationResponse, 0, len(invitations))
 	for _, item := range invitations {
@@ -825,14 +832,19 @@ func (h *Handler) CreateStaffInvitation(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	item, _, err := h.Staff.Invite(r.Context(), usecase.InviteStaffInput{
-		TenantID:   tenant.ID,
-		Email:      req.Email,
-		Role:       req.Role,
-		InvitedBy:  claims.UserID,
-		InviteBase: req.InviteBase,
+		TenantID:        tenant.ID,
+		Email:           req.Email,
+		Role:            req.Role,
+		InvitedBy:       claims.UserID,
+		InviteBase:      req.InviteBase,
+		InstitutionName: tenant.Name,
 	})
 	if err != nil {
-		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		status := http.StatusBadRequest
+		if strings.Contains(strings.ToLower(err.Error()), "already a staff member") {
+			status = http.StatusConflict
+		}
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusCreated, toTenantInvitationResponse(*item))
@@ -853,10 +865,50 @@ func (h *Handler) UpdateStaffRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Staff.UpdateRole(r.Context(), tenant.ID, tenantUserID, req.Role); err != nil {
-		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrForbidden) {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func (h *Handler) DeleteStaffInvitation(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	invitationID, err := uuid.Parse(chi.URLParam(r, "invitationId"))
+	if err != nil {
+		writeErrorText(w, "invalid invitation id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Staff.RevokeInvitation(r.Context(), tenant.ID, invitationID); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrForbidden) {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
+}
+
+func (h *Handler) DeleteStaffUser(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	tenantUserID, err := uuid.Parse(chi.URLParam(r, "tenantUserId"))
+	if err != nil {
+		writeErrorText(w, "invalid staff id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Staff.RemoveUser(r.Context(), tenant.ID, tenantUserID); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrForbidden) {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }
 
 func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {

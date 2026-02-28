@@ -483,6 +483,7 @@ export interface TenantStaffUser {
   id: string;
   tenant_id: string;
   user_id: string;
+  email: string;
   role: Exclude<Role, "BIDDER">;
   is_primary_owner: boolean;
   invited_by?: string | null;
@@ -895,6 +896,7 @@ function normalizeTenantStaffUser(raw: unknown): TenantStaffUser {
     id: String(r.id ?? ""),
     tenant_id: String(r.tenant_id ?? ""),
     user_id: String(r.user_id ?? ""),
+    email: String(r.email ?? ""),
     role: String(r.role ?? "STAFF") as TenantStaffUser["role"],
     is_primary_owner: Boolean(r.is_primary_owner ?? false),
     invited_by: r.invited_by != null ? String(r.invited_by) : null,
@@ -1366,8 +1368,12 @@ export const api = {
   },
   inviteStaff: async (payload: { email: string; role: "ADMIN" | "STAFF" | "ACCOUNTING" | "VIEWER"; invite_base: string }) =>
     normalizeTenantStaffInvitation(await request<unknown>("/admin/staff/invitations", { method: "POST", body: JSON.stringify(payload) })),
+  revokeStaffInvitation: (invitationId: string) => request<JsonRecord>(`/admin/staff/invitations/${invitationId}`, { method: "DELETE" }),
   updateStaffRole: (tenantUserId: string, role: "ADMIN" | "STAFF" | "ACCOUNTING" | "VIEWER") =>
     request<JsonRecord>(`/admin/staff/${tenantUserId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  removeStaffUser: (tenantUserId: string) => request<JsonRecord>(`/admin/staff/${tenantUserId}`, { method: "DELETE" }),
+  acceptStaffInvitation: async (payload: { token: string; password?: string; locale: "en" | "fr" | "de" }) =>
+    request<{ token: string; user: unknown }>("/auth/invitations/accept", { method: "POST", body: JSON.stringify(payload) }),
   listFeeComponents: async (activeOnly = true) =>
     (await request<unknown[]>(`/admin/fees/components?active_only=${activeOnly}`)).map(normalizeFeeComponent),
   createFeeComponent: async (payload: {

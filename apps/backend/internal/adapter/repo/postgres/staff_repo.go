@@ -112,6 +112,18 @@ func (r *StaffRepo) UpdateTenantUserRole(ctx context.Context, tenantID, tenantUs
 	return nil
 }
 
+func (r *StaffRepo) DeleteTenantUser(ctx context.Context, tenantID, tenantUserID uuid.UUID) error {
+	const q = `DELETE FROM tenant_users WHERE tenant_id = $1 AND id = $2`
+	ct, err := r.DB.Exec(ctx, q, tenantID, tenantUserID)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("staff member not found")
+	}
+	return nil
+}
+
 func (r *StaffRepo) CreateInvitation(ctx context.Context, item *domain.TenantInvitation) error {
 	const q = `
 INSERT INTO tenant_invitations (id, tenant_id, email, role, token_hash, expires_at, accepted_at, invited_by, created_at)
@@ -124,7 +136,7 @@ func (r *StaffRepo) ListInvitations(ctx context.Context, tenantID uuid.UUID) ([]
 	const q = `
 SELECT id, tenant_id, email, role, token_hash, expires_at, accepted_at, invited_by, created_at
 FROM tenant_invitations
-WHERE tenant_id = $1
+WHERE tenant_id = $1 AND accepted_at IS NULL
 ORDER BY created_at DESC`
 	rows, err := r.DB.Query(ctx, q, tenantID)
 	if err != nil {
@@ -140,6 +152,21 @@ ORDER BY created_at DESC`
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func (r *StaffRepo) GetInvitationByID(ctx context.Context, tenantID, invitationID uuid.UUID) (*domain.TenantInvitation, error) {
+	const q = `
+SELECT id, tenant_id, email, role, token_hash, expires_at, accepted_at, invited_by, created_at
+FROM tenant_invitations
+WHERE tenant_id = $1 AND id = $2`
+	var item domain.TenantInvitation
+	if err := r.DB.QueryRow(ctx, q, tenantID, invitationID).Scan(&item.ID, &item.TenantID, &item.Email, &item.Role, &item.TokenHash, &item.ExpiresAt, &item.AcceptedAt, &item.InvitedBy, &item.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("invitation not found")
+		}
+		return nil, err
+	}
+	return &item, nil
 }
 
 func (r *StaffRepo) GetInvitationByTokenHash(ctx context.Context, tenantID uuid.UUID, tokenHash string) (*domain.TenantInvitation, error) {
@@ -160,6 +187,18 @@ WHERE tenant_id = $1 AND token_hash = $2`
 func (r *StaffRepo) MarkInvitationAccepted(ctx context.Context, tenantID, invitationID uuid.UUID, acceptedAt time.Time) error {
 	const q = `UPDATE tenant_invitations SET accepted_at = $3 WHERE tenant_id = $1 AND id = $2`
 	ct, err := r.DB.Exec(ctx, q, tenantID, invitationID, acceptedAt)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("invitation not found")
+	}
+	return nil
+}
+
+func (r *StaffRepo) DeleteInvitation(ctx context.Context, tenantID, invitationID uuid.UUID) error {
+	const q = `DELETE FROM tenant_invitations WHERE tenant_id = $1 AND id = $2`
+	ct, err := r.DB.Exec(ctx, q, tenantID, invitationID)
 	if err != nil {
 		return err
 	}

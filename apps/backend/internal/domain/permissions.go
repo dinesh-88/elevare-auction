@@ -5,83 +5,80 @@ import "github.com/google/uuid"
 type Permission string
 
 const (
-	PermissionAuctionCreate      Permission = "auction:create"
-	PermissionAuctionUpdate      Permission = "auction:update"
-	PermissionAuctionStart       Permission = "auction:start"
-	PermissionAuctionEnd         Permission = "auction:end"
-	PermissionAuctionTermsAccept Permission = "auction_terms:accept"
+	PermissionStaffManage       Permission = "staff.manage"
+	PermissionAuctionCreate     Permission = "auction.create"
+	PermissionAuctionEdit       Permission = "auction.edit"
+	PermissionAuctionPublish    Permission = "auction.publish"
+	PermissionAuctionViewAdmin  Permission = "auction.view_admin"
+	PermissionBidderApprove     Permission = "bidder.approve"
+	PermissionFinancialView     Permission = "financial.view"
+	PermissionSettlementApprove Permission = "settlement.approve"
+	PermissionInvoiceSend       Permission = "invoice.send"
+	PermissionVATManage         Permission = "vat.manage"
+	PermissionFeesManage        Permission = "fees.manage"
+	PermissionAuditView         Permission = "audit.view"
+	PermissionCMSManage         Permission = "cms.manage"
+	PermissionAnalyticsView     Permission = "analytics.view"
 
-	PermissionLotCreate  Permission = "lot:create"
-	PermissionLotUpdate  Permission = "lot:update"
-	PermissionLotReorder Permission = "lot:reorder"
-	PermissionLotStart   Permission = "lot:start"
-	PermissionLotEnd     Permission = "lot:end"
-	PermissionBidPlace   Permission = "bid:place"
+	PermissionAuctionTermsAccept Permission = "auction_terms.accept"
+	PermissionBidPlace           Permission = "bid.place"
 
-	PermissionFeesManage      Permission = "fees:manage"
-	PermissionInvoiceView     Permission = "invoice:view"
-	PermissionInvoiceMarkPaid Permission = "invoice:mark_paid"
-
-	PermissionBidderApprove Permission = "bidder:approve"
-	PermissionBidderSuspend Permission = "bidder:suspend"
-
-	PermissionSiteEdit    Permission = "site:edit"
-	PermissionSitePublish Permission = "site:publish"
-
-	PermissionStaffInvite Permission = "staff:invite"
-	PermissionAuditView   Permission = "audit:view"
-	PermissionRoleManage  Permission = "role:manage"
+	PermissionAuctionUpdate   Permission = PermissionAuctionEdit
+	PermissionAuctionStart    Permission = PermissionAuctionPublish
+	PermissionAuctionEnd      Permission = PermissionAuctionPublish
+	PermissionLotCreate       Permission = PermissionAuctionEdit
+	PermissionLotUpdate       Permission = PermissionAuctionEdit
+	PermissionLotReorder      Permission = PermissionAuctionEdit
+	PermissionLotStart        Permission = PermissionAuctionPublish
+	PermissionLotEnd          Permission = PermissionAuctionPublish
+	PermissionInvoiceView     Permission = PermissionFinancialView
+	PermissionInvoiceMarkPaid Permission = PermissionSettlementApprove
+	PermissionBidderSuspend   Permission = PermissionBidderApprove
+	PermissionSiteEdit        Permission = PermissionCMSManage
+	PermissionSitePublish     Permission = PermissionCMSManage
+	PermissionStaffInvite     Permission = PermissionStaffManage
+	PermissionRoleManage      Permission = PermissionStaffManage
 )
 
 var ownerTenantPermissions = []Permission{
+	PermissionStaffManage,
 	PermissionAuctionCreate,
-	PermissionAuctionUpdate,
-	PermissionAuctionStart,
-	PermissionAuctionEnd,
-	PermissionLotCreate,
-	PermissionLotUpdate,
-	PermissionLotReorder,
-	PermissionLotStart,
-	PermissionLotEnd,
+	PermissionAuctionEdit,
+	PermissionAuctionPublish,
+	PermissionAuctionViewAdmin,
 	PermissionFeesManage,
-	PermissionInvoiceView,
-	PermissionInvoiceMarkPaid,
+	PermissionVATManage,
+	PermissionFinancialView,
+	PermissionSettlementApprove,
+	PermissionInvoiceSend,
 	PermissionBidderApprove,
-	PermissionBidderSuspend,
-	PermissionSiteEdit,
-	PermissionSitePublish,
-	PermissionStaffInvite,
 	PermissionAuditView,
-	PermissionRoleManage,
+	PermissionCMSManage,
+	PermissionAnalyticsView,
 }
 
 var adminTenantPermissions = []Permission{
+	PermissionStaffManage,
 	PermissionAuctionCreate,
-	PermissionAuctionUpdate,
-	PermissionAuctionStart,
-	PermissionAuctionEnd,
-	PermissionLotCreate,
-	PermissionLotUpdate,
-	PermissionLotReorder,
-	PermissionLotStart,
-	PermissionLotEnd,
+	PermissionAuctionEdit,
+	PermissionAuctionPublish,
+	PermissionAuctionViewAdmin,
 	PermissionFeesManage,
-	PermissionInvoiceView,
-	PermissionInvoiceMarkPaid,
+	PermissionVATManage,
+	PermissionFinancialView,
+	PermissionSettlementApprove,
 	PermissionBidderApprove,
-	PermissionBidderSuspend,
-	PermissionSiteEdit,
-	PermissionSitePublish,
-	PermissionStaffInvite,
 	PermissionAuditView,
+	PermissionCMSManage,
+	PermissionAnalyticsView,
 }
 
 var RolePermissions = map[Role]map[Permission]struct{}{
 	RoleOwner:      permissionSet(ownerTenantPermissions...),
 	RoleAdmin:      permissionSet(adminTenantPermissions...),
-	RoleStaff:      permissionSet(PermissionAuctionCreate, PermissionAuctionUpdate, PermissionAuctionStart, PermissionAuctionEnd, PermissionLotCreate, PermissionLotUpdate, PermissionLotReorder, PermissionLotStart, PermissionLotEnd, PermissionBidderApprove, PermissionSiteEdit),
-	RoleAccounting: permissionSet(PermissionInvoiceView, PermissionInvoiceMarkPaid, PermissionAuditView),
-	RoleViewer:     permissionSet(),
+	RoleStaff:      permissionSet(PermissionAuctionCreate, PermissionAuctionEdit, PermissionAuctionViewAdmin, PermissionAnalyticsView),
+	RoleAccounting: permissionSet(PermissionFinancialView, PermissionSettlementApprove, PermissionInvoiceSend, PermissionAnalyticsView),
+	RoleViewer:     permissionSet(PermissionAuctionViewAdmin, PermissionAnalyticsView),
 	RoleBidder:     permissionSet(PermissionAuctionTermsAccept, PermissionBidPlace),
 }
 
@@ -113,7 +110,7 @@ func PermissionsForRole(role Role) []Permission {
 
 func IsStaffRole(role Role) bool {
 	switch role {
-	case RoleOwner, RoleAdmin, RoleStaff, RoleAccounting:
+	case RoleOwner, RoleAdmin, RoleStaff, RoleAccounting, RoleViewer:
 		return true
 	default:
 		return false

@@ -67,11 +67,14 @@ type StaffRepository interface {
 	GetTenantUserByID(ctx context.Context, tenantID, tenantUserID uuid.UUID) (*domain.TenantUser, error)
 	GetTenantUserByUserID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.TenantUser, error)
 	UpdateTenantUserRole(ctx context.Context, tenantID, tenantUserID uuid.UUID, role domain.Role) error
+	DeleteTenantUser(ctx context.Context, tenantID, tenantUserID uuid.UUID) error
 
 	CreateInvitation(ctx context.Context, item *domain.TenantInvitation) error
 	ListInvitations(ctx context.Context, tenantID uuid.UUID) ([]domain.TenantInvitation, error)
+	GetInvitationByID(ctx context.Context, tenantID, invitationID uuid.UUID) (*domain.TenantInvitation, error)
 	GetInvitationByTokenHash(ctx context.Context, tenantID uuid.UUID, tokenHash string) (*domain.TenantInvitation, error)
 	MarkInvitationAccepted(ctx context.Context, tenantID, invitationID uuid.UUID, acceptedAt time.Time) error
+	DeleteInvitation(ctx context.Context, tenantID, invitationID uuid.UUID) error
 }
 
 type AuctionRepository interface {

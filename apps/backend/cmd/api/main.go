@@ -117,7 +117,7 @@ func main() {
 	taxUC := &usecase.TaxUseCase{Taxes: taxRepo, Audit: auditRepo}
 	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo, Audit: auditRepo, Notifier: notificationService}
 	bidderUC := &usecase.BidderUseCase{Users: userRepo, Bidders: bidderRepo, Auctions: auctionRepo, Audit: auditRepo}
-	staffUC := &usecase.StaffUseCase{Staff: staffRepo, Users: userRepo, Hasher: hasher, Tokens: jwtSvc, EmailOutbox: emailOutboxSvc}
+	staffUC := &usecase.StaffUseCase{Staff: staffRepo, Users: userRepo, Hasher: hasher, Tokens: jwtSvc, EmailOutbox: emailOutboxSvc, Audit: auditRepo}
 	auditUC := &usecase.AuditUseCase{Audit: auditRepo}
 	siteUC := &usecase.SiteUseCase{Tenants: tenantRepo}
 	assetUC := &usecase.AssetUseCase{Assets: assetRepo}

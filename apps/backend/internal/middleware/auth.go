@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	apperrors "github.com/dinesh-88/elevare-auction/internal/errors"
+	errmiddleware "github.com/dinesh-88/elevare-auction/internal/http/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 )
 
@@ -32,23 +34,26 @@ func (m AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			}
 		}
 		if token == "" {
-			writeError(w, "missing auth token", http.StatusUnauthorized)
+			errmiddleware.WriteError(w, apperrors.New(apperrors.ErrUnauthorized, "Authentication is required.", http.StatusUnauthorized))
 			return
 		}
 		claims, err := m.Tokens.Parse(token)
 		if err != nil {
-			writeError(w, "invalid token", http.StatusUnauthorized)
+			errmiddleware.WriteError(w, apperrors.New(apperrors.ErrUnauthorized, "Authentication is required.", http.StatusUnauthorized))
 			return
 		}
 		tenant, ok := TenantFromContext(r.Context())
 		if !ok || claims.TenantID != tenant.ID {
-			writeError(w, "cross-tenant token", http.StatusUnauthorized)
+			errmiddleware.WriteError(w, apperrors.New(apperrors.ErrUnauthorized, "Authentication is required.", http.StatusUnauthorized))
 			return
 		}
 		if m.Permissions != nil {
-			if role, err := m.Permissions.GetEffectiveRole(r.Context(), claims.TenantID, claims.UserID); err == nil && role != "" {
-				claims.Role = role
+			role, err := m.Permissions.GetEffectiveRole(r.Context(), claims.TenantID, claims.UserID)
+			if err != nil || role == "" {
+				errmiddleware.WriteError(w, apperrors.New(apperrors.ErrForbidden, "You do not have permission to perform this action.", http.StatusForbidden))
+				return
 			}
+			claims.Role = role
 		}
 		next.ServeHTTP(w, r.WithContext(WithClaims(r.Context(), claims)))
 	})
@@ -84,7 +89,7 @@ func RequirePermission(permission domain.Permission) func(http.Handler) http.Han
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims, ok := ClaimsFromContext(r.Context())
 			if !ok || !domain.HasPermission(claims.Role, permission) {
-				writeError(w, "forbidden", http.StatusForbidden)
+				errmiddleware.WriteError(w, apperrors.New(apperrors.ErrForbidden, "You do not have permission to perform this action.", http.StatusForbidden))
 				return
 			}
 			next.ServeHTTP(w, r)
