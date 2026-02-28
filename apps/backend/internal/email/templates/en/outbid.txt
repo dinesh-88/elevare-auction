@@ -1,0 +1,4 @@
+Your bid on {{ .lot_title }} has been surpassed.
+Current highest bid: {{ .amount }}
+
+View the lot: {{ .link }}

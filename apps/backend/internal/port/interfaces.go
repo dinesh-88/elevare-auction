@@ -271,6 +271,25 @@ type NotificationPreferenceRepository interface {
 	List(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.NotificationPreference, error)
 }
 
+type EmailOutboxRepository interface {
+	Create(ctx context.Context, item *domain.EmailOutbox) error
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.EmailOutbox, error)
+	MarkSent(ctx context.Context, id uuid.UUID, sentAt time.Time) error
+	MarkFailed(ctx context.Context, id uuid.UUID, attempts int, nextAttemptAt *time.Time, lastError string) error
+	ListRetryable(ctx context.Context, now time.Time, limit int) ([]domain.EmailOutbox, error)
+	CountByRecipientSince(ctx context.Context, tenantID uuid.UUID, toEmail string, since time.Time) (int64, error)
+	CountByTenantSince(ctx context.Context, tenantID uuid.UUID, since time.Time) (int64, error)
+	ExistsRecentByScope(ctx context.Context, tenantID uuid.UUID, userID *uuid.UUID, toEmail, kind string, entityType string, entityID *uuid.UUID, since time.Time) (bool, error)
+}
+
+type EmailMessage struct {
+	To       string
+	Subject  string
+	HTMLBody string
+	TextBody string
+	From     string
+}
+
 type EmailSender interface {
-	Send(ctx context.Context, to, subject, html string) error
+	Send(ctx context.Context, msg EmailMessage) error
 }

@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#f8f7f3;color:#1f1f1c;font-family:Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e6e2d8;border-radius:12px;padding:32px;">
+      <tr>
+        <td>
+          {{ if .tenant_logo_url }}<p style="margin:0 0 16px;"><img src="{{ .tenant_logo_url }}" alt="{{ .tenant_name }}" style="max-height:48px;max-width:180px;"></p>{{ end }}
+          <p style="margin:0 0 20px;font-size:22px;font-weight:700;">{{ .tenant_name }}</p>
+          {{ template "content" . }}
+          <hr style="border:none;border-top:1px solid #e6e2d8;margin:28px 0;">
+          <p style="margin:0 0 8px;font-size:13px;color:#5b5a55;">Need help?{{ if .support_email }} Contact <a href="mailto:{{ .support_email }}">{{ .support_email }}</a>.{{ end }}</p>
+          {{ if .primary_url }}<p style="margin:0;font-size:13px;"><a href="{{ .primary_url }}">{{ .primary_url }}</a></p>{{ end }}
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

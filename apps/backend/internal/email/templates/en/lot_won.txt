@@ -1,0 +1,3 @@
+Congratulations. You won {{ .lot_title }} at {{ .hammer }}.
+
+View the lot: {{ .link }}

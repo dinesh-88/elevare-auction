@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	emailtpl "github.com/dinesh-88/elevare-auction/internal/email"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/dinesh-88/elevare-auction/internal/usecase"
@@ -80,11 +81,16 @@ func (w *NotificationWorker) processJob(ctx context.Context, job domain.Notifica
 			return w.failOrRetry(ctx, job, attempts, "failed to decode payload")
 		}
 	}
-	subject, html, err := usecase.RenderEmail(job.EventType, payload)
+	rendered, err := usecase.RenderEmailFull(job.EventType, user.Locale, emailtpl.BrandContext{TenantName: "Elevare"}, payload)
 	if err != nil {
 		return w.failOrRetry(ctx, job, attempts, err.Error())
 	}
-	if err := w.Sender.Send(ctx, user.Email, subject, html); err != nil {
+	if err := w.Sender.Send(ctx, port.EmailMessage{
+		To:       user.Email,
+		Subject:  rendered.Subject,
+		HTMLBody: rendered.HTML,
+		TextBody: rendered.Text,
+	}); err != nil {
 		return w.failOrRetry(ctx, job, attempts, err.Error())
 	}
 	if err := w.Jobs.MarkSent(ctx, job.TenantID, job.ID); err != nil {

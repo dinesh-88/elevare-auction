@@ -1,0 +1,4 @@
+Ihr Gebot fuer {{ .lot_title }} wurde ueberboten.
+Aktuelles Hoechstgebot: {{ .amount }}
+
+Los ansehen: {{ .link }}

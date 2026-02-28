@@ -8,61 +8,81 @@ import (
 )
 
 type Config struct {
-	Addr                string
-	DatabaseURL         string
-	JWTSecret           string
-	PlatformAdminToken  string
-	SitePreviewToken    string
-	StorageProvider     string
-	UploadsDir          string
-	S3Bucket            string
-	S3Region            string
-	S3Endpoint          string
-	S3AccessKeyID       string
-	S3SecretAccessKey   string
-	S3PublicBaseURL     string
-	S3UsePathStyle      bool
-	JWTTTL              time.Duration
-	AccessTokenCookie   string
-	CSRFCookie          string
-	CookieSecure        bool
-	TenantAppScheme     string
-	TenantAppBaseDomain string
-	TenantAppPort       string
-	DemoTenantSlug      string
-	BidSimInterval      time.Duration
-	BidSimIdleThreshold time.Duration
-	BidSimMaxEvents     int
+	Addr                        string
+	DatabaseURL                 string
+	JWTSecret                   string
+	PlatformAdminToken          string
+	SitePreviewToken            string
+	StorageProvider             string
+	UploadsDir                  string
+	S3Bucket                    string
+	S3Region                    string
+	S3Endpoint                  string
+	S3AccessKeyID               string
+	S3SecretAccessKey           string
+	S3PublicBaseURL             string
+	S3UsePathStyle              bool
+	JWTTTL                      time.Duration
+	AccessTokenCookie           string
+	CSRFCookie                  string
+	CookieSecure                bool
+	TenantAppScheme             string
+	TenantAppBaseDomain         string
+	TenantAppPort               string
+	DemoTenantSlug              string
+	BidSimInterval              time.Duration
+	BidSimIdleThreshold         time.Duration
+	BidSimMaxEvents             int
+	InternalEmailSecret         string
+	EmailProvider               string
+	EmailRLRecipient10M         int
+	EmailRLRecipient24H         int
+	EmailRLTenant1H             int
+	EmailRLOutbidCooldown       time.Duration
+	EmailRLLotClosingCooldown   time.Duration
+	EmailRLCriticalRecipient10M int
+	EmailRLCriticalRecipient24H int
+	EmailRLCriticalTenant1H     int
 }
 
 func LoadConfig() Config {
 	ttl := getEnvDuration("JWT_TTL", 30*time.Minute)
 	return Config{
-		Addr:                resolveListenAddr(),
-		DatabaseURL:         getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable"),
-		JWTSecret:           getEnv("JWT_SECRET", "dev-secret-change-me"),
-		PlatformAdminToken:  getEnv("PLATFORM_ADMIN_TOKEN", "dev-platform-admin-token"),
-		SitePreviewToken:    getEnv("SITE_PREVIEW_TOKEN", "dev-site-preview-token"),
-		StorageProvider:     getEnv("STORAGE_PROVIDER", "local"),
-		UploadsDir:          getEnv("UPLOADS_DIR", "/tmp/elevare-uploads"),
-		S3Bucket:            getEnv("S3_BUCKET", ""),
-		S3Region:            getEnv("S3_REGION", "us-east-1"),
-		S3Endpoint:          getEnv("S3_ENDPOINT", ""),
-		S3AccessKeyID:       getEnv("S3_ACCESS_KEY_ID", ""),
-		S3SecretAccessKey:   getEnv("S3_SECRET_ACCESS_KEY", ""),
-		S3PublicBaseURL:     getEnv("S3_PUBLIC_BASE_URL", ""),
-		S3UsePathStyle:      getEnvBool("S3_USE_PATH_STYLE", true),
-		JWTTTL:              ttl,
-		AccessTokenCookie:   getEnv("ACCESS_TOKEN_COOKIE_NAME", "access_token"),
-		CSRFCookie:          getEnv("CSRF_COOKIE_NAME", "csrf_token"),
-		CookieSecure:        getEnvBool("COOKIE_SECURE", false),
-		TenantAppScheme:     getEnv("TENANT_APP_SCHEME", "https"),
-		TenantAppBaseDomain: getEnv("TENANT_APP_BASE_DOMAIN", "elevareauctions.com"),
-		TenantAppPort:       strings.TrimSpace(os.Getenv("TENANT_APP_PORT")),
-		DemoTenantSlug:      strings.TrimSpace(os.Getenv("DEMO_TENANT_SLUG")),
-		BidSimInterval:      getEnvDuration("BID_SIM_INTERVAL_SECONDS", 12*time.Second),
-		BidSimIdleThreshold: getEnvDuration("BID_SIM_IDLE_THRESHOLD_SECONDS", 20*time.Second),
-		BidSimMaxEvents:     getEnvInt("BID_SIM_MAX_EVENTS_PER_MINUTE", 6),
+		Addr:                        resolveListenAddr(),
+		DatabaseURL:                 getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/elevare-auction?sslmode=disable"),
+		JWTSecret:                   getEnv("JWT_SECRET", "dev-secret-change-me"),
+		PlatformAdminToken:          getEnv("PLATFORM_ADMIN_TOKEN", "dev-platform-admin-token"),
+		SitePreviewToken:            getEnv("SITE_PREVIEW_TOKEN", "dev-site-preview-token"),
+		StorageProvider:             getEnv("STORAGE_PROVIDER", "local"),
+		UploadsDir:                  getEnv("UPLOADS_DIR", "/tmp/elevare-uploads"),
+		S3Bucket:                    getEnv("S3_BUCKET", ""),
+		S3Region:                    getEnv("S3_REGION", "us-east-1"),
+		S3Endpoint:                  getEnv("S3_ENDPOINT", ""),
+		S3AccessKeyID:               getEnv("S3_ACCESS_KEY_ID", ""),
+		S3SecretAccessKey:           getEnv("S3_SECRET_ACCESS_KEY", ""),
+		S3PublicBaseURL:             getEnv("S3_PUBLIC_BASE_URL", ""),
+		S3UsePathStyle:              getEnvBool("S3_USE_PATH_STYLE", true),
+		JWTTTL:                      ttl,
+		AccessTokenCookie:           getEnv("ACCESS_TOKEN_COOKIE_NAME", "access_token"),
+		CSRFCookie:                  getEnv("CSRF_COOKIE_NAME", "csrf_token"),
+		CookieSecure:                getEnvBool("COOKIE_SECURE", false),
+		TenantAppScheme:             getEnv("TENANT_APP_SCHEME", "https"),
+		TenantAppBaseDomain:         getEnv("TENANT_APP_BASE_DOMAIN", "elevareauctions.com"),
+		TenantAppPort:               strings.TrimSpace(os.Getenv("TENANT_APP_PORT")),
+		DemoTenantSlug:              strings.TrimSpace(os.Getenv("DEMO_TENANT_SLUG")),
+		BidSimInterval:              getEnvDuration("BID_SIM_INTERVAL_SECONDS", 12*time.Second),
+		BidSimIdleThreshold:         getEnvDuration("BID_SIM_IDLE_THRESHOLD_SECONDS", 20*time.Second),
+		BidSimMaxEvents:             getEnvInt("BID_SIM_MAX_EVENTS_PER_MINUTE", 6),
+		InternalEmailSecret:         strings.TrimSpace(os.Getenv("INTERNAL_EMAIL_SECRET")),
+		EmailProvider:               getEnv("EMAIL_PROVIDER", "resend"),
+		EmailRLRecipient10M:         getEnvInt("EMAIL_RL_RECIPIENT_10M", 3),
+		EmailRLRecipient24H:         getEnvInt("EMAIL_RL_RECIPIENT_24H", 20),
+		EmailRLTenant1H:             getEnvInt("EMAIL_RL_TENANT_1H", 200),
+		EmailRLOutbidCooldown:       getEnvDuration("EMAIL_RL_OUTBID_COOLDOWN_SECONDS", 60*time.Second),
+		EmailRLLotClosingCooldown:   getEnvDuration("EMAIL_RL_LOT_CLOSING_COOLDOWN_SECONDS", 10*time.Minute),
+		EmailRLCriticalRecipient10M: getEnvInt("EMAIL_RL_CRITICAL_RECIPIENT_10M", 10),
+		EmailRLCriticalRecipient24H: getEnvInt("EMAIL_RL_CRITICAL_RECIPIENT_24H", 100),
+		EmailRLCriticalTenant1H:     getEnvInt("EMAIL_RL_CRITICAL_TENANT_1H", 1000),
 	}
 }
 

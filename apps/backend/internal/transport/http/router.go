@@ -72,6 +72,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 	r.Post("/signup", h.PublicTenantSignup)
 	r.Post("/auth/discover-tenant", h.DiscoverTenantLogin)
 	r.Post("/contact", h.SubmitDemoRequest)
+	r.Post("/internal/process-email-retries", h.ProcessEmailRetries)
 	r.Get("/public/institutions", h.ListPublicInstitutions)
 	r.Get("/public/institutions/{slug}", h.GetPublicInstitution)
 	r.Get("/public/featured-auction", h.GetPublicFeaturedAuction)

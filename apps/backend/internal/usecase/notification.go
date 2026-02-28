@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	emailtpl "github.com/dinesh-88/elevare-auction/internal/email"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/google/uuid"
@@ -19,6 +20,10 @@ type NotificationService struct {
 	Notifications port.NotificationRepository
 	Jobs          port.NotificationJobRepository
 	Preferences   port.NotificationPreferenceRepository
+	Users         port.UserRepository
+	Tenants       port.TenantRepository
+	EmailOutbox   *EmailOutboxService
+	Renderer      *emailtpl.TemplateRenderer
 	Audit         port.AuditRepository
 	Broadcaster   port.UserNotificationBroadcaster
 }
@@ -78,47 +83,120 @@ func (s *NotificationService) Emit(ctx context.Context, event domain.Notificatio
 		}
 
 		if pref.EmailEnabled {
-			job := domain.NotificationJob{
-				ID:        uuid.New(),
-				TenantID:  event.TenantID,
-				UserID:    userID,
-				Channel:   domain.NotificationChannelEmail,
-				EventType: event.EventType,
-				DedupeKey: buildDedupeKey(event, userID),
-				Payload:   metadata,
-				Status:    domain.NotificationJobStatusPending,
-				Attempts:  0,
-				NextRunAt: time.Now().UTC(),
-			}
-			inserted, err := s.Jobs.Enqueue(ctx, job)
-			if err != nil {
-				return err
-			}
-			if inserted && s.Audit != nil {
-				auditCtx := middleware.AuditContextFromContext(ctx)
-				jobID := job.ID
-				payload, _ := json.Marshal(map[string]any{
-					"job_id":     jobID,
-					"event_type": event.EventType,
-					"channel":    job.Channel,
-					"recipient":  userID,
+			if s.EmailOutbox != nil && s.Users != nil {
+				user, err := s.Users.GetByID(ctx, event.TenantID, userID)
+				if err != nil {
+					return err
+				}
+				renderer := s.Renderer
+				if renderer == nil {
+					renderer = defaultTemplateRenderer
+				}
+				rendered, err := renderer.Render(
+					emailTemplateKey(event.EventType),
+					domain.NormalizeLocale(string(user.Locale)),
+					s.resolveBrandContext(ctx, event.TenantID, event.Payload),
+					event.Payload,
+				)
+				if err != nil {
+					return err
+				}
+				item, err := s.EmailOutbox.Queue(ctx, QueueEmailInput{
+					TenantID:   event.TenantID,
+					UserID:     &userID,
+					ToEmail:    user.Email,
+					Subject:    rendered.Subject,
+					HTMLBody:   rendered.HTML,
+					TextBody:   rendered.Text,
+					Type:       string(event.EventType),
+					EntityType: emailEntityType(event.Payload),
+					EntityID:   emailEntityID(event.Payload),
+					Critical:   isCriticalEmailEvent(event.EventType),
 				})
-				_ = s.Audit.Append(ctx, port.AuditEntry{
-					TenantID:    &event.TenantID,
-					ActorUserID: auditCtx.ActorUserID,
-					ActorRole:   auditCtx.ActorRole,
-					Action:      "NOTIFICATION_JOB_ENQUEUED",
-					EntityType:  "NOTIFICATION_JOB",
-					EntityID:    &jobID,
-					RequestID:   auditCtx.RequestID,
-					IP:          auditCtx.IP,
-					UserAgent:   auditCtx.UserAgent,
-					Metadata:    payload,
-				})
+				if err != nil {
+					return err
+				}
+				if s.Audit != nil {
+					auditCtx := middleware.AuditContextFromContext(ctx)
+					payload, _ := json.Marshal(map[string]any{
+						"email_outbox_id": item.ID,
+						"event_type":      event.EventType,
+						"recipient":       userID,
+					})
+					_ = s.Audit.Append(ctx, port.AuditEntry{
+						TenantID:    &event.TenantID,
+						ActorUserID: auditCtx.ActorUserID,
+						ActorRole:   auditCtx.ActorRole,
+						Action:      "EMAIL_OUTBOX_ENQUEUED",
+						EntityType:  "EMAIL_OUTBOX",
+						EntityID:    &item.ID,
+						RequestID:   auditCtx.RequestID,
+						IP:          auditCtx.IP,
+						UserAgent:   auditCtx.UserAgent,
+						Metadata:    payload,
+					})
+				}
+			} else if s.Jobs != nil {
+				job := domain.NotificationJob{
+					ID:        uuid.New(),
+					TenantID:  event.TenantID,
+					UserID:    userID,
+					Channel:   domain.NotificationChannelEmail,
+					EventType: event.EventType,
+					DedupeKey: buildDedupeKey(event, userID),
+					Payload:   metadata,
+					Status:    domain.NotificationJobStatusPending,
+					Attempts:  0,
+					NextRunAt: time.Now().UTC(),
+				}
+				inserted, err := s.Jobs.Enqueue(ctx, job)
+				if err != nil {
+					return err
+				}
+				if inserted && s.Audit != nil {
+					auditCtx := middleware.AuditContextFromContext(ctx)
+					jobID := job.ID
+					payload, _ := json.Marshal(map[string]any{
+						"job_id":     jobID,
+						"event_type": event.EventType,
+						"channel":    job.Channel,
+						"recipient":  userID,
+					})
+					_ = s.Audit.Append(ctx, port.AuditEntry{
+						TenantID:    &event.TenantID,
+						ActorUserID: auditCtx.ActorUserID,
+						ActorRole:   auditCtx.ActorRole,
+						Action:      "NOTIFICATION_JOB_ENQUEUED",
+						EntityType:  "NOTIFICATION_JOB",
+						EntityID:    &jobID,
+						RequestID:   auditCtx.RequestID,
+						IP:          auditCtx.IP,
+						UserAgent:   auditCtx.UserAgent,
+						Metadata:    payload,
+					})
+				}
 			}
 		}
 	}
 	return nil
+}
+
+func (s *NotificationService) resolveBrandContext(ctx context.Context, tenantID uuid.UUID, payload map[string]any) emailtpl.BrandContext {
+	brand := emailtpl.BrandContext{}
+	if s.Tenants != nil {
+		if tenant, err := s.Tenants.GetByID(ctx, tenantID); err == nil && tenant != nil {
+			brand.TenantName = tenant.Name
+			brand.TenantLogoURL = tenantLogoURL(tenant)
+			brand.PrimaryURL = tenantPrimaryURL(tenant)
+			brand.SupportEmail = tenantSupportEmail(tenant)
+		}
+	}
+	if brand.PrimaryURL == "" {
+		if link, ok := payload["link"].(string); ok {
+			brand.PrimaryURL = strings.TrimSpace(link)
+		}
+	}
+	return brand
 }
 
 func buildDedupeKey(event domain.NotificationEvent, userID uuid.UUID) string {
@@ -154,6 +232,49 @@ func fallbackDedupeRef(eventType domain.NotificationEventType, payload map[strin
 		}
 	}
 	return "generic"
+}
+
+func isCriticalEmailEvent(eventType domain.NotificationEventType) bool {
+	switch eventType {
+	case domain.NotificationEventInvoiceIssued:
+		return true
+	default:
+		return false
+	}
+}
+
+func emailEntityType(payload map[string]any) string {
+	switch {
+	case parseUUIDFromPayload(payload, "auction_id") != nil:
+		return "AUCTION"
+	case parseUUIDFromPayload(payload, "lot_id") != nil:
+		return "LOT"
+	case parseUUIDFromPayload(payload, "invoice_id") != nil:
+		return "INVOICE"
+	default:
+		return ""
+	}
+}
+
+func emailEntityID(payload map[string]any) *uuid.UUID {
+	for _, key := range []string{"auction_id", "lot_id", "invoice_id"} {
+		if id := parseUUIDFromPayload(payload, key); id != nil {
+			return id
+		}
+	}
+	return nil
+}
+
+func parseUUIDFromPayload(payload map[string]any, key string) *uuid.UUID {
+	raw, ok := payload[key].(string)
+	if !ok {
+		return nil
+	}
+	id, err := uuid.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return nil
+	}
+	return &id
 }
 
 type NotificationUseCase struct {

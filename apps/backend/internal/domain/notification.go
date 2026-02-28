@@ -74,3 +74,31 @@ type NotificationPreference struct {
 	EmailEnabled bool
 	InAppEnabled bool
 }
+
+type EmailOutboxStatus string
+
+const (
+	EmailOutboxPending EmailOutboxStatus = "pending"
+	EmailOutboxSent    EmailOutboxStatus = "sent"
+	EmailOutboxFailed  EmailOutboxStatus = "failed"
+)
+
+type EmailOutbox struct {
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	UserID        *uuid.UUID
+	ToEmail       string
+	Subject       string
+	HTMLBody      string
+	TextBody      string
+	Type          *string
+	EntityType    *string
+	EntityID      *uuid.UUID
+	Provider      *string
+	Status        EmailOutboxStatus
+	AttemptCount  int
+	LastError     *string
+	NextAttemptAt *time.Time
+	CreatedAt     time.Time
+	SentAt        *time.Time
+}

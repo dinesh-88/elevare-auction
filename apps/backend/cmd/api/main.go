@@ -10,10 +10,12 @@ import (
 	"time"
 
 	wsadapter "github.com/dinesh-88/elevare-auction/internal/adapter/broadcaster/ws"
+	emailadapter "github.com/dinesh-88/elevare-auction/internal/adapter/email"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/repo/postgres"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/security"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/storage"
 	"github.com/dinesh-88/elevare-auction/internal/bootstrap"
+	emailtpl "github.com/dinesh-88/elevare-auction/internal/email"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	httptransport "github.com/dinesh-88/elevare-auction/internal/transport/http"
@@ -47,11 +49,33 @@ func main() {
 	lotRepo := &postgres.LotRepo{DB: db, Audit: auditRepo}
 	feeRepo := &postgres.FeeRepo{DB: db}
 	taxRepo := &postgres.TaxRepo{DB: db}
+	emailOutboxRepo := &postgres.EmailOutboxRepo{DB: db}
 	invoiceRepo := &postgres.InvoiceRepo{DB: db, Audit: auditRepo}
 	notificationRepo := &postgres.NotificationRepo{DB: db}
 	notificationJobsRepo := &postgres.NotificationJobsRepo{DB: db}
 	notificationPrefsRepo := &postgres.NotificationPreferenceRepo{DB: db}
 	bidderRepo := &postgres.BidderRepo{DB: db}
+
+	emailSender := &emailadapter.ResendSender{
+		APIKey: os.Getenv("RESEND_API_KEY"),
+		From:   os.Getenv("RESEND_FROM_EMAIL"),
+	}
+	emailOutboxSvc := &usecase.EmailOutboxService{
+		Outbox:   emailOutboxRepo,
+		Mailer:   emailSender,
+		Provider: cfg.EmailProvider,
+		Limits: usecase.EmailRateLimits{
+			Recipient10Min:         cfg.EmailRLRecipient10M,
+			Recipient24H:           cfg.EmailRLRecipient24H,
+			Tenant1H:               cfg.EmailRLTenant1H,
+			OutbidCooldown:         cfg.EmailRLOutbidCooldown,
+			LotClosingCooldown:     cfg.EmailRLLotClosingCooldown,
+			CriticalRecipient10Min: cfg.EmailRLCriticalRecipient10M,
+			CriticalRecipient24H:   cfg.EmailRLCriticalRecipient24H,
+			CriticalTenant1H:       cfg.EmailRLCriticalTenant1H,
+		},
+		Logger: log.Default(),
+	}
 
 	hasher := &security.Argon2Hasher{}
 	jwtSvc := &security.JWTService{Secret: []byte(cfg.JWTSecret), TTL: cfg.JWTTTL}
@@ -64,6 +88,10 @@ func main() {
 		Notifications: notificationRepo,
 		Jobs:          notificationJobsRepo,
 		Preferences:   notificationPrefsRepo,
+		Users:         userRepo,
+		Tenants:       tenantRepo,
+		EmailOutbox:   emailOutboxSvc,
+		Renderer:      emailtpl.NewTemplateRenderer(),
 		Audit:         auditRepo,
 		Broadcaster:   hub,
 	}
@@ -151,6 +179,7 @@ func main() {
 		Bidder:              bidderUC,
 		Audit:               auditUC,
 		Notification:        notificationUC,
+		EmailOutbox:         emailOutboxSvc,
 		Site:                siteUC,
 		Asset:               assetUC,
 		Onboarding:          onboardingUC,
@@ -165,6 +194,7 @@ func main() {
 		TenantAppScheme:     cfg.TenantAppScheme,
 		TenantAppBaseDomain: cfg.TenantAppBaseDomain,
 		TenantAppPort:       cfg.TenantAppPort,
+		InternalEmailSecret: cfg.InternalEmailSecret,
 	}
 	tenantMW := middleware.TenantMiddleware{Tenants: tenantRepo}
 	authMW := middleware.AuthMiddleware{Tokens: jwtSvc, AccessTokenCookie: cfg.AccessTokenCookie}

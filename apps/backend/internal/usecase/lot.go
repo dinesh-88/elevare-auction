@@ -157,6 +157,7 @@ func (uc *LotUseCase) End(ctx context.Context, tenantID, lotID uuid.UUID, now ti
 			RecipientUserIDs: []uuid.UUID{*settlement.WinnerUserID},
 			Payload: map[string]any{
 				"auction_title": settlement.AuctionTitle,
+				"auction_id":    settlement.AuctionID.String(),
 				"lot_title":     settlement.LotTitle,
 				"lot_id":        settlement.LotID.String(),
 				"hammer":        *settlement.HammerPrice,
@@ -294,6 +295,7 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 			RecipientUserIDs: []uuid.UUID{*res.PreviousHighestBidder},
 			Payload: map[string]any{
 				"auction_title": res.AuctionTitle,
+				"auction_id":    res.Lot.AuctionID.String(),
 				"lot_title":     res.Lot.Title,
 				"lot_id":        res.Lot.ID.String(),
 				"amount":        res.Bid.Amount,

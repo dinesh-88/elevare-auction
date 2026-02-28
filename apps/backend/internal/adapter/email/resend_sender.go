@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/dinesh-88/elevare-auction/internal/port"
 )
 
 type ResendSender struct {
@@ -18,20 +20,25 @@ type ResendSender struct {
 	BaseURL string
 }
 
-func (s *ResendSender) Send(ctx context.Context, to, subject, html string) error {
+func (s *ResendSender) Send(ctx context.Context, msg port.EmailMessage) error {
 	apiKey := strings.TrimSpace(s.APIKey)
-	from := strings.TrimSpace(s.From)
+	from := strings.TrimSpace(msg.From)
+	if from == "" {
+		from = strings.TrimSpace(s.From)
+	}
 	if apiKey == "" || from == "" {
 		return fmt.Errorf("resend configuration missing")
 	}
-	if strings.TrimSpace(to) == "" {
+	to := strings.TrimSpace(msg.To)
+	if to == "" {
 		return fmt.Errorf("recipient email is required")
 	}
 	payload, err := json.Marshal(map[string]any{
 		"from":    from,
 		"to":      []string{to},
-		"subject": subject,
-		"html":    html,
+		"subject": msg.Subject,
+		"html":    msg.HTMLBody,
+		"text":    msg.TextBody,
 	})
 	if err != nil {
 		return err

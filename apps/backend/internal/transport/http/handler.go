@@ -33,6 +33,7 @@ type Handler struct {
 	Bidder              *usecase.BidderUseCase
 	Audit               *usecase.AuditUseCase
 	Notification        *usecase.NotificationUseCase
+	EmailOutbox         *usecase.EmailOutboxService
 	Site                *usecase.SiteUseCase
 	Asset               *usecase.AssetUseCase
 	Onboarding          *usecase.OnboardingUseCase
@@ -47,6 +48,7 @@ type Handler struct {
 	TenantAppScheme     string
 	TenantAppBaseDomain string
 	TenantAppPort       string
+	InternalEmailSecret string
 }
 
 type lotPublicResponse struct {
@@ -2092,6 +2094,27 @@ func (h *Handler) TriggerBidSimulation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "TRIGGERED"})
+}
+
+func (h *Handler) ProcessEmailRetries(w http.ResponseWriter, r *http.Request) {
+	secret := strings.TrimSpace(h.InternalEmailSecret)
+	if secret == "" {
+		writeErrorText(w, "internal email retry is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if got := strings.TrimSpace(r.Header.Get("X-Internal-Secret")); got == "" || got != secret {
+		writeErrorText(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if h.EmailOutbox == nil {
+		writeErrorText(w, "email outbox unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.EmailOutbox.ProcessRetries(r.Context(), time.Now().UTC(), 100); err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "PROCESSED"})
 }
 
 func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,3 @@
+Please verify your email address to continue using {{ .tenant_name }}.
+
+Verify email: {{ .link }}

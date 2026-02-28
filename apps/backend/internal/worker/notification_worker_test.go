@@ -79,7 +79,7 @@ type fakeEmailSender struct {
 	calls int
 }
 
-func (f *fakeEmailSender) Send(ctx context.Context, to, subject, html string) error {
+func (f *fakeEmailSender) Send(ctx context.Context, msg port.EmailMessage) error {
 	f.calls++
 	return f.err
 }

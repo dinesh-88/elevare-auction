@@ -1,0 +1,3 @@
+Veuillez verifier votre adresse e-mail pour continuer avec {{ .tenant_name }}.
+
+Verifier l'e-mail : {{ .link }}

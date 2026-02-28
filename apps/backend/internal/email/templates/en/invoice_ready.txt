@@ -1,0 +1,4 @@
+Invoice {{ .invoice_number }} is ready.
+Total due: {{ .total_due }}
+
+View invoice: {{ .link }}

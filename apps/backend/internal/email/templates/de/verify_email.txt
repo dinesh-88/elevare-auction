@@ -1,0 +1,3 @@
+Bitte bestaetigen Sie Ihre E-Mail-Adresse, um {{ .tenant_name }} weiter zu nutzen.
+
+E-Mail bestaetigen: {{ .link }}

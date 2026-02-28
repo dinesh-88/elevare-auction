@@ -49,6 +49,7 @@ func (uc *InvoiceUseCase) GenerateForLot(ctx context.Context, tenantID, lotID uu
 			EventType:        domain.NotificationEventInvoiceIssued,
 			RecipientUserIDs: []uuid.UUID{inv.WinnerUserID},
 			Payload: map[string]any{
+				"auction_id":     inv.AuctionID.String(),
 				"invoice_id":     inv.ID.String(),
 				"invoice_number": inv.InvoiceNumber,
 				"lot_id":         inv.LotID.String(),
