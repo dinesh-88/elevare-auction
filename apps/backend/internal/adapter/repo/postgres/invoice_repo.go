@@ -569,9 +569,10 @@ func snapshotTotals(snapshot []byte, fallbackTotal int64) (hammerMinor, feesMino
 		HammerPrice int64 `json:"hammer_price"`
 		TotalDue    int64 `json:"total_due"`
 		Fees        []struct {
-			Name    string `json:"name"`
-			Amount  int64  `json:"amount"`
-			Taxable bool   `json:"taxable"`
+			Name     string `json:"name"`
+			Amount   int64  `json:"amount"`
+			Taxable  bool   `json:"taxable"`
+			Category string `json:"category"`
 		} `json:"fees"`
 	}
 	if err := json.Unmarshal(snapshot, &payload); err != nil {
@@ -582,13 +583,24 @@ func snapshotTotals(snapshot []byte, fallbackTotal int64) (hammerMinor, feesMino
 		totalDueMinor = payload.TotalDue
 	}
 	for _, fee := range payload.Fees {
-		feesMinor += fee.Amount
-		name := strings.ToUpper(strings.TrimSpace(fee.Name))
-		if fee.Taxable || strings.Contains(name, "VAT") || strings.Contains(name, "TAX") || strings.Contains(name, "GST") {
+		category := strings.ToUpper(strings.TrimSpace(fee.Category))
+		switch {
+		case category == "TAX":
 			taxMinor += fee.Amount
+		case category == "FEE":
+			feesMinor += fee.Amount
+		case isLegacyTaxLineName(fee.Name):
+			taxMinor += fee.Amount
+		default:
+			feesMinor += fee.Amount
 		}
 	}
 	return
+}
+
+func isLegacyTaxLineName(name string) bool {
+	normalized := strings.ToUpper(strings.TrimSpace(name))
+	return strings.Contains(normalized, "VAT") || strings.Contains(normalized, "TAX") || strings.Contains(normalized, "GST")
 }
 
 func canMarkPaid(current domain.InvoicePaymentStatus) error {

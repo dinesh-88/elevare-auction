@@ -9,6 +9,8 @@ import {
   type FeeComponent,
   type FeeScopeType,
   type Lot,
+  type TaxRule,
+  type TaxRuleAssignment,
 } from "../../api/client";
 import ElevareButton from "../../components/ui/ElevareButton";
 
@@ -27,6 +29,8 @@ export default function FinancialRules() {
   const { auctionId } = useParams();
   const [components, setComponents] = useState<FeeComponent[]>([]);
   const [assignments, setAssignments] = useState<FeeAssignment[]>([]);
+  const [taxRules, setTaxRules] = useState<TaxRule[]>([]);
+  const [taxAssignments, setTaxAssignments] = useState<TaxRuleAssignment[]>([]);
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
 
@@ -34,6 +38,7 @@ export default function FinancialRules() {
   const [selectedAuctionId, setSelectedAuctionId] = useState<string>(auctionId ?? "");
   const [selectedLotId, setSelectedLotId] = useState<string>("");
   const [selectedComponentId, setSelectedComponentId] = useState<string>("");
+  const [selectedTaxRuleId, setSelectedTaxRuleId] = useState<string>("");
 
   const [form, setForm] = useState({
     name: "",
@@ -43,6 +48,11 @@ export default function FinancialRules() {
     taxable: false,
   });
   const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
+  const [taxForm, setTaxForm] = useState({
+    name: "",
+    rate_percent: 0,
+  });
+  const [editingTaxRuleId, setEditingTaxRuleId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +68,13 @@ export default function FinancialRules() {
     try {
       setLoading(true);
       setError(null);
-      const [feeComponents, adminAuctions] = await Promise.all([api.listFeeComponents(false), api.listAdminAuctions()]);
+      const [feeComponents, activeTaxRules, adminAuctions] = await Promise.all([
+        api.listFeeComponents(false),
+        api.listTaxRules(false),
+        api.listAdminAuctions(),
+      ]);
       setComponents(feeComponents);
+      setTaxRules(activeTaxRules);
       setAuctions(adminAuctions);
       const nextAuctionId = selectedAuctionId || auctionId || adminAuctions[0]?.id || "";
       if (!selectedAuctionId && nextAuctionId) setSelectedAuctionId(nextAuctionId);
@@ -74,10 +89,12 @@ export default function FinancialRules() {
       const tenantId = adminAuctions[0]?.tenant_id ?? "";
       const scopeId = scopeType === "TENANT" ? tenantId : scopeType === "AUCTION" ? nextAuctionId : selectedLotId;
       if (scopeId) {
-        const rows = await api.listFeeAssignments(scopeType, scopeId);
-        setAssignments(rows);
+        const [feeRows, taxRows] = await Promise.all([api.listFeeAssignments(scopeType, scopeId), api.listTaxAssignments(scopeType, scopeId)]);
+        setAssignments(feeRows);
+        setTaxAssignments(taxRows);
       } else {
         setAssignments([]);
+        setTaxAssignments([]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load financial rules");
@@ -114,6 +131,10 @@ export default function FinancialRules() {
       .listFeeAssignments(scopeType, scopeId)
       .then(setAssignments)
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load assignments"));
+    api
+      .listTaxAssignments(scopeType, scopeId)
+      .then(setTaxAssignments)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load tax assignments"));
   }, [scopeType, selectedAuctionId, selectedLotId, auctions]);
 
   const saveComponent = async (e: React.FormEvent) => {
@@ -171,6 +192,39 @@ export default function FinancialRules() {
     }
   };
 
+  const saveTaxRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setError(null);
+      setMessage(null);
+      if (editingTaxRuleId) {
+        const updated = await api.updateTaxRule(editingTaxRuleId, taxForm);
+        setTaxRules((prev) => prev.map((rule) => (rule.id === editingTaxRuleId ? updated : rule)));
+        setMessage("Tax rule updated.");
+      } else {
+        const created = await api.createTaxRule(taxForm);
+        setTaxRules((prev) => [created, ...prev]);
+        setMessage("Tax rule created.");
+      }
+      setTaxForm({ name: "", rate_percent: 0 });
+      setEditingTaxRuleId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save tax rule");
+    }
+  };
+
+  const deactivateTaxRule = async (id: string) => {
+    try {
+      setError(null);
+      setMessage(null);
+      await api.deleteTaxRule(id);
+      setTaxRules((prev) => prev.map((rule) => (rule.id === id ? { ...rule, active: false } : rule)));
+      setMessage("Tax rule archived.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to archive tax rule");
+    }
+  };
+
   const removeAssignment = async (id: string) => {
     try {
       setError(null);
@@ -183,8 +237,44 @@ export default function FinancialRules() {
     }
   };
 
+  const addTaxAssignment = async () => {
+    const tenantId = auctions[0]?.tenant_id ?? "";
+    const scopeId = resolveScopeId(tenantId);
+    if (!scopeId || !selectedTaxRuleId) {
+      setError("Please choose a scope and a tax rule.");
+      return;
+    }
+    try {
+      setError(null);
+      setMessage(null);
+      const created = await api.createTaxAssignment({
+        scope_type: scopeType,
+        scope_id: scopeId,
+        tax_rule_id: selectedTaxRuleId,
+      });
+      setTaxAssignments((prev) => [created, ...prev]);
+      setMessage("Tax assignment added.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create tax assignment");
+    }
+  };
+
+  const removeTaxAssignment = async (id: string) => {
+    try {
+      setError(null);
+      setMessage(null);
+      await api.deleteTaxAssignment(id);
+      setTaxAssignments((prev) => prev.filter((assignment) => assignment.id !== id));
+      setMessage("Tax assignment removed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove tax assignment");
+    }
+  };
+
   const componentMap = useMemo(() => new Map(components.map((c) => [c.id, c])), [components]);
   const activeComponents = components.filter((c) => c.active);
+  const taxRuleMap = useMemo(() => new Map(taxRules.map((rule) => [rule.id, rule])), [taxRules]);
+  const activeTaxRules = taxRules.filter((rule) => rule.active);
   const tenantId = auctions[0]?.tenant_id ?? "";
 
   return (
@@ -204,7 +294,7 @@ export default function FinancialRules() {
       {error ? <p className="error">{error}</p> : null}
       {message ? <p className="success">{message}</p> : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-3">
         <div className="panel">
           <h2 className="mb-3 font-heading text-xl">Fee Components</h2>
           <p className="mb-4 text-sm text-neutral-500">Reusable fee definitions available for scope assignments.</p>
@@ -366,6 +456,110 @@ export default function FinancialRules() {
               );
             })}
             {assignments.length === 0 ? <p className="text-sm text-neutral-500">No assignments for this scope.</p> : null}
+          </div>
+        </div>
+
+        <div className="panel">
+          <h2 className="mb-3 font-heading text-xl">Tax Rules</h2>
+          <p className="mb-4 text-sm text-neutral-500">Tax applies only to fee lines marked taxable.</p>
+
+          <form className="grid gap-3" onSubmit={saveTaxRule}>
+            <label>Name</label>
+            <input value={taxForm.name} onChange={(e) => setTaxForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Sales Tax" required />
+            <label>Rate (%)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={taxForm.rate_percent}
+              onChange={(e) => setTaxForm((prev) => ({ ...prev, rate_percent: Number(e.target.value) }))}
+              required
+            />
+            <div className="flex gap-2">
+              <ElevareButton type="submit">{editingTaxRuleId ? "Save Tax Rule" : "Add Tax Rule"}</ElevareButton>
+              {editingTaxRuleId ? (
+                <ElevareButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setEditingTaxRuleId(null);
+                    setTaxForm({ name: "", rate_percent: 0 });
+                  }}
+                >
+                  Cancel
+                </ElevareButton>
+              ) : null}
+            </div>
+          </form>
+
+          <div className="mt-5 space-y-2">
+            {taxRules.map((rule) => (
+              <div key={rule.id} className="rounded-md border border-neutral-200 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-neutral-900">{rule.name}</p>
+                    <p className="text-xs text-neutral-500">{rule.rate_percent}% of taxable fees</p>
+                  </div>
+                  {rule.active ? (
+                    <div className="flex gap-2">
+                      <ElevareButton
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          setEditingTaxRuleId(rule.id);
+                          setTaxForm({ name: rule.name, rate_percent: rule.rate_percent });
+                        }}
+                      >
+                        Edit
+                      </ElevareButton>
+                      <ElevareButton type="button" variant="secondary" onClick={() => deactivateTaxRule(rule.id)}>
+                        Archive
+                      </ElevareButton>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-neutral-500">Archived</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 grid gap-3 border-t border-neutral-200 pt-5">
+            <h3 className="font-heading text-lg">Tax Assignments</h3>
+            <label>Tax Rule</label>
+            <select value={selectedTaxRuleId} onChange={(e) => setSelectedTaxRuleId(e.target.value)}>
+              <option value="">Select tax rule</option>
+              {activeTaxRules.map((rule) => (
+                <option key={rule.id} value={rule.id}>
+                  {rule.name}
+                </option>
+              ))}
+            </select>
+            <div>
+              <ElevareButton type="button" onClick={addTaxAssignment}>
+                Assign Tax Rule
+              </ElevareButton>
+            </div>
+
+            <div className="space-y-2">
+              {taxAssignments.map((assignment) => {
+                const rule = taxRuleMap.get(assignment.tax_rule_id);
+                return (
+                  <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 p-3">
+                    <div>
+                      <p className="font-medium text-neutral-900">{rule?.name ?? "Unknown tax rule"}</p>
+                      <p className="text-xs text-neutral-500">
+                        {assignment.scope_type} • {assignment.scope_id === tenantId ? "Tenant default" : assignment.scope_id}
+                      </p>
+                    </div>
+                    <ElevareButton type="button" variant="secondary" onClick={() => removeTaxAssignment(assignment.id)}>
+                      Remove
+                    </ElevareButton>
+                  </div>
+                );
+              })}
+              {taxAssignments.length === 0 ? <p className="text-sm text-neutral-500">No tax assignments for this scope.</p> : null}
+            </div>
           </div>
         </div>
       </div>

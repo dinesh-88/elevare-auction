@@ -37,7 +37,7 @@ var (
 	lotTwoEndedOne   = uuid.MustParse("17111111-1111-1111-1111-111111111111")
 	lotTwoFutureOne  = uuid.MustParse("16111111-1111-1111-1111-111111111111")
 	feePremium       = uuid.MustParse("d1111111-1111-1111-1111-111111111111")
-	feeVAT           = uuid.MustParse("e1111111-1111-1111-1111-111111111111")
+	taxRuleVAT       = uuid.MustParse("e1111111-1111-1111-1111-111111111111")
 	invoiceOneID     = uuid.MustParse("f1111111-1111-1111-1111-111111111111")
 	assetLogoID      = uuid.MustParse("f2111111-1111-1111-1111-111111111111")
 	assetBannerID    = uuid.MustParse("f3111111-1111-1111-1111-111111111111")
@@ -434,10 +434,10 @@ func seedLots(ctx context.Context, tx pgx.Tx, now time.Time) error {
 		"currency":     "GBP",
 		"hammer_price": 12000,
 		"fees": []map[string]any{
-			{"name": "Buyer's Premium", "type": "PERCENTAGE", "value": 15, "amount": 1800},
-			{"name": "VAT", "type": "PERCENTAGE", "value": 10, "amount": 1380},
+			{"name": "Buyer's Premium", "type": "PERCENTAGE", "value": 15, "amount": 1800, "taxable": true, "category": "FEE"},
+			{"name": "VAT", "type": "PERCENTAGE", "value": 10, "amount": 180, "category": "TAX"},
 		},
-		"total_due": 15180,
+		"total_due": 13980,
 	})
 
 	type lotRow struct {
@@ -468,8 +468,8 @@ func seedLots(ctx context.Context, tx pgx.Tx, now time.Time) error {
 	r5000 := int64(5000)
 	h12000 := int64(12000)
 	h5400 := int64(5400)
-	t15180 := int64(15180)
-	t6120 := int64(6120)
+	t13980 := int64(13980)
+	t5994 := int64(5994)
 	startEnded := now.Add(-6 * 24 * time.Hour)
 	endEnded := now.Add(-24 * time.Hour)
 	startEndedTwo := now.Add(-9 * 24 * time.Hour)
@@ -481,21 +481,21 @@ func seedLots(ctx context.Context, tx pgx.Tx, now time.Time) error {
 		"currency":     "GBP",
 		"hammer_price": 5400,
 		"fees": []map[string]any{
-			{"name": "Buyer's Premium", "type": "PERCENTAGE", "value": 10, "amount": 540},
-			{"name": "VAT", "type": "PERCENTAGE", "value": 10, "amount": 180},
+			{"name": "Buyer's Premium", "type": "PERCENTAGE", "value": 10, "amount": 540, "taxable": true, "category": "FEE"},
+			{"name": "VAT", "type": "PERCENTAGE", "value": 10, "amount": 54, "category": "TAX"},
 		},
-		"total_due": 6120,
+		"total_due": 5994,
 	})
 
 	rows := []lotRow{
-		{lotEndedSold, auctionEnded, "1", 1, "Sunlit Coastline", "Signed landscape, framed.", 10000, 12000, &r11000, 500, lot1Meta, "ENDED", &startEnded, &endEnded, &h12000, &t15180, &bidderOneID, snapshot1},
+		{lotEndedSold, auctionEnded, "1", 1, "Sunlit Coastline", "Signed landscape, framed.", 10000, 12000, &r11000, 500, lot1Meta, "ENDED", &startEnded, &endEnded, &h12000, &t13980, &bidderOneID, snapshot1},
 		{lotEndedNoRes, auctionEnded, "2", 2, "Portrait Study", "Unsigned portrait study.", 9000, 9000, &r12000, 250, lot2Meta, "ENDED", &startEnded, &endEnded, nil, nil, nil, nil},
 		{lotLiveOne, auctionLive, "3", 1, "Abstract Composition", "Bright abstract work.", 5000, 8600, &r6500, 200, lot3Meta, "LIVE", &startLive, &endLive, nil, nil, nil, nil},
 		{lotLiveTwo, auctionLive, "4", 2, "Bronze Figure", "Mid-century bronze figure.", 6000, 9200, &r7000, 200, lot4Meta, "LIVE", &startLive, &endLiveSoftClose, nil, nil, nil, nil},
 		{lotFutureOne, auctionFuture, "5", 1, "Marble Bust", "Neoclassical marble bust.", 7000, 7000, nil, 300, lot5Meta, "PENDING", nil, nil, nil, nil, nil, nil},
 		{lotFutureTwo, auctionFuture, "6", 2, "Giltwood Mirror", "Late Georgian giltwood wall mirror.", 4200, 4200, nil, 200, lot6Meta, "PENDING", nil, nil, nil, nil, nil, nil},
 		{lotTwoFutureOne, auctionTwoFuture, "1", 1, "Annotated Travel Journal", "A nineteenth-century journal with hand-coloured plates.", 3800, 3800, nil, 150, lot7Meta, "PENDING", nil, nil, nil, nil, nil, nil},
-		{lotTwoEndedOne, auctionTwoEnded, "1", 1, "Mahogany Collectors Cabinet", "A fitted collectors cabinet with brass pulls.", 4800, 5400, &r5000, 150, lot8Meta, "ENDED", &startEndedTwo, &endEndedTwo, &h5400, &t6120, &bidderTwoID, snapshot2},
+		{lotTwoEndedOne, auctionTwoEnded, "1", 1, "Mahogany Collectors Cabinet", "A fitted collectors cabinet with brass pulls.", 4800, 5400, &r5000, 150, lot8Meta, "ENDED", &startEndedTwo, &endEndedTwo, &h5400, &t5994, &bidderTwoID, snapshot2},
 	}
 
 	for _, l := range rows {
@@ -693,8 +693,7 @@ func seedFees(ctx context.Context, tx pgx.Tx, now time.Time) error {
 	_, err := tx.Exec(ctx, `
 INSERT INTO fee_components (id, tenant_id, name, calculation_type, value, applies_to, taxable, active, created_at)
 VALUES
-  ($1,$2,'Buyer''s Premium','PERCENTAGE',15,'HAMMER',false,true,$3),
-  ($4,$2,'VAT','PERCENTAGE',10,'SUBTOTAL',true,true,$3)
+  ($1,$2,'Buyer''s Premium','PERCENTAGE',15,'HAMMER',true,true,$3)
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name,
     calculation_type = EXCLUDED.calculation_type,
@@ -702,7 +701,20 @@ SET name = EXCLUDED.name,
     applies_to = EXCLUDED.applies_to,
     taxable = EXCLUDED.taxable,
     active = EXCLUDED.active
-`, feePremium, tenantID, now.Add(-72*time.Hour), feeVAT)
+`, feePremium, tenantID, now.Add(-72*time.Hour))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `
+INSERT INTO tax_rules (id, tenant_id, name, rate_percent, active, created_at)
+VALUES
+  ($1,$2,'VAT',10,true,$3)
+ON CONFLICT (id) DO UPDATE
+SET name = EXCLUDED.name,
+    rate_percent = EXCLUDED.rate_percent,
+    active = EXCLUDED.active
+`, taxRuleVAT, tenantID, now.Add(-72*time.Hour))
 	if err != nil {
 		return err
 	}
@@ -714,7 +726,6 @@ SET name = EXCLUDED.name,
 		feeComponent uuid.UUID
 	}{
 		{uuid.MustParse("66666666-aaaa-1111-1111-111111111111"), "TENANT", tenantID, feePremium},
-		{uuid.MustParse("77777777-aaaa-1111-1111-111111111111"), "TENANT", tenantID, feeVAT},
 	}
 	for _, a := range assignments {
 		_, err := tx.Exec(ctx, `
@@ -726,6 +737,15 @@ ON CONFLICT (scope_type, scope_id, fee_component_id) DO NOTHING
 			return err
 		}
 	}
+
+	_, err = tx.Exec(ctx, `
+INSERT INTO tax_rule_assignments (id, scope_type, scope_id, tax_rule_id, created_at)
+VALUES ($1,$2,$3,$4,$5)
+ON CONFLICT (scope_type, scope_id, tax_rule_id) DO NOTHING
+`, uuid.MustParse("77777777-aaaa-1111-1111-111111111111"), "TENANT", tenantID, taxRuleVAT, now.Add(-48*time.Hour))
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -734,10 +754,10 @@ func seedInvoices(ctx context.Context, tx pgx.Tx, now time.Time) error {
 		"currency":     "GBP",
 		"hammer_price": 12000,
 		"fees": []map[string]any{
-			{"name": "Buyer's Premium", "type": "PERCENTAGE", "value": 15, "amount": 1800},
-			{"name": "VAT", "type": "PERCENTAGE", "value": 10, "amount": 1380},
+			{"name": "Buyer's Premium", "type": "PERCENTAGE", "value": 15, "amount": 1800, "taxable": true, "category": "FEE"},
+			{"name": "VAT", "type": "PERCENTAGE", "value": 10, "amount": 180, "category": "TAX"},
 		},
-		"total_due": 15180,
+		"total_due": 13980,
 	})
 	issued := now.Add(-20 * time.Hour)
 	due := now.Add(7 * 24 * time.Hour)
@@ -747,7 +767,7 @@ INSERT INTO invoices (
   currency, total_amount, hammer_price_minor, fees_total_minor, tax_total_minor, total_due_minor,
   payment_status, snapshot, status, created_at
 )
-VALUES ($1,$2,$3,$4,$5,'INV-2026-000001',$6,$7,'GBP',15180,12000,3180,1380,15180,'UNPAID',$8,'ISSUED',$9)
+VALUES ($1,$2,$3,$4,$5,'INV-2026-000001',$6,$7,'GBP',13980,12000,1800,180,13980,'UNPAID',$8,'ISSUED',$9)
 ON CONFLICT (lot_id) DO UPDATE
 SET tenant_id = EXCLUDED.tenant_id,
     auction_id = EXCLUDED.auction_id,

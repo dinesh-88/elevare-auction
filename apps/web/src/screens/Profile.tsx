@@ -63,28 +63,30 @@ export default function Profile() {
         </div>
       </header>
 
-      <div className="panel space-y-4">
-        <div className="form-grid">
-          <label>{t("email")}</label>
-          <input value={user.email} readOnly disabled />
-          <label>{t("language")}</label>
-          <select value={locale} onChange={(event) => setLocale(event.target.value as AppLocale)}>
+      <div className="panel space-y-6">
+        <div className="grid gap-x-6 gap-y-4 sm:grid-cols-[160px_minmax(0,1fr)] sm:items-center">
+          <label className="text-sm font-medium text-neutral-700">{t("email")}</label>
+          <input value={user.email} readOnly disabled className="min-w-0" />
+
+          <label className="text-sm font-medium text-neutral-700">{t("language")}</label>
+          <select value={locale} onChange={(event) => setLocale(event.target.value as AppLocale)} className="min-w-0">
             {LOCALES.map((item) => (
               <option key={item} value={item}>
                 {tLocales(item)}
               </option>
             ))}
           </select>
-          <div className="actions">
+
+          <div className="sm:col-start-2 flex justify-start">
             <button type="button" className="btn-brand" disabled={saving || locale === user.locale} onClick={() => void save()}>
               {saving ? t("saving") : t("save")}
             </button>
           </div>
         </div>
-      </div>
 
-      {error ? <p className="error">{error}</p> : null}
-      {message ? <p className="success">{message}</p> : null}
+        {error ? <p className="error">{error}</p> : null}
+        {message ? <p className="success">{message}</p> : null}
+      </div>
     </section>
   );
 }

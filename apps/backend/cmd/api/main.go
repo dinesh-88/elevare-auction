@@ -46,6 +46,7 @@ func main() {
 	auctionTermsRepo := &postgres.AuctionTermsRepo{DB: db}
 	lotRepo := &postgres.LotRepo{DB: db, Audit: auditRepo}
 	feeRepo := &postgres.FeeRepo{DB: db}
+	taxRepo := &postgres.TaxRepo{DB: db}
 	invoiceRepo := &postgres.InvoiceRepo{DB: db, Audit: auditRepo}
 	notificationRepo := &postgres.NotificationRepo{DB: db}
 	notificationJobsRepo := &postgres.NotificationJobsRepo{DB: db}
@@ -83,6 +84,7 @@ func main() {
 		DemoTenantSlug: cfg.DemoTenantSlug,
 	}
 	feeUC := &usecase.FeeUseCase{Fees: feeRepo, Audit: auditRepo}
+	taxUC := &usecase.TaxUseCase{Taxes: taxRepo, Audit: auditRepo}
 	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo, Audit: auditRepo, Notifier: notificationService}
 	bidderUC := &usecase.BidderUseCase{Users: userRepo, Bidders: bidderRepo, Auctions: auctionRepo, Audit: auditRepo}
 	auditUC := &usecase.AuditUseCase{Audit: auditRepo}
@@ -130,6 +132,7 @@ func main() {
 		Terms:               auctionTermsUC,
 		Lot:                 lotUC,
 		Fee:                 feeUC,
+		Tax:                 taxUC,
 		Invoice:             invoiceUC,
 		Bidder:              bidderUC,
 		Audit:               auditUC,

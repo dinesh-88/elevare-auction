@@ -27,6 +27,7 @@ type Handler struct {
 	Terms               *usecase.AuctionTermsUseCase
 	Lot                 *usecase.LotUseCase
 	Fee                 *usecase.FeeUseCase
+	Tax                 *usecase.TaxUseCase
 	Invoice             *usecase.InvoiceUseCase
 	Bidder              *usecase.BidderUseCase
 	Audit               *usecase.AuditUseCase
@@ -1930,6 +1931,144 @@ func (h *Handler) DeleteFeeAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Fee.DeleteAssignment(r.Context(), tenant.ID, assignmentID); err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "DELETED"})
+}
+
+func (h *Handler) ListTaxRules(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	activeOnly := r.URL.Query().Get("active_only") != "false"
+	items, err := h.Tax.ListRules(r.Context(), tenant.ID, activeOnly)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *Handler) CreateTaxRule(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	var req struct {
+		Name        string  `json:"name"`
+		RatePercent float64 `json:"rate_percent"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Tax.CreateRule(r.Context(), usecase.CreateTaxRuleInput{
+		TenantID:    tenant.ID,
+		Name:        req.Name,
+		RatePercent: req.RatePercent,
+	})
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) UpdateTaxRule(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	ruleID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErrorText(w, "invalid tax rule id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Name        string  `json:"name"`
+		RatePercent float64 `json:"rate_percent"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Tax.UpdateRule(r.Context(), tenant.ID, ruleID, usecase.CreateTaxRuleInput{
+		TenantID:    tenant.ID,
+		Name:        req.Name,
+		RatePercent: req.RatePercent,
+	})
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) DeleteTaxRule(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	ruleID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErrorText(w, "invalid tax rule id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Tax.DeactivateRule(r.Context(), tenant.ID, ruleID); err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "DEACTIVATED"})
+}
+
+func (h *Handler) ListTaxAssignments(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	scopeType := domain.TaxRuleScopeType(r.URL.Query().Get("scope_type"))
+	scopeID, err := uuid.Parse(r.URL.Query().Get("scope_id"))
+	if err != nil {
+		writeErrorText(w, "invalid scope_id", http.StatusBadRequest)
+		return
+	}
+	items, err := h.Tax.ListAssignments(r.Context(), tenant.ID, scopeType, scopeID)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (h *Handler) CreateTaxAssignment(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	var req struct {
+		ScopeType domain.TaxRuleScopeType `json:"scope_type"`
+		ScopeID   string                  `json:"scope_id"`
+		TaxRuleID string                  `json:"tax_rule_id"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	scopeID, err := uuid.Parse(req.ScopeID)
+	if err != nil {
+		writeErrorText(w, "invalid scope_id", http.StatusBadRequest)
+		return
+	}
+	taxRuleID, err := uuid.Parse(req.TaxRuleID)
+	if err != nil {
+		writeErrorText(w, "invalid tax_rule_id", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Tax.CreateAssignment(r.Context(), usecase.CreateTaxAssignmentInput{
+		TenantID:  tenant.ID,
+		ScopeType: req.ScopeType,
+		ScopeID:   scopeID,
+		TaxRuleID: taxRuleID,
+	})
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) DeleteTaxAssignment(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	assignmentID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErrorText(w, "invalid assignment id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Tax.DeleteAssignment(r.Context(), tenant.ID, assignmentID); err != nil {
 		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}

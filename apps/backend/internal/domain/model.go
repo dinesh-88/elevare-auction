@@ -334,6 +334,7 @@ type FinancialFee struct {
 	Amount    int64   `json:"amount"`
 	AppliesTo string  `json:"applies_to,omitempty"`
 	Taxable   bool    `json:"taxable"`
+	Category  string  `json:"category,omitempty"`
 }
 
 type LotFinancialSnapshot struct {
@@ -383,6 +384,31 @@ type FeeAssignment struct {
 	ScopeID        uuid.UUID
 	FeeComponentID uuid.UUID
 	CreatedAt      time.Time
+}
+
+type TaxRuleScopeType string
+
+const (
+	TaxRuleScopeTenant  TaxRuleScopeType = "TENANT"
+	TaxRuleScopeAuction TaxRuleScopeType = "AUCTION"
+	TaxRuleScopeLot     TaxRuleScopeType = "LOT"
+)
+
+type TaxRule struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	Name        string
+	RatePercent float64
+	Active      bool
+	CreatedAt   time.Time
+}
+
+type TaxRuleAssignment struct {
+	ID        uuid.UUID
+	ScopeType TaxRuleScopeType
+	ScopeID   uuid.UUID
+	TaxRuleID uuid.UUID
+	CreatedAt time.Time
 }
 
 type LotImage struct {

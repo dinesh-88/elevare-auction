@@ -368,6 +368,7 @@ function normalizeLotAuditItem(raw: unknown): LotAuditItem {
 export type FeeCalculationType = "PERCENTAGE" | "FIXED";
 export type FeeAppliesTo = "HAMMER" | "PREMIUM" | "SUBTOTAL";
 export type FeeScopeType = "TENANT" | "AUCTION" | "LOT";
+export type TaxRuleScopeType = "TENANT" | "AUCTION" | "LOT";
 
 export interface FeeComponent {
   id: string;
@@ -386,6 +387,23 @@ export interface FeeAssignment {
   scope_type: FeeScopeType;
   scope_id: string;
   fee_component_id: string;
+  created_at: string;
+}
+
+export interface TaxRule {
+  id: string;
+  tenant_id: string;
+  name: string;
+  rate_percent: number;
+  active: boolean;
+  created_at: string;
+}
+
+export interface TaxRuleAssignment {
+  id: string;
+  scope_type: TaxRuleScopeType;
+  scope_id: string;
+  tax_rule_id: string;
   created_at: string;
 }
 
@@ -773,6 +791,29 @@ function normalizeFeeAssignment(raw: unknown): FeeAssignment {
     scope_type: String(r.scope_type ?? r.ScopeType ?? "TENANT") as FeeScopeType,
     scope_id: String(r.scope_id ?? r.ScopeID ?? ""),
     fee_component_id: String(r.fee_component_id ?? r.FeeComponentID ?? ""),
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
+function normalizeTaxRule(raw: unknown): TaxRule {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    tenant_id: String(r.tenant_id ?? r.TenantID ?? ""),
+    name: String(r.name ?? r.Name ?? ""),
+    rate_percent: Number(r.rate_percent ?? r.RatePercent ?? 0),
+    active: Boolean(r.active ?? r.Active),
+    created_at: String(r.created_at ?? r.CreatedAt ?? ""),
+  };
+}
+
+function normalizeTaxRuleAssignment(raw: unknown): TaxRuleAssignment {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? r.ID ?? ""),
+    scope_type: String(r.scope_type ?? r.ScopeType ?? "TENANT") as TaxRuleScopeType,
+    scope_id: String(r.scope_id ?? r.ScopeID ?? ""),
+    tax_rule_id: String(r.tax_rule_id ?? r.TaxRuleID ?? ""),
     created_at: String(r.created_at ?? r.CreatedAt ?? ""),
   };
 }
@@ -1235,6 +1276,28 @@ export const api = {
     fee_component_id: string;
   }) => normalizeFeeAssignment(await request<unknown>("/admin/fees/assignments", { method: "POST", body: JSON.stringify(payload) })),
   deleteFeeAssignment: (id: string) => request<JsonRecord>(`/admin/fees/assignments/${id}`, { method: "DELETE" }),
+  listTaxRules: async (activeOnly = true) =>
+    (await request<unknown[]>(`/admin/taxes/rules?active_only=${activeOnly}`)).map(normalizeTaxRule),
+  createTaxRule: async (payload: {
+    name: string;
+    rate_percent: number;
+  }) => normalizeTaxRule(await request<unknown>("/admin/taxes/rules", { method: "POST", body: JSON.stringify(payload) })),
+  updateTaxRule: async (
+    id: string,
+    payload: {
+      name: string;
+      rate_percent: number;
+    },
+  ) => normalizeTaxRule(await request<unknown>(`/admin/taxes/rules/${id}`, { method: "PATCH", body: JSON.stringify(payload) })),
+  deleteTaxRule: (id: string) => request<JsonRecord>(`/admin/taxes/rules/${id}`, { method: "DELETE" }),
+  listTaxAssignments: async (scopeType: TaxRuleScopeType, scopeID: string) =>
+    (await request<unknown[]>(`/admin/taxes/assignments?scope_type=${scopeType}&scope_id=${scopeID}`)).map(normalizeTaxRuleAssignment),
+  createTaxAssignment: async (payload: {
+    scope_type: TaxRuleScopeType;
+    scope_id: string;
+    tax_rule_id: string;
+  }) => normalizeTaxRuleAssignment(await request<unknown>("/admin/taxes/assignments", { method: "POST", body: JSON.stringify(payload) })),
+  deleteTaxAssignment: (id: string) => request<JsonRecord>(`/admin/taxes/assignments/${id}`, { method: "DELETE" }),
   platformListTenants: (platformToken: string, status: TenantStatus = "PENDING") =>
     requestWithToken<Array<Record<string, unknown>>>(`/platform/admin/tenants?status=${status}`, platformToken),
   platformApproveTenant: (platformToken: string, tenantId: string) =>

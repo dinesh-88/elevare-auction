@@ -970,7 +970,7 @@ FOR UPDATE`, lotID).Scan(&currentStatus, &auctionID, &tenantID, &auctionTitle, &
 	var hammerPrice *int64
 	var winnerID uuid.UUID
 	var winningAmount int64
-err := tx.QueryRow(ctx, `
+	err := tx.QueryRow(ctx, `
 SELECT user_id, amount
 FROM lot_bids
 WHERE lot_id = $1 AND tenant_id = $2
@@ -990,12 +990,17 @@ LIMIT 1`, lotID, tenantID).Scan(&winnerID, &winningAmount)
 		if err != nil {
 			return nil, err
 		}
-		components, computedTotal := calculateFinancials(*hammerPrice, fees)
+		taxes, err := r.resolveTaxRulesTx(ctx, tx, lotID, auctionID, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		computation := calculateFinancials(*hammerPrice, fees, taxes)
+		computedTotal := computation.TotalDue
 		totalDue = &computedTotal
 		payload := domain.LotFinancialSnapshot{
 			HammerPrice: *hammerPrice,
-			Fees:        components,
-			TotalDue:    computedTotal,
+			Fees:        computation.Lines,
+			TotalDue:    computation.TotalDue,
 		}
 		b, err := json.Marshal(payload)
 		if err != nil {
@@ -1018,7 +1023,7 @@ LIMIT 1`, lotID, tenantID).Scan(&winnerID, &winningAmount)
 		}
 
 		if winnerUserID != nil {
-			if err := r.createInvoiceForSettlementTx(ctx, tx, lotID, auctionID, tenantID, *winnerUserID, computedTotal, snapshot, now); err != nil {
+			if err := r.createInvoiceForSettlementTx(ctx, tx, lotID, auctionID, tenantID, *winnerUserID, computation.TotalDue, snapshot, now); err != nil {
 				return nil, err
 			}
 		}
@@ -1072,6 +1077,21 @@ type rawFeeRule struct {
 	CreatedAt time.Time
 }
 
+type rawTaxRule struct {
+	ID          uuid.UUID
+	Name        string
+	RatePercent float64
+	CreatedAt   time.Time
+}
+
+type financialComputation struct {
+	Lines       []domain.FinancialFee
+	FeeSubtotal int64
+	TaxSubtotal int64
+	TotalDue    int64
+	TaxableBase int64
+}
+
 func (r *LotRepo) resolveFeeComponentsTx(ctx context.Context, tx pgx.Tx, lotID, auctionID, tenantID uuid.UUID) ([]rawFeeRule, error) {
 	byScope := func(scopeType string, scopeID uuid.UUID) ([]rawFeeRule, error) {
 		const q = `
@@ -1111,20 +1131,59 @@ ORDER BY fc.created_at ASC, fc.id ASC`
 	return byScope("TENANT", tenantID)
 }
 
-func calculateFinancials(hammer int64, rules []rawFeeRule) ([]domain.FinancialFee, int64) {
+func (r *LotRepo) resolveTaxRulesTx(ctx context.Context, tx pgx.Tx, lotID, auctionID, tenantID uuid.UUID) ([]rawTaxRule, error) {
+	byScope := func(scopeType string, scopeID uuid.UUID) ([]rawTaxRule, error) {
+		const q = `
+SELECT tr.id, tr.name, tr.rate_percent::double precision, tr.created_at
+FROM tax_rule_assignments ta
+JOIN tax_rules tr ON tr.id = ta.tax_rule_id
+WHERE ta.scope_type = $1
+  AND ta.scope_id = $2
+  AND tr.active = true
+ORDER BY tr.created_at ASC, tr.id ASC`
+		rows, err := tx.Query(ctx, q, scopeType, scopeID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		out := make([]rawTaxRule, 0)
+		for rows.Next() {
+			var rule rawTaxRule
+			if err := rows.Scan(&rule.ID, &rule.Name, &rule.RatePercent, &rule.CreatedAt); err != nil {
+				return nil, err
+			}
+			out = append(out, rule)
+		}
+		return out, rows.Err()
+	}
+
+	if rules, err := byScope("LOT", lotID); err != nil {
+		return nil, err
+	} else if len(rules) > 0 {
+		return rules, nil
+	}
+	if rules, err := byScope("AUCTION", auctionID); err != nil {
+		return nil, err
+	} else if len(rules) > 0 {
+		return rules, nil
+	}
+	return byScope("TENANT", tenantID)
+}
+
+func calculateFinancials(hammer int64, feeRules []rawFeeRule, taxRules []rawTaxRule) financialComputation {
 	if hammer < 0 {
 		hammer = 0
 	}
 	percentageRules := make([]rawFeeRule, 0)
 	fixedRules := make([]rawFeeRule, 0)
-	for _, r := range rules {
-		if r.Value < 0 || r.Name == "" {
+	for _, rule := range feeRules {
+		if rule.Value < 0 || rule.Name == "" {
 			continue
 		}
-		if r.Type == string(domain.FeeTypeFixed) {
-			fixedRules = append(fixedRules, r)
-		} else if r.Type == string(domain.FeeTypePercentage) {
-			percentageRules = append(percentageRules, r)
+		if rule.Type == string(domain.FeeTypeFixed) {
+			fixedRules = append(fixedRules, rule)
+		} else if rule.Type == string(domain.FeeTypePercentage) {
+			percentageRules = append(percentageRules, rule)
 		}
 	}
 	sort.SliceStable(percentageRules, func(i, j int) bool {
@@ -1147,8 +1206,9 @@ func calculateFinancials(hammer int64, rules []rawFeeRule) ([]domain.FinancialFe
 	hammerBase := float64(hammer)
 	premiumBase := 0.0
 	subtotalBase := hammerBase
-	fees := make([]domain.FinancialFee, 0, len(rules))
+	lines := make([]domain.FinancialFee, 0, len(feeRules)+len(taxRules))
 	totalFees := int64(0)
+	taxableBase := int64(0)
 	for _, rule := range percentageRules {
 		var base float64
 		switch rule.AppliesTo {
@@ -1166,37 +1226,70 @@ func calculateFinancials(hammer int64, rules []rawFeeRule) ([]domain.FinancialFe
 			amount = 0
 		}
 		totalFees += amount
+		if rule.Taxable {
+			taxableBase += amount
+		}
 		subtotalBase += float64(amount)
 		if rule.AppliesTo == "HAMMER" || rule.AppliesTo == "PREMIUM" {
 			premiumBase += float64(amount)
 		}
-		fees = append(fees, domain.FinancialFee{
+		lines = append(lines, domain.FinancialFee{
 			Name:      rule.Name,
 			Type:      domain.FeeTypePercentage,
 			Value:     rule.Value,
 			Amount:    amount,
 			AppliesTo: rule.AppliesTo,
 			Taxable:   rule.Taxable,
+			Category:  "FEE",
 		})
 	}
 	for _, rule := range fixedRules {
-		amount := int64(0)
-		amount = int64(math.Round(rule.Value))
+		amount := int64(math.Round(rule.Value))
 		if amount < 0 {
 			amount = 0
 		}
 		totalFees += amount
+		if rule.Taxable {
+			taxableBase += amount
+		}
 		subtotalBase += float64(amount)
-		fees = append(fees, domain.FinancialFee{
+		lines = append(lines, domain.FinancialFee{
 			Name:      rule.Name,
 			Type:      domain.FeeTypeFixed,
 			Value:     rule.Value,
 			Amount:    amount,
 			AppliesTo: rule.AppliesTo,
 			Taxable:   rule.Taxable,
+			Category:  "FEE",
 		})
 	}
-	return fees, hammer + totalFees
+
+	totalTax := int64(0)
+	for _, rule := range taxRules {
+		if rule.Name == "" || rule.RatePercent < 0 {
+			continue
+		}
+		amount := int64(math.Round(float64(taxableBase) * rule.RatePercent / 100))
+		if amount < 0 {
+			amount = 0
+		}
+		totalTax += amount
+		lines = append(lines, domain.FinancialFee{
+			Name:     rule.Name,
+			Type:     domain.FeeTypePercentage,
+			Value:    rule.RatePercent,
+			Amount:   amount,
+			Category: "TAX",
+		})
+	}
+
+	return financialComputation{
+		Lines:       lines,
+		FeeSubtotal: totalFees,
+		TaxSubtotal: totalTax,
+		TotalDue:    hammer + totalFees + totalTax,
+		TaxableBase: taxableBase,
+	}
 }
 
 func appliesToRank(appliesTo string) int {

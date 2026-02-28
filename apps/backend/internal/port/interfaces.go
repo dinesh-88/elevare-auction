@@ -141,6 +141,18 @@ type FeeRepository interface {
 	DeleteAssignment(ctx context.Context, tenantID, assignmentID uuid.UUID) error
 }
 
+type TaxRepository interface {
+	CreateRule(ctx context.Context, rule *domain.TaxRule) error
+	UpdateRule(ctx context.Context, rule *domain.TaxRule) error
+	ListRules(ctx context.Context, tenantID uuid.UUID, activeOnly bool) ([]domain.TaxRule, error)
+	GetRuleByID(ctx context.Context, tenantID, ruleID uuid.UUID) (*domain.TaxRule, error)
+	DeactivateRule(ctx context.Context, tenantID, ruleID uuid.UUID) error
+
+	CreateAssignment(ctx context.Context, tenantID uuid.UUID, assignment *domain.TaxRuleAssignment) error
+	ListAssignments(ctx context.Context, tenantID uuid.UUID, scopeType domain.TaxRuleScopeType, scopeID uuid.UUID) ([]domain.TaxRuleAssignment, error)
+	DeleteAssignment(ctx context.Context, tenantID, assignmentID uuid.UUID) error
+}
+
 type InvoiceRepository interface {
 	GetByID(ctx context.Context, tenantID, invoiceID uuid.UUID) (*domain.Invoice, error)
 	GetByLotID(ctx context.Context, tenantID, lotID uuid.UUID) (*domain.Invoice, error)
