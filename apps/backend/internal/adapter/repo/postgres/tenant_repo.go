@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/dinesh-88/elevare-auction/internal/domain"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
@@ -26,7 +27,7 @@ func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 		&t.ID, &t.Name, &t.Subdomain, &t.CustomDomain, &t.DefaultCurrency, &t.Status,
 		&t.Country, &t.EstimatedAuctionVolume, &t.Branding,
 		&t.BrandingPublished, &t.ContentPublished, &t.BrandingDraft, &t.ContentDraft,
-		&t.ContentVersion, &t.ContentSchemaVersion,
+		&t.ContentVersion, &t.ContentSchemaVersion, &t.OnboardingStatus, &t.OnboardingStep, &t.OnboardingCompletedAt,
 		&t.RequireAdminApproval, &t.RequireKYC, &t.CreatedAt,
 	)
 	if err != nil {
@@ -45,6 +46,7 @@ func (r *TenantRepo) GetByHost(ctx context.Context, host string) (*domain.Tenant
 	const q = `
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
        branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
+       onboarding_status, onboarding_step, onboarding_completed_at,
        require_admin_approval, require_kyc, created_at
 FROM tenants
 WHERE (subdomain = split_part($1, '.', 1) OR custom_domain = $1 OR custom_domain = $2)
@@ -64,6 +66,7 @@ func (r *TenantRepo) GetBySubdomain(ctx context.Context, subdomain string) (*dom
 	const q = `
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
        branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
+       onboarding_status, onboarding_step, onboarding_completed_at,
        require_admin_approval, require_kyc, created_at
 FROM tenants
 WHERE subdomain = $1
@@ -82,6 +85,7 @@ func (r *TenantRepo) GetByID(ctx context.Context, tenantID uuid.UUID) (*domain.T
 	const q = `
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
        branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
+       onboarding_status, onboarding_step, onboarding_completed_at,
        require_admin_approval, require_kyc, created_at
 FROM tenants
 WHERE id = $1
@@ -126,6 +130,7 @@ func (r *TenantRepo) ListByStatus(ctx context.Context, status domain.TenantStatu
 	const q = `
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
        branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
+       onboarding_status, onboarding_step, onboarding_completed_at,
        require_admin_approval, require_kyc, created_at
 FROM tenants
 WHERE status = $1
@@ -174,6 +179,18 @@ func (r *TenantRepo) UpdateStatusAndAdminApproval(ctx context.Context, tenantID 
 func (r *TenantRepo) UpdateDefaultCurrency(ctx context.Context, tenantID uuid.UUID, currency string) error {
 	const q = `UPDATE tenants SET default_currency = $2 WHERE id = $1`
 	ct, err := r.DB.Exec(ctx, q, tenantID, currency)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("tenant not found")
+	}
+	return nil
+}
+
+func (r *TenantRepo) UpdateProfile(ctx context.Context, tenantID uuid.UUID, name, country string) error {
+	const q = `UPDATE tenants SET name = $2, country = $3 WHERE id = $1`
+	ct, err := r.DB.Exec(ctx, q, tenantID, name, country)
 	if err != nil {
 		return err
 	}
@@ -251,6 +268,23 @@ WHERE id = $1`, tenantID, afterVersion); err != nil {
 		return 0, 0, err
 	}
 	return beforeVersion, afterVersion, nil
+}
+
+func (r *TenantRepo) UpdateOnboardingState(ctx context.Context, tenantID uuid.UUID, status domain.OnboardingStatus, step int, completedAt *time.Time) error {
+	const q = `
+UPDATE tenants
+SET onboarding_status = $2,
+    onboarding_step = $3,
+    onboarding_completed_at = $4
+WHERE id = $1`
+	ct, err := r.DB.Exec(ctx, q, tenantID, status, step, completedAt)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("tenant not found")
+	}
+	return nil
 }
 
 func mustJSONMap(v map[string]any) []byte {

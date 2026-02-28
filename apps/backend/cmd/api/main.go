@@ -118,7 +118,7 @@ func main() {
 	auditUC := &usecase.AuditUseCase{Audit: auditRepo}
 	siteUC := &usecase.SiteUseCase{Tenants: tenantRepo}
 	assetUC := &usecase.AssetUseCase{Assets: assetRepo}
-	onboardingUC := &usecase.OnboardingUseCase{Tenants: tenantRepo, Hasher: hasher}
+	onboardingUC := &usecase.OnboardingUseCase{Tenants: tenantRepo, Fees: feeRepo, Taxes: taxRepo, Hasher: hasher}
 	demoRequestUC := &usecase.DemoRequestUseCase{Requests: demoRequestRepo}
 
 	var objectStorage port.ObjectStorage

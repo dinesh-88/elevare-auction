@@ -1436,6 +1436,41 @@ func (h *Handler) UpdateTenantSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"default_currency": currency})
 }
 
+func (h *Handler) GetInstitutionOnboarding(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	state, err := h.Onboarding.GetInstitutionOnboarding(r.Context(), tenant.ID)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
+}
+
+func (h *Handler) SaveInstitutionOnboarding(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	var req usecase.SaveInstitutionOnboardingInput
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	state, err := h.Onboarding.SaveInstitutionOnboarding(r.Context(), tenant.ID, req)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
+}
+
+func (h *Handler) CompleteInstitutionOnboarding(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	state, err := h.Onboarding.CompleteInstitutionOnboarding(r.Context(), tenant.ID)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
+}
+
 func (h *Handler) GetSite(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	item, err := h.Site.Get(r.Context(), tenant.ID)

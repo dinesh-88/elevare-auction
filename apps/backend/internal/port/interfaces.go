@@ -17,9 +17,11 @@ type TenantRepository interface {
 	CreatePendingTenantWithAdmin(ctx context.Context, in CreatePendingTenantWithAdminInput) error
 	ListByStatus(ctx context.Context, status domain.TenantStatus) ([]domain.Tenant, error)
 	UpdateStatusAndAdminApproval(ctx context.Context, tenantID uuid.UUID, tenantStatus domain.TenantStatus, adminApproval domain.ApprovalStatus) error
+	UpdateProfile(ctx context.Context, tenantID uuid.UUID, name, country string) error
 	UpdateDefaultCurrency(ctx context.Context, tenantID uuid.UUID, currency string) error
 	UpdateSiteDraft(ctx context.Context, tenantID uuid.UUID, brandingDraft, contentDraft json.RawMessage) error
 	PublishSiteDraft(ctx context.Context, tenantID uuid.UUID) (beforeVersion int, afterVersion int, err error)
+	UpdateOnboardingState(ctx context.Context, tenantID uuid.UUID, status domain.OnboardingStatus, step int, completedAt *time.Time) error
 }
 
 type AssetRepository interface {

@@ -1,5 +1,6 @@
 export type Role = "OWNER" | "ADMIN" | "STAFF" | "ACCOUNTING" | "BIDDER";
 export type TenantStatus = "PENDING" | "ACTIVE" | "REJECTED";
+export type OnboardingStatus = "not_started" | "in_progress" | "completed";
 
 export interface User {
   id: string;
@@ -430,6 +431,28 @@ export interface TenantSettings {
   default_currency: string;
 }
 
+export interface InstitutionOnboardingData {
+  institution_name: string;
+  country: string;
+  logo_url: string;
+  primary_color: string;
+  secondary_color: string;
+  favicon_url: string;
+  font_family: string;
+  default_currency: string;
+  vat_rate_percent: number;
+  buyers_premium_percent: number;
+  legal_terms_markdown: string;
+  support_email: string;
+}
+
+export interface InstitutionOnboardingState {
+  status: OnboardingStatus;
+  step: number;
+  completed_at?: string | null;
+  data: InstitutionOnboardingData;
+}
+
 export interface TenantSitePayload {
   branding: Record<string, unknown>;
   content: Record<string, unknown>;
@@ -845,6 +868,30 @@ function normalizeTenantAsset(raw: unknown): TenantAsset {
   };
 }
 
+function normalizeInstitutionOnboardingState(raw: unknown): InstitutionOnboardingState {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const data = (r.data ?? {}) as Record<string, unknown>;
+  return {
+    status: String(r.status ?? "not_started") as OnboardingStatus,
+    step: Number(r.step ?? 0),
+    completed_at: r.completed_at != null ? String(r.completed_at) : null,
+    data: {
+      institution_name: String(data.institution_name ?? ""),
+      country: String(data.country ?? ""),
+      logo_url: String(data.logo_url ?? ""),
+      primary_color: String(data.primary_color ?? ""),
+      secondary_color: String(data.secondary_color ?? ""),
+      favicon_url: String(data.favicon_url ?? ""),
+      font_family: String(data.font_family ?? ""),
+      default_currency: String(data.default_currency ?? "USD"),
+      vat_rate_percent: Number(data.vat_rate_percent ?? 0),
+      buyers_premium_percent: Number(data.buyers_premium_percent ?? 0),
+      legal_terms_markdown: String(data.legal_terms_markdown ?? ""),
+      support_email: String(data.support_email ?? ""),
+    },
+  };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
@@ -880,6 +927,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
           ? body
           : "Something went wrong. Please try again.";
     const debug = typeof bodyRecord?.debug === "string" ? bodyRecord.debug : null;
+    if (typeof window !== "undefined" && code === "onboarding_required" && window.location.pathname !== "/admin/onboarding") {
+      window.location.assign("/admin/onboarding");
+    }
     throw new ApiError({ message, code, status: res.status, requestId, debug });
   }
 
@@ -915,6 +965,9 @@ async function requestWithToken<T>(path: string, bearerToken: string, init?: Req
           ? body
           : "Something went wrong. Please try again.";
     const debug = typeof bodyRecord?.debug === "string" ? bodyRecord.debug : null;
+    if (typeof window !== "undefined" && code === "onboarding_required" && window.location.pathname !== "/admin/onboarding") {
+      window.location.assign("/admin/onboarding");
+    }
     throw new ApiError({ message, code, status: res.status, requestId, debug });
   }
 
@@ -951,6 +1004,9 @@ async function requestBinary(path: string, init?: RequestInit): Promise<Blob> {
           ? body
           : "Something went wrong. Please try again.";
     const debug = typeof bodyRecord?.debug === "string" ? bodyRecord.debug : null;
+    if (typeof window !== "undefined" && code === "onboarding_required" && window.location.pathname !== "/admin/onboarding") {
+      window.location.assign("/admin/onboarding");
+    }
     throw new ApiError({ message, code, status: res.status, requestId, debug });
   }
   return res.blob();
@@ -1000,6 +1056,11 @@ export const api = {
       }
     }
   },
+  getInstitutionOnboarding: async () => normalizeInstitutionOnboardingState(await request<unknown>("/admin/onboarding")),
+  saveInstitutionOnboarding: async (payload: { step: number; data: InstitutionOnboardingData }) =>
+    normalizeInstitutionOnboardingState(await request<unknown>("/admin/onboarding", { method: "PUT", body: JSON.stringify(payload) })),
+  completeInstitutionOnboarding: async () =>
+    normalizeInstitutionOnboardingState(await request<unknown>("/admin/onboarding/complete", { method: "POST" })),
   getSite: async () => normalizeSiteState(await request<unknown>("/admin/site")),
   updateSiteDraft: (payload: TenantSitePayload) =>
     request<{ status: string }>("/admin/site/draft", { method: "PUT", body: JSON.stringify(payload) }),

@@ -100,6 +100,14 @@ const (
 	TenantRejected TenantStatus = "REJECTED"
 )
 
+type OnboardingStatus string
+
+const (
+	OnboardingNotStarted OnboardingStatus = "not_started"
+	OnboardingInProgress OnboardingStatus = "in_progress"
+	OnboardingCompleted  OnboardingStatus = "completed"
+)
+
 type Tenant struct {
 	ID                     uuid.UUID
 	Name                   string
@@ -116,6 +124,9 @@ type Tenant struct {
 	ContentDraft           json.RawMessage
 	ContentVersion         int
 	ContentSchemaVersion   int
+	OnboardingStatus       OnboardingStatus
+	OnboardingStep         int
+	OnboardingCompletedAt  *time.Time
 	RequireAdminApproval   bool
 	RequireKYC             bool
 	CreatedAt              time.Time

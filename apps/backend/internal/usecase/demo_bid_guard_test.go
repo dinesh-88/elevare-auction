@@ -79,6 +79,9 @@ func (f *fakeDemoGuardTenantRepo) ListByStatus(ctx context.Context, status domai
 func (f *fakeDemoGuardTenantRepo) UpdateStatusAndAdminApproval(ctx context.Context, tenantID uuid.UUID, tenantStatus domain.TenantStatus, adminApproval domain.ApprovalStatus) error {
 	return errors.New("unused")
 }
+func (f *fakeDemoGuardTenantRepo) UpdateProfile(ctx context.Context, tenantID uuid.UUID, name, country string) error {
+	return errors.New("unused")
+}
 func (f *fakeDemoGuardTenantRepo) UpdateDefaultCurrency(ctx context.Context, tenantID uuid.UUID, currency string) error {
 	return errors.New("unused")
 }
@@ -87,6 +90,9 @@ func (f *fakeDemoGuardTenantRepo) UpdateSiteDraft(ctx context.Context, tenantID 
 }
 func (f *fakeDemoGuardTenantRepo) PublishSiteDraft(ctx context.Context, tenantID uuid.UUID) (int, int, error) {
 	return 0, 0, errors.New("unused")
+}
+func (f *fakeDemoGuardTenantRepo) UpdateOnboardingState(ctx context.Context, tenantID uuid.UUID, status domain.OnboardingStatus, step int, completedAt *time.Time) error {
+	return errors.New("unused")
 }
 
 type fakeDemoGuardUserRepo struct {

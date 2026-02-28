@@ -73,12 +73,15 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 	if in.Title == "" || !in.EndTime.After(in.StartTime) {
 		return nil, ErrValidation
 	}
+	tenant, err := uc.Tenants.GetByID(ctx, in.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if tenant.OnboardingStatus != domain.OnboardingCompleted {
+		return nil, ErrOnboardingPending
+	}
 	currency := strings.ToUpper(strings.TrimSpace(in.Currency))
 	if currency == "" {
-		tenant, err := uc.Tenants.GetByID(ctx, in.TenantID)
-		if err != nil {
-			return nil, err
-		}
 		currency = strings.ToUpper(strings.TrimSpace(tenant.DefaultCurrency))
 	}
 	if len(currency) != 3 {
@@ -244,6 +247,13 @@ func (uc *AuctionUseCase) Start(ctx context.Context, tenantID, auctionID uuid.UU
 	}
 	if err := authz.Authorize(ctx, domain.PermissionAuctionStart); err != nil {
 		return ErrForbidden
+	}
+	tenant, err := uc.Tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	if tenant.OnboardingStatus != domain.OnboardingCompleted {
+		return ErrOnboardingPending
 	}
 	if err := uc.Auctions.UpdateStatus(ctx, tenantID, auctionID, domain.AuctionLive); err != nil {
 		return err

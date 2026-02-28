@@ -37,6 +37,9 @@ func (f *fakeBidSimTenantRepo) ListByStatus(ctx context.Context, status domain.T
 func (f *fakeBidSimTenantRepo) UpdateStatusAndAdminApproval(ctx context.Context, tenantID uuid.UUID, tenantStatus domain.TenantStatus, adminApproval domain.ApprovalStatus) error {
 	return errors.New("unused")
 }
+func (f *fakeBidSimTenantRepo) UpdateProfile(ctx context.Context, tenantID uuid.UUID, name, country string) error {
+	return errors.New("unused")
+}
 func (f *fakeBidSimTenantRepo) UpdateDefaultCurrency(ctx context.Context, tenantID uuid.UUID, currency string) error {
 	return errors.New("unused")
 }
@@ -45,6 +48,9 @@ func (f *fakeBidSimTenantRepo) UpdateSiteDraft(ctx context.Context, tenantID uui
 }
 func (f *fakeBidSimTenantRepo) PublishSiteDraft(ctx context.Context, tenantID uuid.UUID) (int, int, error) {
 	return 0, 0, errors.New("unused")
+}
+func (f *fakeBidSimTenantRepo) UpdateOnboardingState(ctx context.Context, tenantID uuid.UUID, status domain.OnboardingStatus, step int, completedAt *time.Time) error {
+	return errors.New("unused")
 }
 
 type fakeBidSimAuctionRepo struct {

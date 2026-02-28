@@ -17,4 +17,5 @@ var (
 	ErrDepositNeeded     = errors.New("A deposit is required before bidding.")
 	ErrTermsUnavailable  = errors.New("active auction terms are not available")
 	ErrTermsRequired     = errors.New("auction terms must be accepted before bidding")
+	ErrOnboardingPending = errors.New("institution onboarding must be completed before creating or publishing auctions")
 )
