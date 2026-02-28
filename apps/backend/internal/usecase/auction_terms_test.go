@@ -17,11 +17,11 @@ type fakeAuctionTermsRepo struct {
 	createdTerms []*domain.AuctionTerms
 }
 
-func (f *fakeAuctionTermsRepo) ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) ([]domain.AuctionTerms, error) {
+func (f *fakeAuctionTermsRepo) ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID, locale domain.Locale) ([]domain.AuctionTerms, error) {
 	return nil, nil
 }
 
-func (f *fakeAuctionTermsRepo) GetActiveByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.AuctionTerms, error) {
+func (f *fakeAuctionTermsRepo) GetActiveByAuction(ctx context.Context, tenantID, auctionID uuid.UUID, locale domain.Locale) (*domain.AuctionTerms, error) {
 	return f.active, nil
 }
 
@@ -43,7 +43,7 @@ func (f *fakeAuctionTermsRepo) CreateVersion(ctx context.Context, item *domain.A
 	return nil
 }
 
-func (f *fakeAuctionTermsRepo) PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID) error {
+func (f *fakeAuctionTermsRepo) PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID, locale domain.Locale) error {
 	if f.active != nil && f.active.ID == auctionTermsID {
 		f.active.IsActive = true
 		return nil
@@ -153,7 +153,7 @@ func TestAcceptActiveTerms_CapturesImmutableAcceptance(t *testing.T) {
 	uc := &AuctionTermsUseCase{Terms: termsRepo}
 	now := time.Now().UTC()
 
-	item, active, err := uc.AcceptActive(bidderCtx(tenantID, userID), tenantID, auctionID, userID, now, "127.0.0.1", "test-agent")
+	item, active, err := uc.AcceptActive(bidderCtx(tenantID, userID), tenantID, auctionID, userID, "en", now, "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("expected acceptance to succeed, got %v", err)
 	}

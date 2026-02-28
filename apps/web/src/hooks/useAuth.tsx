@@ -7,6 +7,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<User>;
+  updateLocale: (locale: User["locale"]) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -25,6 +26,7 @@ function normalizeUser(raw: unknown): User | null {
     id,
     tenant_id: tenantId,
     email,
+    locale: String(r.locale ?? r.Locale ?? "en") as User["locale"],
     role,
     email_verified: Boolean(r.email_verified ?? r.EmailVerified),
     approval_status: String(r.approval_status ?? r.ApprovalStatus ?? "PENDING") as User["approval_status"],
@@ -67,6 +69,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return normalizedUser;
   };
 
+  const updateLocale = async (locale: User["locale"]) => {
+    const res = await api.updateMe({ locale });
+    const normalizedUser = normalizeUser(res.user);
+    if (!normalizedUser) throw new Error("Invalid user payload");
+    setUser(normalizedUser);
+    return normalizedUser;
+  };
+
   const logout = async () => {
     try {
       await api.logout();
@@ -83,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: Boolean(user),
       isAdmin: user?.role !== ("BIDDER" as Role),
       login,
+      updateLocale,
       logout,
     }),
     [user, loading],

@@ -36,6 +36,7 @@ type UserRepository interface {
 	GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error)
 	GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*domain.User, error)
 	GetBidders(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error)
+	UpdateLocale(ctx context.Context, tenantID, userID uuid.UUID, locale domain.Locale) error
 	UpdateApproval(ctx context.Context, tenantID, userID uuid.UUID, status domain.ApprovalStatus) error
 	UpdateEmailVerified(ctx context.Context, tenantID, userID uuid.UUID, verified bool) error
 }
@@ -64,11 +65,11 @@ type AuctionRepository interface {
 }
 
 type AuctionTermsRepository interface {
-	ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) ([]domain.AuctionTerms, error)
-	GetActiveByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.AuctionTerms, error)
+	ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID, locale domain.Locale) ([]domain.AuctionTerms, error)
+	GetActiveByAuction(ctx context.Context, tenantID, auctionID uuid.UUID, locale domain.Locale) (*domain.AuctionTerms, error)
 	GetAcceptance(ctx context.Context, tenantID, auctionID, userID, auctionTermsID uuid.UUID) (*domain.BidderTermsAcceptance, error)
 	CreateVersion(ctx context.Context, item *domain.AuctionTerms) error
-	PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID) error
+	PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID, locale domain.Locale) error
 	CreateAcceptance(ctx context.Context, item *domain.BidderTermsAcceptance) error
 }
 
@@ -212,7 +213,7 @@ type PasswordHasher interface {
 }
 
 type TokenService interface {
-	Issue(userID, tenantID uuid.UUID, role domain.Role) (string, error)
+	Issue(userID, tenantID uuid.UUID, role domain.Role, locale domain.Locale) (string, error)
 	Parse(token string) (*TokenClaims, error)
 }
 
@@ -220,6 +221,7 @@ type TokenClaims struct {
 	UserID   uuid.UUID
 	TenantID uuid.UUID
 	Role     domain.Role
+	Locale   domain.Locale
 	Exp      int64
 }
 

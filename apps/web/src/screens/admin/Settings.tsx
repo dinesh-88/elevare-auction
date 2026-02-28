@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { api } from "../../api/client";
 import ElevareButton from "../../components/ui/ElevareButton";
 
 const CURRENCIES = ["USD", "GBP", "EUR", "AUD", "CAD", "CHF", "JPY"];
 
 export default function Settings() {
+  const t = useTranslations("settings");
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,7 +40,7 @@ export default function Settings() {
     try {
       const updated = await api.updateTenantSettings({ default_currency: defaultCurrency });
       setDefaultCurrency(updated.default_currency);
-      setMessage("Default currency updated.");
+      setMessage(t("success"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update default currency");
     } finally {
@@ -50,17 +52,17 @@ export default function Settings() {
     <section className="page-shell">
       <header className="section-head">
         <div>
-          <h1 className="section-title">Organization Settings</h1>
-          <p className="section-copy">Set the default currency used for new auctions.</p>
+          <h1 className="section-title">{t("title")}</h1>
+          <p className="section-copy">{t("description")}</p>
         </div>
       </header>
 
       <div className="panel">
         {loading ? (
-          <p className="text-sm text-neutral-500">Loading settings...</p>
+          <p className="text-sm text-neutral-500">{t("loading")}</p>
         ) : (
           <div className="form-grid">
-            <label>Default Currency</label>
+            <label>{t("defaultCurrency")}</label>
             <select value={defaultCurrency} onChange={(e) => setDefaultCurrency(e.target.value)}>
               {CURRENCIES.map((currency) => (
                 <option key={currency} value={currency}>
@@ -70,7 +72,7 @@ export default function Settings() {
             </select>
             <div className="actions">
               <ElevareButton type="button" onClick={save} disabled={saving}>
-                {saving ? "Saving..." : "Save"}
+                {saving ? t("saving") : t("save")}
               </ElevareButton>
             </div>
           </div>

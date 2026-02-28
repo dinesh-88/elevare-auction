@@ -112,6 +112,7 @@ func NewRouter(h *Handler, tenantMW middleware.TenantMiddleware, authMW middlewa
 			r.Post("/auctions/{auctionId}/terms/accept", h.AcceptAuctionTerms)
 			r.Post("/lots/{lotId}/bid", h.PlaceLotBid)
 			r.Get("/lots/{lotId}/financials", h.GetLotFinancials)
+			r.Patch("/me", h.UpdateMe)
 			r.Get("/me/winnings", h.ListMyWinningLots)
 			r.Get("/me/notifications", h.ListMyNotifications)
 			r.Post("/me/notifications/{id}/read", h.MarkMyNotificationRead)

@@ -147,6 +147,9 @@ func (f *fakeBidSimUserRepo) GetByEmail(ctx context.Context, tenantID uuid.UUID,
 func (f *fakeBidSimUserRepo) GetBidders(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
 	return nil, errors.New("unused")
 }
+func (f *fakeBidSimUserRepo) UpdateLocale(ctx context.Context, tenantID, userID uuid.UUID, locale domain.Locale) error {
+	return errors.New("unused")
+}
 func (f *fakeBidSimUserRepo) UpdateApproval(ctx context.Context, tenantID, userID uuid.UUID, status domain.ApprovalStatus) error {
 	return errors.New("unused")
 }

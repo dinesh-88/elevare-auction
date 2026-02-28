@@ -76,6 +76,7 @@ type authUserResponse struct {
 	ID             uuid.UUID             `json:"id"`
 	TenantID       uuid.UUID             `json:"tenant_id"`
 	Email          string                `json:"email"`
+	Locale         domain.Locale         `json:"locale"`
 	Role           domain.Role           `json:"role"`
 	Status         domain.UserStatus     `json:"status"`
 	EmailVerified  bool                  `json:"email_verified"`
@@ -737,6 +738,38 @@ func (h *Handler) Session(w http.ResponseWriter, r *http.Request) {
 		writeErrorText(w, "session not found", http.StatusUnauthorized)
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": toAuthUserResponse(user)})
+}
+
+func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		Locale string `json:"locale"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	user, err := h.Auth.UpdateLocale(r.Context(), tenant.ID, claims.UserID, req.Locale)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrUnauthorized) {
+			status = http.StatusUnauthorized
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	token, err := h.Auth.Tokens.Issue(user.ID, user.TenantID, user.Role, user.Locale)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.setSessionCookies(w, token)
 	writeJSON(w, http.StatusOK, map[string]any{"user": toAuthUserResponse(user)})
 }
 
@@ -1570,7 +1603,8 @@ func (h *Handler) GetActiveAuctionTerms(w http.ResponseWriter, r *http.Request) 
 		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
-	item, err := h.Terms.GetActive(r.Context(), tenant.ID, auctionID)
+	locale := strings.TrimSpace(r.URL.Query().Get("locale"))
+	item, err := h.Terms.GetActive(r.Context(), tenant.ID, auctionID, locale)
 	if err != nil {
 		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1585,6 +1619,7 @@ func (h *Handler) GetActiveAuctionTerms(w http.ResponseWriter, r *http.Request) 
 		"has_active_terms": true,
 		"id":               item.ID,
 		"auction_id":       item.AuctionID,
+		"locale":           item.Locale,
 		"version_number":   item.VersionNumber,
 		"content_markdown": item.ContentMarkdown,
 		"content_hash":     item.ContentHash,
@@ -1605,7 +1640,7 @@ func (h *Handler) GetAuctionTermsStatus(w http.ResponseWriter, r *http.Request) 
 		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
-	active, acceptance, err := h.Terms.GetBidderStatus(r.Context(), tenant.ID, auctionID, claims.UserID)
+	active, acceptance, err := h.Terms.GetBidderStatus(r.Context(), tenant.ID, auctionID, claims.UserID, string(domain.NormalizeLocale(string(claims.Locale))))
 	if err != nil {
 		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1624,6 +1659,7 @@ func (h *Handler) GetAuctionTermsStatus(w http.ResponseWriter, r *http.Request) 
 		"terms": map[string]any{
 			"id":               active.ID,
 			"auction_id":       active.AuctionID,
+			"locale":           active.Locale,
 			"version_number":   active.VersionNumber,
 			"content_markdown": active.ContentMarkdown,
 			"content_hash":     active.ContentHash,
@@ -1651,7 +1687,7 @@ func (h *Handler) AcceptAuctionTerms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	meta, _ := middleware.RequestMetaFromContext(r.Context())
-	item, active, err := h.Terms.AcceptActive(r.Context(), tenant.ID, auctionID, claims.UserID, time.Now().UTC(), meta.IP, meta.UserAgent)
+	item, active, err := h.Terms.AcceptActive(r.Context(), tenant.ID, auctionID, claims.UserID, string(domain.NormalizeLocale(string(claims.Locale))), time.Now().UTC(), meta.IP, meta.UserAgent)
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, usecase.ErrTermsUnavailable) {
@@ -1673,7 +1709,8 @@ func (h *Handler) ListAuctionTerms(w http.ResponseWriter, r *http.Request) {
 		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
 		return
 	}
-	items, err := h.Terms.ListByAuction(r.Context(), tenant.ID, auctionID)
+	locale := strings.TrimSpace(r.URL.Query().Get("locale"))
+	items, err := h.Terms.ListByAuction(r.Context(), tenant.ID, auctionID, locale)
 	if err != nil {
 		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1689,6 +1726,7 @@ func (h *Handler) CreateAuctionTerms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		Locale          string `json:"locale"`
 		ContentMarkdown string `json:"content_markdown"`
 		Publish         bool   `json:"publish"`
 	}
@@ -1696,7 +1734,7 @@ func (h *Handler) CreateAuctionTerms(w http.ResponseWriter, r *http.Request) {
 		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	item, err := h.Terms.CreateVersion(r.Context(), tenant.ID, auctionID, req.ContentMarkdown, req.Publish)
+	item, err := h.Terms.CreateVersion(r.Context(), tenant.ID, auctionID, req.Locale, req.ContentMarkdown, req.Publish)
 	if err != nil {
 		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1716,7 +1754,8 @@ func (h *Handler) PublishAuctionTerms(w http.ResponseWriter, r *http.Request) {
 		writeErrorText(w, "invalid terms id", http.StatusBadRequest)
 		return
 	}
-	if err := h.Terms.PublishVersion(r.Context(), tenant.ID, auctionID, auctionTermsID); err != nil {
+	locale := strings.TrimSpace(r.URL.Query().Get("locale"))
+	if err := h.Terms.PublishVersion(r.Context(), tenant.ID, auctionID, auctionTermsID, locale); err != nil {
 		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -2175,6 +2214,7 @@ func toAuthUserResponse(user *domain.User) authUserResponse {
 		ID:             user.ID,
 		TenantID:       user.TenantID,
 		Email:          user.Email,
+		Locale:         domain.NormalizeLocale(string(user.Locale)),
 		Role:           user.Role,
 		Status:         user.Status,
 		EmailVerified:  user.EmailVerified,

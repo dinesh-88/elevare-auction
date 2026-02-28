@@ -21,25 +21,26 @@ func (r *UserRepo) Create(ctx context.Context, tenantID uuid.UUID, user *domain.
 		return errors.New("tenant mismatch")
 	}
 	const q = `
-INSERT INTO users (id, tenant_id, email, password_hash, role, status, email_verified, approval_status, kyc_status, created_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())`
+INSERT INTO users (id, tenant_id, email, password_hash, locale, role, status, email_verified, approval_status, kyc_status, created_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())`
 	status := user.Status
 	if status == "" {
 		status = domain.UserStatusActive
 	}
+	locale := domain.NormalizeLocale(string(user.Locale))
 	_, err := r.DB.Exec(ctx, q,
-		user.ID, user.TenantID, user.Email, user.PasswordHash, user.Role, status, user.EmailVerified, user.ApprovalStatus, user.KYCStatus,
+		user.ID, user.TenantID, user.Email, user.PasswordHash, locale, user.Role, status, user.EmailVerified, user.ApprovalStatus, user.KYCStatus,
 	)
 	return mapDBError(err, "A user with this email already exists.")
 }
 
 func (r *UserRepo) GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*domain.User, error) {
 	const q = `
-SELECT id, tenant_id, email, password_hash, role, status, email_verified, approval_status, kyc_status, created_at
+SELECT id, tenant_id, email, password_hash, locale, role, status, email_verified, approval_status, kyc_status, created_at
 FROM users WHERE tenant_id = $1 AND email = $2`
 	var u domain.User
 	err := r.DB.QueryRow(ctx, q, tenantID, email).Scan(
-		&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Role, &u.Status, &u.EmailVerified, &u.ApprovalStatus, &u.KYCStatus, &u.CreatedAt,
+		&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Locale, &u.Role, &u.Status, &u.EmailVerified, &u.ApprovalStatus, &u.KYCStatus, &u.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errors.New("user not found")
@@ -52,11 +53,11 @@ FROM users WHERE tenant_id = $1 AND email = $2`
 
 func (r *UserRepo) GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error) {
 	const q = `
-SELECT id, tenant_id, email, password_hash, role, status, email_verified, approval_status, kyc_status, created_at
+SELECT id, tenant_id, email, password_hash, locale, role, status, email_verified, approval_status, kyc_status, created_at
 FROM users WHERE tenant_id = $1 AND id = $2`
 	var u domain.User
 	err := r.DB.QueryRow(ctx, q, tenantID, userID).Scan(
-		&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Role, &u.Status, &u.EmailVerified, &u.ApprovalStatus, &u.KYCStatus, &u.CreatedAt,
+		&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Locale, &u.Role, &u.Status, &u.EmailVerified, &u.ApprovalStatus, &u.KYCStatus, &u.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errors.New("user not found")
@@ -69,7 +70,7 @@ FROM users WHERE tenant_id = $1 AND id = $2`
 
 func (r *UserRepo) GetBidders(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
 	const q = `
-SELECT id, tenant_id, email, password_hash, role, status, email_verified, approval_status, kyc_status, created_at
+SELECT id, tenant_id, email, password_hash, locale, role, status, email_verified, approval_status, kyc_status, created_at
 FROM users WHERE tenant_id = $1 AND role = 'BIDDER' ORDER BY created_at DESC`
 	rows, err := r.DB.Query(ctx, q, tenantID)
 	if err != nil {
@@ -79,12 +80,24 @@ FROM users WHERE tenant_id = $1 AND role = 'BIDDER' ORDER BY created_at DESC`
 	out := make([]domain.User, 0)
 	for rows.Next() {
 		var u domain.User
-		if err := rows.Scan(&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Role, &u.Status, &u.EmailVerified, &u.ApprovalStatus, &u.KYCStatus, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Locale, &u.Role, &u.Status, &u.EmailVerified, &u.ApprovalStatus, &u.KYCStatus, &u.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
 	}
 	return out, rows.Err()
+}
+
+func (r *UserRepo) UpdateLocale(ctx context.Context, tenantID, userID uuid.UUID, locale domain.Locale) error {
+	const q = `UPDATE users SET locale = $3 WHERE tenant_id = $1 AND id = $2`
+	ct, err := r.DB.Exec(ctx, q, tenantID, userID, domain.NormalizeLocale(string(locale)))
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
 }
 
 func (r *UserRepo) UpdateApproval(ctx context.Context, tenantID, userID uuid.UUID, status domain.ApprovalStatus) error {

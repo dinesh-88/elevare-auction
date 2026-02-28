@@ -55,6 +55,7 @@ func (uc *AuthUseCase) Register(ctx context.Context, in RegisterInput) (*domain.
 		TenantID:       in.Tenant.ID,
 		Email:          in.Email,
 		PasswordHash:   hash,
+		Locale:         domain.LocaleEnglish,
 		Role:           in.Role,
 		Status:         domain.UserStatusActive,
 		EmailVerified:  false,
@@ -88,7 +89,7 @@ func (uc *AuthUseCase) Login(ctx context.Context, in LoginInput) (string, *domai
 	if user.Status == domain.UserStatusSuspended {
 		return "", nil, errors.New("user is suspended")
 	}
-	token, err := uc.Tokens.Issue(user.ID, user.TenantID, user.Role)
+	token, err := uc.Tokens.Issue(user.ID, user.TenantID, user.Role, user.Locale)
 	if err != nil {
 		return "", nil, err
 	}
@@ -98,6 +99,17 @@ func (uc *AuthUseCase) Login(ctx context.Context, in LoginInput) (string, *domai
 func (uc *AuthUseCase) CurrentUser(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error) {
 	if tenantID == uuid.Nil || userID == uuid.Nil {
 		return nil, ErrValidation
+	}
+	return uc.Users.GetByID(ctx, tenantID, userID)
+}
+
+func (uc *AuthUseCase) UpdateLocale(ctx context.Context, tenantID, userID uuid.UUID, locale string) (*domain.User, error) {
+	if tenantID == uuid.Nil || userID == uuid.Nil || !domain.IsSupportedLocale(locale) {
+		return nil, ErrValidation
+	}
+	normalized := domain.NormalizeLocale(locale)
+	if err := uc.Users.UpdateLocale(ctx, tenantID, userID, normalized); err != nil {
+		return nil, err
 	}
 	return uc.Users.GetByID(ctx, tenantID, userID)
 }

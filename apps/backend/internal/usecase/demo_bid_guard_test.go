@@ -105,6 +105,9 @@ func (f *fakeDemoGuardUserRepo) GetByEmail(ctx context.Context, tenantID uuid.UU
 func (f *fakeDemoGuardUserRepo) GetBidders(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
 	return nil, errors.New("unused")
 }
+func (f *fakeDemoGuardUserRepo) UpdateLocale(ctx context.Context, tenantID, userID uuid.UUID, locale domain.Locale) error {
+	return errors.New("unused")
+}
 func (f *fakeDemoGuardUserRepo) UpdateApproval(ctx context.Context, tenantID, userID uuid.UUID, status domain.ApprovalStatus) error {
 	return errors.New("unused")
 }

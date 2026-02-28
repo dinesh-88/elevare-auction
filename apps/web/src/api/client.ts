@@ -5,6 +5,7 @@ export interface User {
   id: string;
   tenant_id: string;
   email: string;
+  locale: "en" | "fr" | "de";
   role: Role;
   email_verified: boolean;
   approval_status: "PENDING" | "APPROVED" | "REJECTED";
@@ -78,6 +79,7 @@ export interface Auction {
 export interface AuctionTerms {
   id: string;
   auction_id: string;
+  locale: "en" | "fr" | "de";
   version_number: number;
   content_markdown: string;
   content_hash: string;
@@ -559,6 +561,7 @@ function normalizeAuctionTerms(raw: unknown): AuctionTerms {
   return {
     id: String(r.id ?? r.ID ?? ""),
     auction_id: String(r.auction_id ?? r.AuctionID ?? ""),
+    locale: String(r.locale ?? r.Locale ?? "en") as AuctionTerms["locale"],
     version_number: Number(r.version_number ?? r.VersionNumber ?? 0),
     content_markdown: String(r.content_markdown ?? r.ContentMarkdown ?? ""),
     content_hash: String(r.content_hash ?? r.ContentHash ?? ""),
@@ -739,6 +742,7 @@ function normalizeUser(raw: unknown): User {
     id: String(r.id ?? r.ID ?? ""),
     tenant_id: String(r.tenant_id ?? r.TenantID ?? ""),
     email: String(r.email ?? r.Email ?? ""),
+    locale: String(r.locale ?? r.Locale ?? "en") as User["locale"],
     role: String(r.role ?? r.Role ?? "BIDDER") as Role,
     email_verified: Boolean(r.email_verified ?? r.EmailVerified),
     approval_status: String(r.approval_status ?? r.ApprovalStatus ?? "PENDING") as User["approval_status"],
@@ -962,8 +966,10 @@ export const api = {
     request<{ status: string; before_version: number; after_version: number }>("/admin/site/publish", { method: "POST" }),
   listAuctions: async () => (await request<unknown[]>("/auctions")).map(normalizeAuction),
   getAuction: async (id: string) => normalizeAuction(await request<unknown>(`/auctions/${id}`)),
-  getActiveAuctionTerms: async (auctionId: string) => {
-    const res = await request<{ has_active_terms: boolean } & Record<string, unknown>>(`/auctions/${auctionId}/terms/active`);
+  getActiveAuctionTerms: async (auctionId: string, locale = "en") => {
+    const res = await request<{ has_active_terms: boolean } & Record<string, unknown>>(
+      `/auctions/${auctionId}/terms/active?locale=${encodeURIComponent(locale)}`,
+    );
     if (!res.has_active_terms) return null;
     return normalizeAuctionTerms(res);
   },
@@ -1079,6 +1085,7 @@ export const api = {
   downloadInvoicePDF: (invoiceId: string) => requestBinary(`/invoices/${invoiceId}/pdf`),
   listLotBids: async (lotId: string) => (await request<unknown[]>(`/lots/${lotId}/bids`)).map(normalizeLotBid),
   listMyWinningLots: async () => (await request<unknown[]>("/me/winnings")).map(normalizeLot),
+  updateMe: (payload: { locale: User["locale"] }) => request<{ user: User }>("/me", { method: "PATCH", body: JSON.stringify(payload) }),
   register: (payload: { email: string; password: string }) =>
     request<JsonRecord>("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   login: (payload: { email: string; password: string }) =>
@@ -1109,12 +1116,14 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ require_bidder_approval: requireBidderApproval }),
     }),
-  listAuctionTerms: async (auctionId: string) =>
-    ((await request<{ items: unknown[] }>(`/admin/auctions/${auctionId}/terms`)).items ?? []).map(normalizeAuctionTerms),
-  createAuctionTerms: async (auctionId: string, payload: { content_markdown: string; publish?: boolean }) =>
+  listAuctionTerms: async (auctionId: string, locale: User["locale"]) =>
+    ((await request<{ items: unknown[] }>(`/admin/auctions/${auctionId}/terms?locale=${encodeURIComponent(locale)}`)).items ?? []).map(
+      normalizeAuctionTerms,
+    ),
+  createAuctionTerms: async (auctionId: string, payload: { locale: User["locale"]; content_markdown: string; publish?: boolean }) =>
     normalizeAuctionTerms(await request<unknown>(`/admin/auctions/${auctionId}/terms`, { method: "POST", body: JSON.stringify(payload) })),
-  publishAuctionTerms: (auctionId: string, termsId: string) =>
-    request<{ status: string }>(`/admin/auctions/${auctionId}/terms/${termsId}/publish`, { method: "POST" }),
+  publishAuctionTerms: (auctionId: string, termsId: string, locale: User["locale"]) =>
+    request<{ status: string }>(`/admin/auctions/${auctionId}/terms/${termsId}/publish?locale=${encodeURIComponent(locale)}`, { method: "POST" }),
   listAuctionBidders: async (
     auctionId: string,
     filters?: {

@@ -26,28 +26,37 @@ func hashTermsContent(content string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (uc *AuctionTermsUseCase) ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) ([]domain.AuctionTerms, error) {
+func (uc *AuctionTermsUseCase) ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID, locale string) ([]domain.AuctionTerms, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
 	}
 	if err := authz.Authorize(ctx, domain.PermissionAuctionUpdate); err != nil {
 		return nil, ErrForbidden
 	}
-	return uc.Terms.ListByAuction(ctx, tenantID, auctionID)
+	if !domain.IsSupportedLocale(locale) {
+		return nil, ErrValidation
+	}
+	return uc.Terms.ListByAuction(ctx, tenantID, auctionID, domain.NormalizeLocale(locale))
 }
 
-func (uc *AuctionTermsUseCase) GetActive(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.AuctionTerms, error) {
+func (uc *AuctionTermsUseCase) GetActive(ctx context.Context, tenantID, auctionID uuid.UUID, locale string) (*domain.AuctionTerms, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
 	}
-	return uc.Terms.GetActiveByAuction(ctx, tenantID, auctionID)
+	if !domain.IsSupportedLocale(locale) {
+		return nil, ErrValidation
+	}
+	return uc.Terms.GetActiveByAuction(ctx, tenantID, auctionID, domain.NormalizeLocale(locale))
 }
 
-func (uc *AuctionTermsUseCase) GetBidderStatus(ctx context.Context, tenantID, auctionID, userID uuid.UUID) (*domain.AuctionTerms, *domain.BidderTermsAcceptance, error) {
+func (uc *AuctionTermsUseCase) GetBidderStatus(ctx context.Context, tenantID, auctionID, userID uuid.UUID, locale string) (*domain.AuctionTerms, *domain.BidderTermsAcceptance, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, nil, err
 	}
-	active, err := uc.Terms.GetActiveByAuction(ctx, tenantID, auctionID)
+	if !domain.IsSupportedLocale(locale) {
+		return nil, nil, ErrValidation
+	}
+	active, err := uc.Terms.GetActiveByAuction(ctx, tenantID, auctionID, domain.NormalizeLocale(locale))
 	if err != nil || active == nil {
 		return active, nil, err
 	}
@@ -58,12 +67,15 @@ func (uc *AuctionTermsUseCase) GetBidderStatus(ctx context.Context, tenantID, au
 	return active, acceptance, nil
 }
 
-func (uc *AuctionTermsUseCase) CreateVersion(ctx context.Context, tenantID, auctionID uuid.UUID, contentMarkdown string, publish bool) (*domain.AuctionTerms, error) {
+func (uc *AuctionTermsUseCase) CreateVersion(ctx context.Context, tenantID, auctionID uuid.UUID, locale string, contentMarkdown string, publish bool) (*domain.AuctionTerms, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
 	}
 	if err := authz.Authorize(ctx, domain.PermissionAuctionUpdate); err != nil {
 		return nil, ErrForbidden
+	}
+	if !domain.IsSupportedLocale(locale) {
+		return nil, ErrValidation
 	}
 	trimmed := strings.TrimSpace(contentMarkdown)
 	if trimmed == "" {
@@ -82,6 +94,7 @@ func (uc *AuctionTermsUseCase) CreateVersion(ctx context.Context, tenantID, auct
 		ID:              uuid.New(),
 		TenantID:        tenantID,
 		AuctionID:       auctionID,
+		Locale:          domain.NormalizeLocale(locale),
 		ContentMarkdown: contentMarkdown,
 		ContentHash:     hashTermsContent(contentMarkdown),
 		IsActive:        false,
@@ -111,7 +124,7 @@ func (uc *AuctionTermsUseCase) CreateVersion(ctx context.Context, tenantID, auct
 		})
 	}
 	if publish {
-		if err := uc.PublishVersion(ctx, tenantID, auctionID, item.ID); err != nil {
+		if err := uc.PublishVersion(ctx, tenantID, auctionID, item.ID, locale); err != nil {
 			return nil, err
 		}
 		item.IsActive = true
@@ -119,14 +132,17 @@ func (uc *AuctionTermsUseCase) CreateVersion(ctx context.Context, tenantID, auct
 	return item, nil
 }
 
-func (uc *AuctionTermsUseCase) PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID) error {
+func (uc *AuctionTermsUseCase) PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID, locale string) error {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return err
 	}
 	if err := authz.Authorize(ctx, domain.PermissionAuctionUpdate); err != nil {
 		return ErrForbidden
 	}
-	if err := uc.Terms.PublishVersion(ctx, tenantID, auctionID, auctionTermsID); err != nil {
+	if !domain.IsSupportedLocale(locale) {
+		return ErrValidation
+	}
+	if err := uc.Terms.PublishVersion(ctx, tenantID, auctionID, auctionTermsID, domain.NormalizeLocale(locale)); err != nil {
 		return err
 	}
 	if uc.Audit != nil {
@@ -148,11 +164,14 @@ func (uc *AuctionTermsUseCase) PublishVersion(ctx context.Context, tenantID, auc
 	return nil
 }
 
-func (uc *AuctionTermsUseCase) AcceptActive(ctx context.Context, tenantID, auctionID, userID uuid.UUID, now time.Time, acceptedIP, acceptedUserAgent string) (*domain.BidderTermsAcceptance, *domain.AuctionTerms, error) {
+func (uc *AuctionTermsUseCase) AcceptActive(ctx context.Context, tenantID, auctionID, userID uuid.UUID, locale string, now time.Time, acceptedIP, acceptedUserAgent string) (*domain.BidderTermsAcceptance, *domain.AuctionTerms, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, nil, err
 	}
-	active, err := uc.Terms.GetActiveByAuction(ctx, tenantID, auctionID)
+	if !domain.IsSupportedLocale(locale) {
+		return nil, nil, ErrValidation
+	}
+	active, err := uc.Terms.GetActiveByAuction(ctx, tenantID, auctionID, domain.NormalizeLocale(locale))
 	if err != nil || active == nil {
 		return nil, active, ErrTermsUnavailable
 	}

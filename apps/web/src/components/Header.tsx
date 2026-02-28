@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "react-router-dom";
 import ElevareButton from "./ui/ElevareButton";
 import NotificationBell from "./NotificationBell";
@@ -18,6 +19,7 @@ export default function Header({
   userEmail?: string;
   onLogout: () => void;
 }) {
+  const t = useTranslations("header");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const closeMenu = () => setMobileMenuOpen(false);
 
@@ -41,21 +43,26 @@ export default function Header({
 
         <nav className="hidden items-center gap-8 md:flex">
           <Link to="/auctions" className="text-neutral-900 no-underline hover:text-neutral-500">
-            Auctions
+            {t("auctions")}
           </Link>
           {isAuthenticated && !isAdmin ? (
             <Link to="/my-winnings" className="text-neutral-900 no-underline hover:text-neutral-500">
-              My Winnings
+              {t("myWinnings")}
+            </Link>
+          ) : null}
+          {isAuthenticated ? (
+            <Link to="/profile" className="text-neutral-900 no-underline hover:text-neutral-500">
+              {t("profile")}
             </Link>
           ) : null}
           {!isAuthenticated ? (
             <>
               <Link to="/login" className="text-neutral-900 no-underline hover:text-neutral-500">
-                Login
+                {t("login")}
               </Link>
               <ElevareButton size="default">
                 <Link to="/register" className="text-inherit no-underline">
-                  Register
+                  {t("register")}
                 </Link>
               </ElevareButton>
             </>
@@ -64,7 +71,7 @@ export default function Header({
               <NotificationBell isAuthenticated={isAuthenticated} />
               <span className="text-xs text-neutral-500">{userEmail}</span>
               <ElevareButton variant="secondary" onClick={onLogout}>
-                Logout
+                {t("logout")}
               </ElevareButton>
             </>
           )}
@@ -76,7 +83,7 @@ export default function Header({
             className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-200 text-neutral-900"
             onClick={() => setMobileMenuOpen((v) => !v)}
             type="button"
-            aria-label="Open menu"
+            aria-label={t("openMenu")}
             aria-expanded={mobileMenuOpen}
           >
             ☰
@@ -87,20 +94,25 @@ export default function Header({
           <div className="fixed left-0 right-0 top-[72px] z-20 max-h-[calc(100vh-72px)] overflow-y-auto border-b border-neutral-200 bg-white shadow-sm md:hidden">
             <nav className="flex flex-col gap-3 p-4">
               <Link to="/auctions" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
-                Auctions
+                {t("auctions")}
               </Link>
               {isAuthenticated && !isAdmin ? (
                 <Link to="/my-winnings" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
-                  My Winnings
+                  {t("myWinnings")}
+                </Link>
+              ) : null}
+              {isAuthenticated ? (
+                <Link to="/profile" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
+                  {t("profile")}
                 </Link>
               ) : null}
               {!isAuthenticated ? (
                 <>
                   <Link to="/login" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
-                    Login
+                    {t("login")}
                   </Link>
                   <Link to="/register" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
-                    Register
+                    {t("register")}
                   </Link>
                 </>
               ) : (
@@ -114,7 +126,7 @@ export default function Header({
                       onLogout();
                     }}
                   >
-                    Logout
+                    {t("logout")}
                   </button>
                 </>
               )}

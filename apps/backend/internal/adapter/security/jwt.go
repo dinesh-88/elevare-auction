@@ -19,15 +19,17 @@ type claims struct {
 	UserID   string      `json:"user_id"`
 	TenantID string      `json:"tenant_id"`
 	Role     domain.Role `json:"role"`
+	Locale   string      `json:"locale"`
 	jwt.RegisteredClaims
 }
 
-func (j *JWTService) Issue(userID, tenantID uuid.UUID, role domain.Role) (string, error) {
+func (j *JWTService) Issue(userID, tenantID uuid.UUID, role domain.Role, locale domain.Locale) (string, error) {
 	now := time.Now()
 	cl := claims{
 		UserID:   userID.String(),
 		TenantID: tenantID.String(),
 		Role:     role,
+		Locale:   string(domain.NormalizeLocale(string(locale))),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(j.TTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -63,6 +65,7 @@ func (j *JWTService) Parse(raw string) (*port.TokenClaims, error) {
 		UserID:   uid,
 		TenantID: tid,
 		Role:     cl.Role,
+		Locale:   domain.NormalizeLocale(cl.Locale),
 		Exp:      cl.ExpiresAt.Unix(),
 	}, nil
 }

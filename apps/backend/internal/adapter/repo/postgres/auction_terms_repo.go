@@ -15,13 +15,13 @@ type AuctionTermsRepo struct {
 	DB *pgxpool.Pool
 }
 
-func (r *AuctionTermsRepo) ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) ([]domain.AuctionTerms, error) {
+func (r *AuctionTermsRepo) ListByAuction(ctx context.Context, tenantID, auctionID uuid.UUID, locale domain.Locale) ([]domain.AuctionTerms, error) {
 	rows, err := r.DB.Query(ctx, `
-SELECT id, tenant_id, auction_id, version_number, content_markdown, content_hash,
+SELECT id, tenant_id, auction_id, locale, version_number, content_markdown, content_hash,
        is_active, created_by_user_id, created_at
 FROM auction_terms
-WHERE tenant_id = $1 AND auction_id = $2
-ORDER BY version_number DESC, created_at DESC`, tenantID, auctionID)
+WHERE tenant_id = $1 AND auction_id = $2 AND locale = $3
+ORDER BY version_number DESC, created_at DESC`, tenantID, auctionID, locale)
 	if err != nil {
 		return nil, err
 	}
@@ -38,13 +38,13 @@ ORDER BY version_number DESC, created_at DESC`, tenantID, auctionID)
 	return out, rows.Err()
 }
 
-func (r *AuctionTermsRepo) GetActiveByAuction(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.AuctionTerms, error) {
+func (r *AuctionTermsRepo) GetActiveByAuction(ctx context.Context, tenantID, auctionID uuid.UUID, locale domain.Locale) (*domain.AuctionTerms, error) {
 	item, err := scanAuctionTerms(r.DB.QueryRow(ctx, `
-SELECT id, tenant_id, auction_id, version_number, content_markdown, content_hash,
+SELECT id, tenant_id, auction_id, locale, version_number, content_markdown, content_hash,
        is_active, created_by_user_id, created_at
 FROM auction_terms
-WHERE tenant_id = $1 AND auction_id = $2 AND is_active = true
-LIMIT 1`, tenantID, auctionID))
+WHERE tenant_id = $1 AND auction_id = $2 AND locale = $3 AND is_active = true
+LIMIT 1`, tenantID, auctionID, locale))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -77,17 +77,17 @@ func (r *AuctionTermsRepo) CreateVersion(ctx context.Context, item *domain.Aucti
 	if err := tx.QueryRow(ctx, `
 SELECT COALESCE(MAX(version_number), 0) + 1
 FROM auction_terms
-WHERE tenant_id = $1 AND auction_id = $2`, item.TenantID, item.AuctionID).Scan(&item.VersionNumber); err != nil {
+WHERE tenant_id = $1 AND auction_id = $2 AND locale = $3`, item.TenantID, item.AuctionID, item.Locale).Scan(&item.VersionNumber); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
 INSERT INTO auction_terms (
-  id, tenant_id, auction_id, version_number, content_markdown, content_hash,
+  id, tenant_id, auction_id, locale, version_number, content_markdown, content_hash,
   is_active, created_by_user_id, created_at
 ) VALUES (
-  $1, $2, $3, $4, $5, $6,
-  $7, $8, now()
-)`, item.ID, item.TenantID, item.AuctionID, item.VersionNumber, item.ContentMarkdown, item.ContentHash, item.IsActive, item.CreatedByUserID); err != nil {
+  $1, $2, $3, $4, $5, $6, $7,
+  $8, $9, now()
+)`, item.ID, item.TenantID, item.AuctionID, item.Locale, item.VersionNumber, item.ContentMarkdown, item.ContentHash, item.IsActive, item.CreatedByUserID); err != nil {
 		return mapDBError(err, "A conflicting terms version already exists.")
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -97,7 +97,7 @@ INSERT INTO auction_terms (
 	return nil
 }
 
-func (r *AuctionTermsRepo) PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID) error {
+func (r *AuctionTermsRepo) PublishVersion(ctx context.Context, tenantID, auctionID, auctionTermsID uuid.UUID, locale domain.Locale) error {
 	tx, err := r.DB.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
@@ -109,8 +109,8 @@ func (r *AuctionTermsRepo) PublishVersion(ctx context.Context, tenantID, auction
 SELECT EXISTS(
   SELECT 1
   FROM auction_terms
-  WHERE tenant_id = $1 AND auction_id = $2 AND id = $3
-)`, tenantID, auctionID, auctionTermsID).Scan(&exists); err != nil {
+  WHERE tenant_id = $1 AND auction_id = $2 AND id = $3 AND locale = $4
+)`, tenantID, auctionID, auctionTermsID, locale).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
@@ -119,13 +119,13 @@ SELECT EXISTS(
 	if _, err := tx.Exec(ctx, `
 UPDATE auction_terms
 SET is_active = false
-WHERE tenant_id = $1 AND auction_id = $2`, tenantID, auctionID); err != nil {
+WHERE tenant_id = $1 AND auction_id = $2 AND locale = $3`, tenantID, auctionID, locale); err != nil {
 		return err
 	}
 	ct, err := tx.Exec(ctx, `
 UPDATE auction_terms
 SET is_active = true
-WHERE tenant_id = $1 AND auction_id = $2 AND id = $3`, tenantID, auctionID, auctionTermsID)
+WHERE tenant_id = $1 AND auction_id = $2 AND id = $3 AND locale = $4`, tenantID, auctionID, auctionTermsID, locale)
 	if err != nil {
 		return err
 	}
@@ -154,6 +154,7 @@ func scanAuctionTerms(row pgx.Row) (*domain.AuctionTerms, error) {
 		&item.ID,
 		&item.TenantID,
 		&item.AuctionID,
+		&item.Locale,
 		&item.VersionNumber,
 		&item.ContentMarkdown,
 		&item.ContentHash,

@@ -23,6 +23,32 @@ const (
 	UserStatusSuspended UserStatus = "SUSPENDED"
 )
 
+type Locale string
+
+const (
+	LocaleEnglish Locale = "en"
+	LocaleFrench  Locale = "fr"
+	LocaleGerman  Locale = "de"
+)
+
+func NormalizeLocale(raw string) Locale {
+	switch Locale(raw) {
+	case LocaleFrench, LocaleGerman:
+		return Locale(raw)
+	default:
+		return LocaleEnglish
+	}
+}
+
+func IsSupportedLocale(raw string) bool {
+	switch NormalizeLocale(raw) {
+	case LocaleEnglish, LocaleFrench, LocaleGerman:
+		return raw == string(LocaleEnglish) || raw == string(LocaleFrench) || raw == string(LocaleGerman)
+	default:
+		return false
+	}
+}
+
 type ApprovalStatus string
 
 const (
@@ -109,6 +135,7 @@ type User struct {
 	TenantID       uuid.UUID
 	Email          string
 	PasswordHash   string
+	Locale         Locale
 	Role           Role
 	Status         UserStatus
 	EmailVerified  bool
@@ -151,6 +178,7 @@ type AuctionTerms struct {
 	ID              uuid.UUID
 	TenantID        uuid.UUID
 	AuctionID       uuid.UUID
+	Locale          Locale
 	VersionNumber   int
 	ContentMarkdown string
 	ContentHash     string

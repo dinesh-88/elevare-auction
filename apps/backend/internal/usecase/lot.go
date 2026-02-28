@@ -220,7 +220,12 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 		}
 	}
 	if uc.Terms != nil {
-		activeTerms, err := uc.Terms.GetActiveByAuction(ctx, in.TenantID, lot.AuctionID)
+		claims, _ := middleware.ClaimsFromContext(ctx)
+		locale := domain.LocaleEnglish
+		if claims != nil {
+			locale = domain.NormalizeLocale(string(claims.Locale))
+		}
+		activeTerms, err := uc.Terms.GetActiveByAuction(ctx, in.TenantID, lot.AuctionID, locale)
 		if err != nil {
 			return nil, err
 		}

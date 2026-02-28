@@ -3,12 +3,15 @@
 import React, { useEffect } from "react";
 import NextLink from "next/link";
 import { usePathname, useRouter, useParams as useNextParams } from "next/navigation";
+import { getLocaleFromPathname, localizePath } from "./i18n/config";
 
 type LinkProps = Omit<React.ComponentPropsWithoutRef<"a">, "href"> & { to: string; replace?: boolean };
 
 export function Link({ to, children, ...rest }: LinkProps) {
+  const pathname = usePathname();
+  const locale = getLocaleFromPathname(pathname);
   return (
-    <NextLink href={to} {...rest}>
+    <NextLink href={localizePath(to, locale)} {...rest}>
       {children}
     </NextLink>
   );
@@ -16,12 +19,15 @@ export function Link({ to, children, ...rest }: LinkProps) {
 
 export function useNavigate() {
   const router = useRouter();
+  const pathname = usePathname();
+  const locale = getLocaleFromPathname(pathname);
   return (to: string, options?: { replace?: boolean }) => {
+    const target = localizePath(to, locale);
     if (options?.replace) {
-      router.replace(to);
+      router.replace(target);
       return;
     }
-    router.push(to);
+    router.push(target);
   };
 }
 
@@ -41,13 +47,16 @@ export function useParams<T extends Record<string, string>>() {
 
 export function Navigate({ to, replace = false }: { to: string; replace?: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const locale = getLocaleFromPathname(pathname);
   useEffect(() => {
+    const target = localizePath(to, locale);
     if (replace) {
-      router.replace(to);
+      router.replace(target);
       return;
     }
-    router.push(to);
-  }, [replace, router, to]);
+    router.push(target);
+  }, [locale, replace, router, to]);
   return null;
 }
 
