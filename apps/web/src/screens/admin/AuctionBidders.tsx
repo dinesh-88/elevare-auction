@@ -57,7 +57,7 @@ export default function AuctionBidders() {
         ),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load bidders");
+      setError(err instanceof Error ? err.message : "Failed to load registrations");
     } finally {
       setLoading(false);
     }
@@ -71,10 +71,10 @@ export default function AuctionBidders() {
     if (!auctionId) return;
     try {
       await api.approveAuctionBidder(auctionId, userID);
-      setMessage("Bidder approved.");
+      setMessage("Registration approved.");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to approve bidder");
+      setError(err instanceof Error ? err.message : "Failed to approve registration");
     }
   };
 
@@ -82,10 +82,10 @@ export default function AuctionBidders() {
     if (!auctionId) return;
     try {
       await api.rejectAuctionBidder(auctionId, userID);
-      setMessage("Bidder rejected.");
+      setMessage("Registration rejected.");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reject bidder");
+      setError(err instanceof Error ? err.message : "Failed to reject registration");
     }
   };
 
@@ -127,8 +127,8 @@ export default function AuctionBidders() {
     <section className="page-shell">
       <header className="section-head">
         <div>
-          <h1 className="section-title">Auction Bidders</h1>
-          <p className="section-copy">Review and decide bidder approvals for this auction.</p>
+          <h1 className="section-title">Auction Registrations</h1>
+          <p className="section-copy">Review and decide bidder registrations for this auction.</p>
         </div>
         <div className="flex gap-2">
           <Link className="btn-link-brand" to={`/admin/auctions/${auctionId}/lots`}>← Back to Lots</Link>
@@ -170,7 +170,7 @@ export default function AuctionBidders() {
         </select>
       </div>
 
-      {loading ? <p className="text-sm text-neutral-500">Loading bidders...</p> : null}
+      {loading ? <p className="text-sm text-neutral-500">Loading registrations...</p> : null}
 
       <div className="table-wrap">
         <table>

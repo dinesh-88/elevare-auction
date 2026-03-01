@@ -30,6 +30,8 @@ export default function BidderProfile() {
       const updated = await api.updateBidderProfile(userId, {
         status: profile.status,
         risk_level: profile.risk_level,
+        bidder_status: profile.bidder_status,
+        vat_classification: profile.vat_classification ?? null,
         internal_notes: profile.internal_notes ?? null,
         phone: profile.phone ?? null,
         company_name: profile.company_name ?? null,
@@ -45,6 +47,23 @@ export default function BidderProfile() {
       setError(err instanceof Error ? err.message : "Failed to save profile");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const updateDecision = async (next: "approved" | "rejected") => {
+    if (!userId) return;
+    setError(null);
+    setMessage(null);
+    try {
+      if (next === "approved") {
+        await api.approveBidder(userId);
+      } else {
+        await api.rejectBidder(userId);
+      }
+      setProfile((prev) => (prev ? { ...prev, bidder_status: next } : prev));
+      setMessage(next === "approved" ? "Bidder approved." : "Bidder rejected.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update bidder");
     }
   };
 
@@ -80,6 +99,18 @@ export default function BidderProfile() {
             </select>
           </label>
           <label className="text-sm">
+            <span>Bidder Onboarding</span>
+            <select
+              value={profile.bidder_status}
+              onChange={(e) => setProfile((p) => (p ? { ...p, bidder_status: e.target.value as TenantBidderProfile["bidder_status"] } : p))}
+            >
+              <option value="incomplete">incomplete</option>
+              <option value="pending_review">pending_review</option>
+              <option value="approved">approved</option>
+              <option value="rejected">rejected</option>
+            </select>
+          </label>
+          <label className="text-sm">
             <span>Phone</span>
             <input value={profile.phone ?? ""} onChange={(e) => setProfile((p) => (p ? { ...p, phone: e.target.value } : p))} />
           </label>
@@ -107,6 +138,17 @@ export default function BidderProfile() {
             <span>Country</span>
             <input value={profile.country ?? ""} onChange={(e) => setProfile((p) => (p ? { ...p, country: e.target.value } : p))} />
           </label>
+          <label className="text-sm">
+            <span>VAT Classification</span>
+            <input
+              value={profile.vat_classification ?? ""}
+              onChange={(e) => setProfile((p) => (p ? { ...p, vat_classification: e.target.value } : p))}
+            />
+          </label>
+        </div>
+        <div className="grid grid-cols-1 gap-3 rounded-lg border border-neutral-200 p-4 text-sm text-neutral-600 md:grid-cols-2">
+          <div>Terms Accepted: {profile.terms_accepted_at ? new Date(profile.terms_accepted_at).toLocaleString() : "No"}</div>
+          <div>Privacy Accepted: {profile.privacy_accepted_at ? new Date(profile.privacy_accepted_at).toLocaleString() : "No"}</div>
         </div>
         <label className="text-sm">
           <span>Internal Notes</span>
@@ -114,6 +156,12 @@ export default function BidderProfile() {
         </label>
         <div className="actions">
           <ElevareButton type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</ElevareButton>
+          {profile.bidder_status !== "approved" ? (
+            <ElevareButton type="button" onClick={() => void updateDecision("approved")}>Approve</ElevareButton>
+          ) : null}
+          {profile.bidder_status !== "rejected" ? (
+            <ElevareButton type="button" variant="secondary" onClick={() => void updateDecision("rejected")}>Reject</ElevareButton>
+          ) : null}
         </div>
       </form>
     </section>

@@ -15,6 +15,7 @@ import (
 
 	"github.com/dinesh-88/elevare-auction/internal/authz"
 	"github.com/dinesh-88/elevare-auction/internal/domain"
+	apperrors "github.com/dinesh-88/elevare-auction/internal/errors"
 	"github.com/dinesh-88/elevare-auction/internal/middleware"
 	"github.com/dinesh-88/elevare-auction/internal/port"
 	"github.com/dinesh-88/elevare-auction/internal/usecase"
@@ -407,14 +408,15 @@ func (h *Handler) PublicConfig(w http.ResponseWriter, r *http.Request) {
 		branding = tenant.Branding
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"name":                   tenant.Name,
-		"branding":               branding,
-		"content":                content,
-		"content_version":        tenant.ContentVersion,
-		"content_schema_version": tenant.ContentSchemaVersion,
-		"default_currency":       tenant.DefaultCurrency,
-		"require_admin_approval": tenant.RequireAdminApproval,
-		"require_kyc":            tenant.RequireKYC,
+		"name":                               tenant.Name,
+		"branding":                           branding,
+		"content":                            content,
+		"content_version":                    tenant.ContentVersion,
+		"content_schema_version":             tenant.ContentSchemaVersion,
+		"default_currency":                   tenant.DefaultCurrency,
+		"require_admin_approval":             tenant.RequireAdminApproval,
+		"require_bidder_onboarding_approval": tenant.RequireBidderOnboardingApproval,
+		"require_kyc":                        tenant.RequireKYC,
 	})
 }
 
@@ -1029,6 +1031,99 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"user": toAuthUserResponse(user)})
 }
 
+func (h *Handler) GetMyBidderOnboarding(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	item, err := h.Bidder.GetMyOnboarding(r.Context(), tenant.ID, claims.UserID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrForbidden) {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) SaveMyBidderOnboarding(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		Phone             *string `json:"phone"`
+		CompanyName       *string `json:"company_name"`
+		AddressLine1      *string `json:"address_line1"`
+		AddressLine2      *string `json:"address_line2"`
+		City              *string `json:"city"`
+		PostalCode        *string `json:"postal_code"`
+		Country           *string `json:"country"`
+		VATClassification *string `json:"vat_classification"`
+		AcceptTerms       bool    `json:"accept_terms"`
+		AcceptPrivacy     bool    `json:"accept_privacy"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	var termsAcceptedAt *time.Time
+	var privacyAcceptedAt *time.Time
+	now := time.Now().UTC()
+	if req.AcceptTerms {
+		termsAcceptedAt = &now
+	}
+	if req.AcceptPrivacy {
+		privacyAcceptedAt = &now
+	}
+	item, err := h.Bidder.SaveMyOnboarding(r.Context(), tenant.ID, claims.UserID, port.UpdateTenantBidderInput{
+		Phone:             req.Phone,
+		CompanyName:       req.CompanyName,
+		AddressLine1:      req.AddressLine1,
+		AddressLine2:      req.AddressLine2,
+		City:              req.City,
+		PostalCode:        req.PostalCode,
+		Country:           req.Country,
+		VATClassification: req.VATClassification,
+		TermsAcceptedAt:   termsAcceptedAt,
+		PrivacyAcceptedAt: privacyAcceptedAt,
+	})
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrForbidden) {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) SubmitMyBidderOnboarding(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	item, err := h.Bidder.SubmitMyOnboarding(r.Context(), tenant.ID, claims.UserID, tenant.RequireBidderOnboardingApproval, time.Now().UTC())
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrForbidden) {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	var req struct {
@@ -1048,6 +1143,7 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		SnipingWindowSeconds    int                  `json:"sniping_window_seconds"`
 		SnipingExtensionSeconds int                  `json:"sniping_extension_seconds"`
 		BidVisibility           domain.BidVisibility `json:"bid_visibility"`
+		RegistrationPolicy      string               `json:"registration_policy"`
 		RequireBidderApproval   bool                 `json:"require_bidder_approval"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
@@ -1072,6 +1168,7 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 		SnipingWindowSeconds:    req.SnipingWindowSeconds,
 		SnipingExtensionSeconds: req.SnipingExtensionSeconds,
 		BidVisibility:           req.BidVisibility,
+		RegistrationPolicy:      domain.AuctionRegistrationPolicy(strings.ToLower(strings.TrimSpace(req.RegistrationPolicy))),
 		RequireBidderApproval:   req.RequireBidderApproval,
 	})
 	if err != nil {
@@ -1129,6 +1226,7 @@ func (h *Handler) SaveAuctionWizard(w http.ResponseWriter, r *http.Request) {
 		SnipingWindowSeconds    int                  `json:"sniping_window_seconds"`
 		SnipingExtensionSeconds int                  `json:"sniping_extension_seconds"`
 		BidVisibility           domain.BidVisibility `json:"bid_visibility"`
+		RegistrationPolicy      string               `json:"registration_policy"`
 		RequireBidderApproval   bool                 `json:"require_bidder_approval"`
 		WizardStep              int                  `json:"wizard_step"`
 	}
@@ -1155,6 +1253,7 @@ func (h *Handler) SaveAuctionWizard(w http.ResponseWriter, r *http.Request) {
 			SnipingWindowSeconds:    req.SnipingWindowSeconds,
 			SnipingExtensionSeconds: req.SnipingExtensionSeconds,
 			BidVisibility:           req.BidVisibility,
+			RegistrationPolicy:      domain.AuctionRegistrationPolicy(strings.ToLower(strings.TrimSpace(req.RegistrationPolicy))),
 			RequireBidderApproval:   req.RequireBidderApproval,
 		},
 		WizardStep: req.WizardStep,
@@ -1366,6 +1465,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		SnipingWindowSeconds    int                  `json:"sniping_window_seconds"`
 		SnipingExtensionSeconds int                  `json:"sniping_extension_seconds"`
 		BidVisibility           domain.BidVisibility `json:"bid_visibility"`
+		RegistrationPolicy      *string              `json:"registration_policy"`
 		RequireBidderApproval   *bool                `json:"require_bidder_approval"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
@@ -1373,12 +1473,17 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	requireBidderApproval := false
+	registrationPolicy := domain.AuctionRegistrationOpen
 	if req.RequireBidderApproval != nil {
 		requireBidderApproval = *req.RequireBidderApproval
+	}
+	if req.RegistrationPolicy != nil {
+		registrationPolicy = domain.AuctionRegistrationPolicy(strings.ToLower(strings.TrimSpace(*req.RegistrationPolicy)))
 	} else {
 		current, getErr := h.Auction.Get(r.Context(), tenant.ID, auctionID)
 		if getErr == nil {
 			requireBidderApproval = current.RequireBidderApproval
+			registrationPolicy = current.RegistrationPolicy
 		}
 	}
 	a, err := h.Auction.Update(r.Context(), usecase.CreateAuctionInput{
@@ -1399,6 +1504,7 @@ func (h *Handler) UpdateAuction(w http.ResponseWriter, r *http.Request) {
 		SnipingWindowSeconds:    req.SnipingWindowSeconds,
 		SnipingExtensionSeconds: req.SnipingExtensionSeconds,
 		BidVisibility:           req.BidVisibility,
+		RegistrationPolicy:      registrationPolicy,
 		RequireBidderApproval:   requireBidderApproval,
 	}, auctionID)
 	if err != nil {
@@ -1640,6 +1746,69 @@ func (h *Handler) RejectAuctionBidder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (h *Handler) BulkUpdateAuctionRegistrations(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		writeErrorText(w, "claims missing", http.StatusUnauthorized)
+		return
+	}
+	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))
+	if err != nil {
+		writeErrorText(w, "invalid auction id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		RegistrationIDs []string `json:"registration_ids"`
+		Action          string   `json:"action"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	if len(req.RegistrationIDs) == 0 {
+		writeErrorText(w, "registration_ids is required", http.StatusBadRequest)
+		return
+	}
+	registrationIDs := make([]uuid.UUID, 0, len(req.RegistrationIDs))
+	parseErrors := make([]string, 0)
+	seen := make(map[uuid.UUID]struct{}, len(req.RegistrationIDs))
+	for _, raw := range req.RegistrationIDs {
+		id, parseErr := uuid.Parse(strings.TrimSpace(raw))
+		if parseErr != nil {
+			parseErrors = append(parseErrors, "invalid registration id: "+raw)
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		registrationIDs = append(registrationIDs, id)
+	}
+	if len(registrationIDs) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"updated": 0,
+			"skipped": 0,
+			"errors":  parseErrors,
+		})
+		return
+	}
+	updated, skipped, resultErrors, err := h.Bidder.BulkUpdateAuctionRegistrations(r.Context(), tenant.ID, auctionID, claims.UserID, registrationIDs, strings.ToLower(strings.TrimSpace(req.Action)), time.Now().UTC())
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, usecase.ErrForbidden) {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"updated": updated,
+		"skipped": skipped,
+		"errors":  append(parseErrors, resultErrors...),
+	})
+}
+
 func (h *Handler) ApproveBidder(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -1691,36 +1860,42 @@ func (h *Handler) UpdateBidderProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Status        *domain.TenantBidderStatus    `json:"status"`
-		RiskLevel     *domain.TenantBidderRiskLevel `json:"risk_level"`
-		InternalNotes *string                       `json:"internal_notes"`
-		Phone         *string                       `json:"phone"`
-		CompanyName   *string                       `json:"company_name"`
-		AddressLine1  *string                       `json:"address_line1"`
-		AddressLine2  *string                       `json:"address_line2"`
-		City          *string                       `json:"city"`
-		PostalCode    *string                       `json:"postal_code"`
-		Country       *string                       `json:"country"`
+		Status            *domain.TenantBidderStatus     `json:"status"`
+		RiskLevel         *domain.TenantBidderRiskLevel  `json:"risk_level"`
+		BidderStatus      *domain.BidderOnboardingStatus `json:"bidder_status"`
+		VATClassification *string                        `json:"vat_classification"`
+		InternalNotes     *string                        `json:"internal_notes"`
+		Phone             *string                        `json:"phone"`
+		CompanyName       *string                        `json:"company_name"`
+		AddressLine1      *string                        `json:"address_line1"`
+		AddressLine2      *string                        `json:"address_line2"`
+		City              *string                        `json:"city"`
+		PostalCode        *string                        `json:"postal_code"`
+		Country           *string                        `json:"country"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	input := port.UpdateTenantBidderInput{
-		InternalNotes: req.InternalNotes,
-		Phone:         req.Phone,
-		CompanyName:   req.CompanyName,
-		AddressLine1:  req.AddressLine1,
-		AddressLine2:  req.AddressLine2,
-		City:          req.City,
-		PostalCode:    req.PostalCode,
-		Country:       req.Country,
+		VATClassification: req.VATClassification,
+		InternalNotes:     req.InternalNotes,
+		Phone:             req.Phone,
+		CompanyName:       req.CompanyName,
+		AddressLine1:      req.AddressLine1,
+		AddressLine2:      req.AddressLine2,
+		City:              req.City,
+		PostalCode:        req.PostalCode,
+		Country:           req.Country,
 	}
 	if req.Status != nil {
 		input.Status = *req.Status
 	}
 	if req.RiskLevel != nil {
 		input.RiskLevel = *req.RiskLevel
+	}
+	if req.BidderStatus != nil {
+		input.BidderStatus = *req.BidderStatus
 	}
 	item, err := h.Bidder.UpdateProfile(r.Context(), tenant.ID, userID, input)
 	if err != nil {
@@ -1738,19 +1913,31 @@ func (h *Handler) UpdateAuctionBidderSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 	var req struct {
-		RequireBidderApproval bool `json:"require_bidder_approval"`
+		RegistrationPolicy    string `json:"registration_policy"`
+		RequireBidderApproval *bool  `json:"require_bidder_approval"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeErrorText(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	if err := h.Auction.UpdateRequireBidderApproval(r.Context(), tenant.ID, auctionID, req.RequireBidderApproval); err != nil {
+	required := false
+	if req.RequireBidderApproval != nil {
+		required = *req.RequireBidderApproval
+	} else {
+		required = strings.EqualFold(strings.TrimSpace(req.RegistrationPolicy), string(domain.AuctionRegistrationApprovalRequired))
+	}
+	if err := h.Auction.UpdateRequireBidderApproval(r.Context(), tenant.ID, auctionID, required); err != nil {
 		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	policy := domain.AuctionRegistrationOpen
+	if required {
+		policy = domain.AuctionRegistrationApprovalRequired
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"auction_id":              auctionID,
-		"require_bidder_approval": req.RequireBidderApproval,
+		"registration_policy":     policy,
+		"require_bidder_approval": required,
 	})
 }
 
@@ -1958,7 +2145,11 @@ func (h *Handler) PlaceLotBid(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		switch {
+		case errors.Is(err, usecase.ErrBidderOnboardingRequired):
+			WriteError(w, apperrors.New("bidder_onboarding_required", "Complete bidder onboarding before placing a bid.", http.StatusForbidden))
+			return
 		case errors.Is(err, usecase.ErrApprovalRequired),
+			errors.Is(err, usecase.ErrRegistrationRequired),
 			errors.Is(err, usecase.ErrPendingApproval),
 			errors.Is(err, usecase.ErrNotApproved),
 			errors.Is(err, usecase.ErrBidderSuspended),
@@ -2159,6 +2350,10 @@ func (h *Handler) RequestToBid(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := h.Bidder.RequestToBid(r.Context(), tenant.ID, auctionID, claims.UserID, time.Now().UTC())
 	if err != nil {
+		if errors.Is(err, usecase.ErrBidderOnboardingRequired) {
+			WriteError(w, apperrors.New("bidder_onboarding_required", "Complete bidder onboarding before registering for an auction.", http.StatusForbidden))
+			return
+		}
 		writeErrorText(w, err.Error(), http.StatusBadRequest)
 		return
 	}

@@ -38,7 +38,7 @@ export const defaultAuctionFormState = (): AuctionFormState => ({
   allow_manual_pause: true,
   allow_manual_end: true,
   bid_visibility: "PUBLIC",
-  require_bidder_approval: false,
+  require_bidder_approval: true,
   auction_mode: "TIMED",
   auto_progress_enabled: true,
   lot_duration_seconds: 120,

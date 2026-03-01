@@ -20,6 +20,7 @@ export default function BidderDashboard({ invoicesOnly = false }: Props) {
   const [activeAuctions, setActiveAuctions] = useState<BidderAuctionParticipation[]>([]);
   const [watchlistCount, setWatchlistCount] = useState(0);
   const [settlements, setSettlements] = useState<SettlementInvoiceRow[]>([]);
+  const [bidderStatus, setBidderStatus] = useState<"incomplete" | "pending_review" | "approved" | "rejected" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<PaymentFilter>("ALL");
@@ -32,11 +33,13 @@ export default function BidderDashboard({ invoicesOnly = false }: Props) {
       api.listMyActiveAuctions(tenantAlias),
       api.listMyWatchlist(tenantAlias),
       api.listMySettlements(tenantAlias, { limit: 200 }),
+      api.getMyBidderOnboarding(),
     ])
-      .then(([auctions, watchlist, settlementsRes]) => {
+      .then(([auctions, watchlist, settlementsRes, onboarding]) => {
         setActiveAuctions(auctions);
         setWatchlistCount(Array.isArray(watchlist) ? watchlist.length : 0);
         setSettlements(settlementsRes.items);
+        setBidderStatus(onboarding.bidder_status);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load dashboard"))
       .finally(() => setLoading(false));
@@ -97,6 +100,16 @@ export default function BidderDashboard({ invoicesOnly = false }: Props) {
       </header>
 
       {error ? <p className="error mb-4">{error}</p> : null}
+      {bidderStatus && bidderStatus !== "approved" ? (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>Bidder onboarding status: {bidderStatus}. Complete onboarding before requesting access or bidding.</span>
+            <Link className="btn-link-brand" to={`/dashboard/${tenantAlias}/onboarding`}>
+              Open Onboarding
+            </Link>
+          </div>
+        </div>
+      ) : null}
       {loading ? <p className="text-sm text-neutral-500">Loading dashboard data...</p> : null}
 
       {!invoicesOnly ? (

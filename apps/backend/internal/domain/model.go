@@ -102,6 +102,13 @@ const (
 	BidVisibilitySealed    BidVisibility = "SEALED"
 )
 
+type AuctionRegistrationPolicy string
+
+const (
+	AuctionRegistrationOpen             AuctionRegistrationPolicy = "open"
+	AuctionRegistrationApprovalRequired AuctionRegistrationPolicy = "approval_required"
+)
+
 type TenantStatus string
 
 const (
@@ -119,27 +126,28 @@ const (
 )
 
 type Tenant struct {
-	ID                     uuid.UUID
-	Name                   string
-	Subdomain              string
-	CustomDomain           *string
-	DefaultCurrency        string
-	Status                 TenantStatus
-	Country                string
-	EstimatedAuctionVolume *int
-	Branding               json.RawMessage
-	BrandingPublished      json.RawMessage
-	ContentPublished       json.RawMessage
-	BrandingDraft          json.RawMessage
-	ContentDraft           json.RawMessage
-	ContentVersion         int
-	ContentSchemaVersion   int
-	OnboardingStatus       OnboardingStatus
-	OnboardingStep         int
-	OnboardingCompletedAt  *time.Time
-	RequireAdminApproval   bool
-	RequireKYC             bool
-	CreatedAt              time.Time
+	ID                              uuid.UUID
+	Name                            string
+	Subdomain                       string
+	CustomDomain                    *string
+	DefaultCurrency                 string
+	Status                          TenantStatus
+	Country                         string
+	EstimatedAuctionVolume          *int
+	Branding                        json.RawMessage
+	BrandingPublished               json.RawMessage
+	ContentPublished                json.RawMessage
+	BrandingDraft                   json.RawMessage
+	ContentDraft                    json.RawMessage
+	ContentVersion                  int
+	ContentSchemaVersion            int
+	OnboardingStatus                OnboardingStatus
+	OnboardingStep                  int
+	OnboardingCompletedAt           *time.Time
+	RequireAdminApproval            bool
+	RequireBidderOnboardingApproval bool
+	RequireKYC                      bool
+	CreatedAt                       time.Time
 }
 
 type DemoRequest struct {
@@ -213,6 +221,7 @@ type Auction struct {
 	SnipingWindowSeconds    int
 	SnipingExtensionSeconds int
 	BidVisibility           BidVisibility
+	RegistrationPolicy      AuctionRegistrationPolicy
 	RequireBidderApproval   bool
 	WizardStep              int
 	AuctionStatus           AuctionPublicationStatus
@@ -262,22 +271,35 @@ const (
 	TenantBidderRiskHigh   TenantBidderRiskLevel = "HIGH"
 )
 
+type BidderOnboardingStatus string
+
+const (
+	BidderOnboardingIncomplete    BidderOnboardingStatus = "incomplete"
+	BidderOnboardingPendingReview BidderOnboardingStatus = "pending_review"
+	BidderOnboardingApproved      BidderOnboardingStatus = "approved"
+	BidderOnboardingRejected      BidderOnboardingStatus = "rejected"
+)
+
 type TenantBidderProfile struct {
-	ID            uuid.UUID
-	TenantID      uuid.UUID
-	UserID        uuid.UUID
-	Phone         *string
-	CompanyName   *string
-	AddressLine1  *string
-	AddressLine2  *string
-	City          *string
-	PostalCode    *string
-	Country       *string
-	Status        TenantBidderStatus
-	RiskLevel     TenantBidderRiskLevel
-	InternalNotes *string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID                uuid.UUID
+	TenantID          uuid.UUID
+	UserID            uuid.UUID
+	Phone             *string
+	CompanyName       *string
+	AddressLine1      *string
+	AddressLine2      *string
+	City              *string
+	PostalCode        *string
+	Country           *string
+	Status            TenantBidderStatus
+	RiskLevel         TenantBidderRiskLevel
+	BidderStatus      BidderOnboardingStatus
+	VATClassification *string
+	TermsAcceptedAt   *time.Time
+	PrivacyAcceptedAt *time.Time
+	InternalNotes     *string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type AuctionBidderApproval struct {

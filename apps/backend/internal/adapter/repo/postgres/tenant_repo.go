@@ -28,7 +28,7 @@ func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 		&t.Country, &t.EstimatedAuctionVolume, &t.Branding,
 		&t.BrandingPublished, &t.ContentPublished, &t.BrandingDraft, &t.ContentDraft,
 		&t.ContentVersion, &t.ContentSchemaVersion, &t.OnboardingStatus, &t.OnboardingStep, &t.OnboardingCompletedAt,
-		&t.RequireAdminApproval, &t.RequireKYC, &t.CreatedAt,
+		&t.RequireAdminApproval, &t.RequireBidderOnboardingApproval, &t.RequireKYC, &t.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func (r *TenantRepo) GetByHost(ctx context.Context, host string) (*domain.Tenant
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
        branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
        onboarding_status, onboarding_step, onboarding_completed_at,
-       require_admin_approval, require_kyc, created_at
+       require_admin_approval, require_bidder_onboarding_approval, require_kyc, created_at
 FROM tenants
 WHERE (subdomain = split_part($1, '.', 1) OR custom_domain = $1 OR custom_domain = $2)
   AND status = 'ACTIVE'
@@ -67,7 +67,7 @@ func (r *TenantRepo) GetBySubdomain(ctx context.Context, subdomain string) (*dom
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
        branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
        onboarding_status, onboarding_step, onboarding_completed_at,
-       require_admin_approval, require_kyc, created_at
+       require_admin_approval, require_bidder_onboarding_approval, require_kyc, created_at
 FROM tenants
 WHERE subdomain = $1
 LIMIT 1`
@@ -86,7 +86,7 @@ func (r *TenantRepo) GetByID(ctx context.Context, tenantID uuid.UUID) (*domain.T
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
        branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
        onboarding_status, onboarding_step, onboarding_completed_at,
-       require_admin_approval, require_kyc, created_at
+       require_admin_approval, require_bidder_onboarding_approval, require_kyc, created_at
 FROM tenants
 WHERE id = $1
 LIMIT 1`
@@ -106,8 +106,8 @@ func (r *TenantRepo) CreatePendingTenantWithAdmin(ctx context.Context, in port.C
 
 	const insTenant = `
 INSERT INTO tenants (
-  id, name, subdomain, default_currency, status, country, estimated_auction_volume, branding, require_admin_approval, require_kyc, created_at
-) VALUES ($1,$2,$3,'USD','PENDING',$4,$5,'{}'::jsonb,$6,$7,now())`
+  id, name, subdomain, default_currency, status, country, estimated_auction_volume, branding, require_admin_approval, require_bidder_onboarding_approval, require_kyc, created_at
+) VALUES ($1,$2,$3,'USD','PENDING',$4,$5,'{}'::jsonb,$6,false,$7,now())`
 	if _, err := tx.Exec(ctx, insTenant,
 		in.TenantID, in.TenantName, in.Subdomain, in.Country, in.EstimatedAuctionVolume, in.RequireAdminApproval, in.RequireKYC,
 	); err != nil {
@@ -138,7 +138,7 @@ func (r *TenantRepo) ListByStatus(ctx context.Context, status domain.TenantStatu
 SELECT id, name, subdomain, custom_domain, default_currency, status, country, estimated_auction_volume, branding,
        branding_published, content_published, branding_draft, content_draft, content_version, content_schema_version,
        onboarding_status, onboarding_step, onboarding_completed_at,
-       require_admin_approval, require_kyc, created_at
+       require_admin_approval, require_bidder_onboarding_approval, require_kyc, created_at
 FROM tenants
 WHERE status = $1
 ORDER BY created_at DESC`

@@ -73,6 +73,7 @@ export interface Auction {
   sniping_window_seconds: number;
   sniping_extension_seconds: number;
   bid_visibility: "PUBLIC" | "ANONYMOUS" | "SEALED";
+  registration_policy?: "open" | "approval_required";
   require_bidder_approval?: boolean;
   wizard_step: number;
   auction_status: "draft" | "published" | "closed" | "cancelled";
@@ -170,6 +171,10 @@ export interface TenantBidderProfile {
   country?: string | null;
   status: "ACTIVE" | "SUSPENDED";
   risk_level: "LOW" | "NORMAL" | "HIGH";
+  bidder_status: "incomplete" | "pending_review" | "approved" | "rejected";
+  vat_classification?: string | null;
+  terms_accepted_at?: string | null;
+  privacy_accepted_at?: string | null;
   internal_notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -470,6 +475,7 @@ export interface TenantPublicConfig {
 
 export interface TenantSettings {
   default_currency: string;
+  require_bidder_onboarding_approval?: boolean;
 }
 
 export interface InstitutionOnboardingData {
@@ -655,6 +661,11 @@ export function normalizeAuction(raw: unknown): Auction {
     sniping_window_seconds: Number(r.sniping_window_seconds ?? r.SnipingWindowSeconds ?? 0),
     sniping_extension_seconds: Number(r.sniping_extension_seconds ?? r.SnipingExtensionSeconds ?? 0),
     bid_visibility: String(r.bid_visibility ?? r.BidVisibility ?? "PUBLIC") as Auction["bid_visibility"],
+    registration_policy: String(
+      r.registration_policy ??
+        r.RegistrationPolicy ??
+        (Boolean(r.require_bidder_approval ?? r.RequireBidderApproval) ? "approval_required" : "open"),
+    ) as Auction["registration_policy"],
     require_bidder_approval: Boolean(r.require_bidder_approval ?? r.RequireBidderApproval ?? false),
     wizard_step: Number(r.wizard_step ?? r.WizardStep ?? 1),
     auction_status: String(r.auction_status ?? r.AuctionStatus ?? "draft") as Auction["auction_status"],
@@ -787,6 +798,10 @@ function normalizeTenantBidderProfile(raw: unknown): TenantBidderProfile {
     country: (r.country ?? r.Country ?? null) as string | null,
     status: String(r.status ?? r.Status ?? "ACTIVE") as TenantBidderProfile["status"],
     risk_level: String(r.risk_level ?? r.RiskLevel ?? "NORMAL") as TenantBidderProfile["risk_level"],
+    bidder_status: String(r.bidder_status ?? r.BidderStatus ?? "incomplete") as TenantBidderProfile["bidder_status"],
+    vat_classification: (r.vat_classification ?? r.VATClassification ?? null) as string | null,
+    terms_accepted_at: (r.terms_accepted_at ?? r.TermsAcceptedAt ?? null) as string | null,
+    privacy_accepted_at: (r.privacy_accepted_at ?? r.PrivacyAcceptedAt ?? null) as string | null,
     internal_notes: (r.internal_notes ?? r.InternalNotes ?? null) as string | null,
     created_at: String(r.created_at ?? r.CreatedAt ?? ""),
     updated_at: String(r.updated_at ?? r.UpdatedAt ?? ""),
@@ -1024,6 +1039,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (typeof window !== "undefined" && code === "onboarding_required" && window.location.pathname !== "/admin/onboarding") {
       window.location.assign("/admin/onboarding");
     }
+    if (typeof window !== "undefined" && code === "bidder_onboarding_required") {
+      const target = getBidderOnboardingPath(window.location.pathname);
+      if (window.location.pathname !== target) {
+        window.location.assign(target);
+      }
+    }
     throw new ApiError({ message, code, status: res.status, requestId, debug });
   }
 
@@ -1061,6 +1082,12 @@ async function requestWithToken<T>(path: string, bearerToken: string, init?: Req
     const debug = typeof bodyRecord?.debug === "string" ? bodyRecord.debug : null;
     if (typeof window !== "undefined" && code === "onboarding_required" && window.location.pathname !== "/admin/onboarding") {
       window.location.assign("/admin/onboarding");
+    }
+    if (typeof window !== "undefined" && code === "bidder_onboarding_required") {
+      const target = getBidderOnboardingPath(window.location.pathname);
+      if (window.location.pathname !== target) {
+        window.location.assign(target);
+      }
     }
     throw new ApiError({ message, code, status: res.status, requestId, debug });
   }
@@ -1334,6 +1361,20 @@ export const api = {
   logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
   verifyEmail: (userId: string) =>
     request<JsonRecord>("/auth/verify-email", { method: "POST", body: JSON.stringify({ user_id: userId }) }),
+  getMyBidderOnboarding: async () => normalizeTenantBidderProfile(await request<unknown>("/me/bidder-onboarding")),
+  saveMyBidderOnboarding: async (payload: {
+    phone?: string | null;
+    company_name?: string | null;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
+    vat_classification?: string | null;
+    accept_terms?: boolean;
+    accept_privacy?: boolean;
+  }) => normalizeTenantBidderProfile(await request<unknown>("/me/bidder-onboarding", { method: "PUT", body: JSON.stringify(payload) })),
+  submitMyBidderOnboarding: async () => normalizeTenantBidderProfile(await request<unknown>("/me/bidder-onboarding/submit", { method: "POST" })),
   placeBid: async (..._args: unknown[]) => {
     throw new Error("Auction-level bidding has been removed. Use lot bidding.");
   },
@@ -1357,9 +1398,12 @@ export const api = {
   pauseAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}/pause`, { method: "PATCH" }),
   endAuction: (id: string) => request<JsonRecord>(`/admin/auctions/${id}/end`, { method: "PATCH" }),
   updateAuctionBidderSettings: (auctionId: string, requireBidderApproval: boolean) =>
-    request<{ auction_id: string; require_bidder_approval: boolean }>(`/admin/auctions/${auctionId}/settings`, {
+    request<{ auction_id: string; registration_policy: "open" | "approval_required"; require_bidder_approval: boolean }>(`/admin/auctions/${auctionId}/settings`, {
       method: "PUT",
-      body: JSON.stringify({ require_bidder_approval: requireBidderApproval }),
+      body: JSON.stringify({
+        registration_policy: requireBidderApproval ? "approval_required" : "open",
+        require_bidder_approval: requireBidderApproval,
+      }),
     }),
   listAuctionTerms: async (auctionId: string, locale: User["locale"]) =>
     ((await request<{ items: unknown[] }>(`/admin/auctions/${auctionId}/terms?locale=${encodeURIComponent(locale)}`)).items ?? []).map(
@@ -1390,6 +1434,27 @@ export const api = {
     request<JsonRecord>(`/admin/auctions/${auctionId}/bidders/${userId}/approve`, { method: "POST" }),
   rejectAuctionBidder: async (auctionId: string, userId: string) =>
     request<JsonRecord>(`/admin/auctions/${auctionId}/bidders/${userId}/reject`, { method: "POST" }),
+  listAuctionRegistrations: async (
+    auctionId: string,
+    filters?: {
+      status?: "PENDING" | "APPROVED" | "REJECTED";
+      risk_level?: "low" | "medium" | "high";
+      deposit_required?: boolean;
+      deposit_status?: "not_required" | "required" | "pending" | "received" | "waived";
+    },
+  ) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set("status", filters.status);
+    if (filters?.risk_level) params.set("risk_level", filters.risk_level);
+    if (filters?.deposit_required != null) params.set("deposit_required", String(filters.deposit_required));
+    if (filters?.deposit_status) params.set("deposit_status", filters.deposit_status);
+    const qs = params.toString();
+    return (await request<unknown[]>(`/admin/auctions/${auctionId}/registrations${qs ? `?${qs}` : ""}`)).map(normalizeAuctionBidderAdminRow);
+  },
+  approveAuctionRegistration: async (auctionId: string, userId: string) =>
+    request<JsonRecord>(`/admin/auctions/${auctionId}/registrations/${userId}/approve`, { method: "POST" }),
+  rejectAuctionRegistration: async (auctionId: string, userId: string) =>
+    request<JsonRecord>(`/admin/auctions/${auctionId}/registrations/${userId}/reject`, { method: "POST" }),
   updateAuctionBidderApproval: async (
     auctionId: string,
     userId: string,
@@ -1408,6 +1473,8 @@ export const api = {
     payload: {
       status?: "ACTIVE" | "SUSPENDED";
       risk_level?: "LOW" | "NORMAL" | "HIGH";
+      bidder_status?: "incomplete" | "pending_review" | "approved" | "rejected";
+      vat_classification?: string | null;
       internal_notes?: string | null;
       phone?: string | null;
       company_name?: string | null;
@@ -1524,6 +1591,14 @@ export const api = {
   platformRejectTenant: (platformToken: string, tenantId: string) =>
     requestWithToken<JsonRecord>(`/platform/admin/tenants/${tenantId}/reject`, platformToken, { method: "PATCH" }),
 };
+
+function getBidderOnboardingPath(pathname: string): string {
+  const match = pathname.match(/^\/(?:[a-z]{2}\/)?dashboard\/([^/]+)/i);
+  const tenantAlias = match?.[1] || "current";
+  const localeMatch = pathname.match(/^\/([a-z]{2})(?:\/|$)/i);
+  const localePrefix = localeMatch?.[1] ? `/${localeMatch[1]}` : "";
+  return `${localePrefix}/dashboard/${tenantAlias}/onboarding`;
+}
 
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;

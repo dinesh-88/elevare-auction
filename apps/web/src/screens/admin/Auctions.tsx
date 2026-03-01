@@ -240,10 +240,10 @@ export default function Auctions() {
               </Link>
               <Link
                 className="block rounded px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
-                to={`/admin/auctions/${openMenu.auctionID}/bidders`}
+                to={`/admin/auctions/${openMenu.auctionID}/registrations`}
                 onClick={() => setOpenMenu(null)}
               >
-                Bidders
+                Registrations
               </Link>
               <Link
                 className="block rounded px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"

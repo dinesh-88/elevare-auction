@@ -40,6 +40,7 @@ type CreateAuctionInput struct {
 	SnipingWindowSeconds    int
 	SnipingExtensionSeconds int
 	BidVisibility           domain.BidVisibility
+	RegistrationPolicy      domain.AuctionRegistrationPolicy
 	RequireBidderApproval   bool
 }
 
@@ -117,6 +118,7 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 		SnipingWindowSeconds:    in.SnipingWindowSeconds,
 		SnipingExtensionSeconds: in.SnipingExtensionSeconds,
 		BidVisibility:           in.BidVisibility,
+		RegistrationPolicy:      normalizeRegistrationPolicy(in.RegistrationPolicy, in.RequireBidderApproval),
 		RequireBidderApproval:   in.RequireBidderApproval,
 		WizardStep:              5,
 		AuctionStatus:           domain.AuctionPublicationPublished,
@@ -125,6 +127,7 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 	if len(auction.Metadata) == 0 {
 		auction.Metadata = []byte(`{}`)
 	}
+	auction.RequireBidderApproval = auction.RegistrationPolicy == domain.AuctionRegistrationApprovalRequired
 	if auction.AuctionMode == "" {
 		auction.AuctionMode = domain.AuctionModeTimed
 	}
@@ -192,7 +195,8 @@ func (uc *AuctionUseCase) CreateWizardDraft(ctx context.Context, tenantID uuid.U
 		SnipingWindowSeconds:    60,
 		SnipingExtensionSeconds: 120,
 		BidVisibility:           domain.BidVisibilityPublic,
-		RequireBidderApproval:   false,
+		RegistrationPolicy:      domain.AuctionRegistrationApprovalRequired,
+		RequireBidderApproval:   true,
 		WizardStep:              1,
 		AuctionStatus:           domain.AuctionPublicationDraft,
 	}
@@ -248,7 +252,8 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 	current.SnipingWindowSeconds = in.SnipingWindowSeconds
 	current.SnipingExtensionSeconds = in.SnipingExtensionSeconds
 	current.BidVisibility = in.BidVisibility
-	current.RequireBidderApproval = in.RequireBidderApproval
+	current.RegistrationPolicy = normalizeRegistrationPolicy(in.RegistrationPolicy, in.RequireBidderApproval)
+	current.RequireBidderApproval = current.RegistrationPolicy == domain.AuctionRegistrationApprovalRequired
 	if len(current.Metadata) == 0 {
 		current.Metadata = []byte(`{}`)
 	}
@@ -364,6 +369,7 @@ func (uc *AuctionUseCase) PublishWizard(ctx context.Context, tenantID, auctionID
 			SnipingExtensionSeconds: current.SnipingExtensionSeconds,
 			BidVisibility:           current.BidVisibility,
 			RequireBidderApproval:   current.RequireBidderApproval,
+			RegistrationPolicy:      current.RegistrationPolicy,
 		},
 		WizardStep: 4,
 	}); err != nil {
@@ -425,6 +431,18 @@ func (uc *AuctionUseCase) UpdateRequireBidderApproval(ctx context.Context, tenan
 		})
 	}
 	return nil
+}
+
+func normalizeRegistrationPolicy(policy domain.AuctionRegistrationPolicy, requireBidderApproval bool) domain.AuctionRegistrationPolicy {
+	switch policy {
+	case domain.AuctionRegistrationOpen, domain.AuctionRegistrationApprovalRequired:
+		return policy
+	default:
+		if requireBidderApproval {
+			return domain.AuctionRegistrationApprovalRequired
+		}
+		return domain.AuctionRegistrationOpen
+	}
 }
 
 func (uc *AuctionUseCase) Delete(ctx context.Context, tenantID, auctionID uuid.UUID) error {

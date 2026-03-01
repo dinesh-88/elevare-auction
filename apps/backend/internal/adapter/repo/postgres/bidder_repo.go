@@ -25,7 +25,7 @@ WHERE EXISTS (
   SELECT 1 FROM users WHERE tenant_id = $1 AND id = $2 AND role = 'BIDDER'
 )
 ON CONFLICT (tenant_id, user_id) DO NOTHING
-RETURNING id, tenant_id, user_id, phone, company_name, address_line1, address_line2, city, postal_code, country, status, risk_level, internal_notes, created_at, updated_at`
+RETURNING id, tenant_id, user_id, phone, company_name, address_line1, address_line2, city, postal_code, country, status, risk_level, bidder_status, vat_classification, terms_accepted_at, privacy_accepted_at, internal_notes, created_at, updated_at`
 	item, err := scanTenantBidder(r.DB.QueryRow(ctx, q, tenantID, userID, uuid.New()))
 	if err == nil {
 		return item, nil
@@ -38,7 +38,7 @@ RETURNING id, tenant_id, user_id, phone, company_name, address_line1, address_li
 
 func (r *BidderRepo) GetTenantBidder(ctx context.Context, tenantID, userID uuid.UUID) (*domain.TenantBidderProfile, error) {
 	const q = `
-SELECT id, tenant_id, user_id, phone, company_name, address_line1, address_line2, city, postal_code, country, status, risk_level, internal_notes, created_at, updated_at
+SELECT id, tenant_id, user_id, phone, company_name, address_line1, address_line2, city, postal_code, country, status, risk_level, bidder_status, vat_classification, terms_accepted_at, privacy_accepted_at, internal_notes, created_at, updated_at
 FROM tenant_bidders
 WHERE tenant_id = $1 AND user_id = $2`
 	item, err := scanTenantBidder(r.DB.QueryRow(ctx, q, tenantID, userID))
@@ -58,6 +58,18 @@ func (r *BidderRepo) UpdateTenantBidder(ctx context.Context, tenantID, userID uu
 	}
 	if in.RiskLevel != "" {
 		current.RiskLevel = in.RiskLevel
+	}
+	if in.BidderStatus != "" {
+		current.BidderStatus = in.BidderStatus
+	}
+	if in.VATClassification != nil {
+		current.VATClassification = in.VATClassification
+	}
+	if in.TermsAcceptedAt != nil {
+		current.TermsAcceptedAt = in.TermsAcceptedAt
+	}
+	if in.PrivacyAcceptedAt != nil {
+		current.PrivacyAcceptedAt = in.PrivacyAcceptedAt
 	}
 	if in.InternalNotes != nil {
 		current.InternalNotes = in.InternalNotes
@@ -94,11 +106,34 @@ SET phone = $3,
     country = $9,
     status = $10,
     risk_level = $11,
-    internal_notes = $12,
+    bidder_status = $12,
+    vat_classification = $13,
+    terms_accepted_at = $14,
+    privacy_accepted_at = $15,
+    internal_notes = $16,
     updated_at = now()
 WHERE tenant_id = $1 AND user_id = $2
-RETURNING id, tenant_id, user_id, phone, company_name, address_line1, address_line2, city, postal_code, country, status, risk_level, internal_notes, created_at, updated_at`
-	return scanTenantBidder(r.DB.QueryRow(ctx, q, tenantID, userID, current.Phone, current.CompanyName, current.AddressLine1, current.AddressLine2, current.City, current.PostalCode, current.Country, current.Status, current.RiskLevel, current.InternalNotes))
+RETURNING id, tenant_id, user_id, phone, company_name, address_line1, address_line2, city, postal_code, country, status, risk_level, bidder_status, vat_classification, terms_accepted_at, privacy_accepted_at, internal_notes, created_at, updated_at`
+	return scanTenantBidder(r.DB.QueryRow(
+		ctx,
+		q,
+		tenantID,
+		userID,
+		current.Phone,
+		current.CompanyName,
+		current.AddressLine1,
+		current.AddressLine2,
+		current.City,
+		current.PostalCode,
+		current.Country,
+		current.Status,
+		current.RiskLevel,
+		current.BidderStatus,
+		current.VATClassification,
+		current.TermsAcceptedAt,
+		current.PrivacyAcceptedAt,
+		current.InternalNotes,
+	))
 }
 
 func (r *BidderRepo) ListUserAuctionParticipations(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.BidderAuctionParticipation, error) {
@@ -205,6 +240,65 @@ RETURNING id, tenant_id, auction_id, user_id, status, risk_level, max_bid_limit_
 		return nil, errors.New("auction or bidder not found")
 	}
 	return item, err
+}
+
+func (r *BidderRepo) BulkSetAuctionApprovalByID(ctx context.Context, tenantID, auctionID uuid.UUID, registrationIDs []uuid.UUID, decidedBy uuid.UUID, status domain.ApprovalStatus, now time.Time) ([]domain.AuctionBidderApproval, int, error) {
+	if len(registrationIDs) == 0 {
+		return nil, 0, nil
+	}
+	var approvedBy *uuid.UUID
+	var approvedAt *time.Time
+	if status == domain.ApprovalApproved {
+		approvedBy = &decidedBy
+		approvedAt = &now
+	}
+	const countQ = `
+SELECT COUNT(*)
+FROM auction_bidder_approvals
+WHERE tenant_id = $1
+  AND auction_id = $2
+  AND id = ANY($3)
+`
+	var total int
+	if err := r.DB.QueryRow(ctx, countQ, tenantID, auctionID, registrationIDs).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	const q = `
+UPDATE auction_bidder_approvals
+SET status = $4,
+    decided_by = $5,
+    decided_at = $6,
+    approved_by_user_id = $7,
+    approved_at = $8,
+    updated_at = $6
+WHERE tenant_id = $1
+  AND auction_id = $2
+  AND id = ANY($3)
+  AND status = 'PENDING'
+RETURNING id, tenant_id, auction_id, user_id, status, risk_level, max_bid_limit_minor, deposit_required,
+          deposit_amount_minor, deposit_status, internal_notes, decided_by, decided_at,
+          approved_by_user_id, approved_at, created_at, updated_at`
+	rows, err := r.DB.Query(ctx, q, tenantID, auctionID, registrationIDs, status, decidedBy, now, approvedBy, approvedAt)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	updated := make([]domain.AuctionBidderApproval, 0, len(registrationIDs))
+	for rows.Next() {
+		item, scanErr := scanAuctionBidderApproval(rows)
+		if scanErr != nil {
+			return nil, 0, scanErr
+		}
+		updated = append(updated, *item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	skipped := total - len(updated)
+	if skipped < 0 {
+		skipped = 0
+	}
+	return updated, skipped, nil
 }
 
 func (r *BidderRepo) UpdateAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, in port.UpdateAuctionBidderApprovalInput, now time.Time) (*domain.AuctionBidderApproval, error) {
@@ -329,6 +423,10 @@ func scanTenantBidder(row pgx.Row) (*domain.TenantBidderProfile, error) {
 		&item.Country,
 		&item.Status,
 		&item.RiskLevel,
+		&item.BidderStatus,
+		&item.VATClassification,
+		&item.TermsAcceptedAt,
+		&item.PrivacyAcceptedAt,
 		&item.InternalNotes,
 		&item.CreatedAt,
 		&item.UpdatedAt,

@@ -236,6 +236,9 @@ func (f *fakeBidSimBidderRepo) SetAuctionApproval(ctx context.Context, tenantID,
 		DepositStatus: domain.AuctionBidderDepositNotRequired,
 	}, nil
 }
+func (f *fakeBidSimBidderRepo) BulkSetAuctionApprovalByID(ctx context.Context, tenantID, auctionID uuid.UUID, registrationIDs []uuid.UUID, decidedBy uuid.UUID, status domain.ApprovalStatus, now time.Time) ([]domain.AuctionBidderApproval, int, error) {
+	return nil, len(registrationIDs), errors.New("unused")
+}
 func (f *fakeBidSimBidderRepo) UpdateAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, in port.UpdateAuctionBidderApprovalInput, now time.Time) (*domain.AuctionBidderApproval, error) {
 	return nil, errors.New("unused")
 }

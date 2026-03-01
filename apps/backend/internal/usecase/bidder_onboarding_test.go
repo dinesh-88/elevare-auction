@@ -113,7 +113,14 @@ func (f *fakeBidderApprovalRepo) EnsureTenantBidder(ctx context.Context, tenantI
 	}
 	p, ok := f.profiles[userID]
 	if !ok {
-		p = domain.TenantBidderProfile{ID: uuid.New(), TenantID: tenantID, UserID: userID, Status: domain.TenantBidderActive, RiskLevel: domain.TenantBidderRiskNormal}
+		p = domain.TenantBidderProfile{
+			ID:           uuid.New(),
+			TenantID:     tenantID,
+			UserID:       userID,
+			Status:       domain.TenantBidderActive,
+			RiskLevel:    domain.TenantBidderRiskNormal,
+			BidderStatus: domain.BidderOnboardingIncomplete,
+		}
 		f.profiles[userID] = p
 	}
 	return &p, nil
@@ -132,6 +139,33 @@ func (f *fakeBidderApprovalRepo) UpdateTenantBidder(ctx context.Context, tenantI
 	}
 	if in.Status != "" {
 		p.Status = in.Status
+	}
+	if in.BidderStatus != "" {
+		p.BidderStatus = in.BidderStatus
+	}
+	if in.VATClassification != nil {
+		p.VATClassification = in.VATClassification
+	}
+	if in.TermsAcceptedAt != nil {
+		p.TermsAcceptedAt = in.TermsAcceptedAt
+	}
+	if in.PrivacyAcceptedAt != nil {
+		p.PrivacyAcceptedAt = in.PrivacyAcceptedAt
+	}
+	if in.Phone != nil {
+		p.Phone = in.Phone
+	}
+	if in.AddressLine1 != nil {
+		p.AddressLine1 = in.AddressLine1
+	}
+	if in.City != nil {
+		p.City = in.City
+	}
+	if in.PostalCode != nil {
+		p.PostalCode = in.PostalCode
+	}
+	if in.Country != nil {
+		p.Country = in.Country
 	}
 	f.profiles[userID] = *p
 	return p, nil
@@ -190,6 +224,44 @@ func (f *fakeBidderApprovalRepo) SetAuctionApproval(ctx context.Context, tenantI
 	f.approvals[key] = item
 	return &item, nil
 }
+func (f *fakeBidderApprovalRepo) BulkSetAuctionApprovalByID(ctx context.Context, tenantID, auctionID uuid.UUID, registrationIDs []uuid.UUID, decidedBy uuid.UUID, status domain.ApprovalStatus, now time.Time) ([]domain.AuctionBidderApproval, int, error) {
+	if f.approvals == nil {
+		return nil, len(registrationIDs), nil
+	}
+	updated := make([]domain.AuctionBidderApproval, 0, len(registrationIDs))
+	skipped := 0
+	for _, registrationID := range registrationIDs {
+		matched := false
+		for key, item := range f.approvals {
+			if item.ID != registrationID || item.TenantID != tenantID || item.AuctionID != auctionID {
+				continue
+			}
+			matched = true
+			if item.Status != domain.ApprovalPending {
+				skipped++
+				break
+			}
+			item.Status = status
+			item.DecidedBy = &decidedBy
+			item.DecidedAt = &now
+			if status == domain.ApprovalApproved {
+				item.ApprovedByUserID = &decidedBy
+				item.ApprovedAt = &now
+			} else {
+				item.ApprovedByUserID = nil
+				item.ApprovedAt = nil
+			}
+			item.UpdatedAt = now
+			f.approvals[key] = item
+			updated = append(updated, item)
+			break
+		}
+		if !matched {
+			skipped++
+		}
+	}
+	return updated, skipped, nil
+}
 func (f *fakeBidderApprovalRepo) UpdateAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, in port.UpdateAuctionBidderApprovalInput, now time.Time) (*domain.AuctionBidderApproval, error) {
 	if f.approvals == nil {
 		f.approvals = map[string]domain.AuctionBidderApproval{}
@@ -221,6 +293,42 @@ func (f *fakeBidderApprovalRepo) ListAuctionBidders(ctx context.Context, tenantI
 	return nil, nil
 }
 
+type fakeBidderApprovalUserRepo struct {
+	users map[uuid.UUID]domain.User
+}
+
+func (f *fakeBidderApprovalUserRepo) Create(ctx context.Context, tenantID uuid.UUID, user *domain.User) error {
+	return errors.New("unused")
+}
+func (f *fakeBidderApprovalUserRepo) GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*domain.User, error) {
+	if f.users == nil {
+		return nil, errors.New("not found")
+	}
+	user, ok := f.users[userID]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return &user, nil
+}
+func (f *fakeBidderApprovalUserRepo) GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*domain.User, error) {
+	return nil, errors.New("unused")
+}
+func (f *fakeBidderApprovalUserRepo) GetBidders(ctx context.Context, tenantID uuid.UUID) ([]domain.User, error) {
+	return nil, errors.New("unused")
+}
+func (f *fakeBidderApprovalUserRepo) UpdateLocale(ctx context.Context, tenantID, userID uuid.UUID, locale domain.Locale) error {
+	return errors.New("unused")
+}
+func (f *fakeBidderApprovalUserRepo) UpdateApproval(ctx context.Context, tenantID, userID uuid.UUID, status domain.ApprovalStatus) error {
+	return errors.New("unused")
+}
+func (f *fakeBidderApprovalUserRepo) UpdateEmailVerified(ctx context.Context, tenantID, userID uuid.UUID, verified bool) error {
+	return errors.New("unused")
+}
+func (f *fakeBidderApprovalUserRepo) UpdateRole(ctx context.Context, tenantID, userID uuid.UUID, role domain.Role) error {
+	return errors.New("unused")
+}
+
 func bidderCtx(tenantID, userID uuid.UUID) context.Context {
 	return middleware.WithClaims(context.Background(), &port.TokenClaims{
 		TenantID: tenantID,
@@ -229,13 +337,23 @@ func bidderCtx(tenantID, userID uuid.UUID) context.Context {
 	})
 }
 
-func TestPlaceBid_AllowsWhenApprovalNotRequired(t *testing.T) {
+func TestPlaceBid_AllowsWhenRegistrationApproved(t *testing.T) {
 	tenantID := uuid.New()
 	auctionID := uuid.New()
 	userID := uuid.New()
 	lotRepo := &fakeBidderApprovalLotRepo{lot: domain.Lot{AuctionID: auctionID}}
 	auctionRepo := &fakeBidderApprovalAuctionRepo{auction: domain.Auction{RequireBidderApproval: false}}
-	bidderRepo := &fakeBidderApprovalRepo{}
+	bidderRepo := &fakeBidderApprovalRepo{
+		approvals: map[string]domain.AuctionBidderApproval{
+			approvalKey(auctionID, userID): {
+				ID:        uuid.New(),
+				TenantID:  tenantID,
+				AuctionID: auctionID,
+				UserID:    userID,
+				Status:    domain.ApprovalApproved,
+			},
+		},
+	}
 	uc := &LotUseCase{Lots: lotRepo, Auctions: auctionRepo, Bidders: bidderRepo}
 	_, err := uc.PlaceBid(bidderCtx(tenantID, userID), port.PlaceLotBidTxInput{
 		TenantID: tenantID, LotID: uuid.New(), UserID: userID, Amount: int64Ptr(100), Now: time.Now().UTC(),
@@ -245,7 +363,7 @@ func TestPlaceBid_AllowsWhenApprovalNotRequired(t *testing.T) {
 	}
 }
 
-func TestPlaceBid_CreatesPendingWhenApprovalRequired(t *testing.T) {
+func TestPlaceBid_RequiresRegistrationBeforeBidding(t *testing.T) {
 	tenantID := uuid.New()
 	auctionID := uuid.New()
 	userID := uuid.New()
@@ -256,11 +374,11 @@ func TestPlaceBid_CreatesPendingWhenApprovalRequired(t *testing.T) {
 	_, err := uc.PlaceBid(bidderCtx(tenantID, userID), port.PlaceLotBidTxInput{
 		TenantID: tenantID, LotID: uuid.New(), UserID: userID, Amount: int64Ptr(100), Now: time.Now().UTC(),
 	})
-	if !errors.Is(err, ErrApprovalRequired) {
-		t.Fatalf("expected ErrApprovalRequired, got %v", err)
+	if !errors.Is(err, ErrRegistrationRequired) {
+		t.Fatalf("expected ErrRegistrationRequired, got %v", err)
 	}
-	if !bidderRepo.lastRequestMade {
-		t.Fatal("expected approval request to be created")
+	if bidderRepo.lastRequestMade {
+		t.Fatal("did not expect registration to be created during PlaceBid")
 	}
 }
 
@@ -365,7 +483,32 @@ func TestRequestToBid_Idempotent(t *testing.T) {
 	auctionID := uuid.New()
 	userID := uuid.New()
 	repo := &fakeBidderApprovalRepo{}
+	phone := "123"
+	address := "Street"
+	city := "Berlin"
+	postalCode := "10115"
+	country := "DE"
+	repo.profiles = map[uuid.UUID]domain.TenantBidderProfile{
+		userID: {
+			ID:           uuid.New(),
+			TenantID:     tenantID,
+			UserID:       userID,
+			Status:       domain.TenantBidderActive,
+			RiskLevel:    domain.TenantBidderRiskNormal,
+			BidderStatus: domain.BidderOnboardingApproved,
+			Phone:        &phone,
+			AddressLine1: &address,
+			City:         &city,
+			PostalCode:   &postalCode,
+			Country:      &country,
+		},
+	}
 	uc := &BidderUseCase{
+		Users: &fakeBidderApprovalUserRepo{
+			users: map[uuid.UUID]domain.User{
+				userID: {ID: userID, TenantID: tenantID, Role: domain.RoleBidder, EmailVerified: true},
+			},
+		},
 		Bidders:  repo,
 		Auctions: &fakeBidderApprovalAuctionRepo{auction: domain.Auction{RequireBidderApproval: true}},
 	}
@@ -376,11 +519,63 @@ func TestRequestToBid_Idempotent(t *testing.T) {
 	if _, err := uc.RequestToBid(ctx, tenantID, auctionID, userID, time.Now().UTC()); err != nil {
 		t.Fatalf("second request failed: %v", err)
 	}
-	if repo.requestCalls != 2 {
-		t.Fatalf("expected 2 request calls, got %d", repo.requestCalls)
+	if repo.requestCalls != 1 {
+		t.Fatalf("expected 1 request call, got %d", repo.requestCalls)
 	}
 	if len(repo.approvals) != 1 {
 		t.Fatalf("expected single approval row, got %d", len(repo.approvals))
+	}
+}
+
+func TestBulkUpdateAuctionRegistrations_OnlyPendingUpdated(t *testing.T) {
+	tenantID := uuid.New()
+	auctionID := uuid.New()
+	actorID := uuid.New()
+	pendingID := uuid.New()
+	approvedID := uuid.New()
+	repo := &fakeBidderApprovalRepo{
+		approvals: map[string]domain.AuctionBidderApproval{
+			approvalKey(auctionID, uuid.New()): {
+				ID:        pendingID,
+				TenantID:  tenantID,
+				AuctionID: auctionID,
+				UserID:    uuid.New(),
+				Status:    domain.ApprovalPending,
+				CreatedAt: time.Now().UTC(),
+				UpdatedAt: time.Now().UTC(),
+			},
+			approvalKey(auctionID, uuid.New()): {
+				ID:        approvedID,
+				TenantID:  tenantID,
+				AuctionID: auctionID,
+				UserID:    uuid.New(),
+				Status:    domain.ApprovalApproved,
+				CreatedAt: time.Now().UTC(),
+				UpdatedAt: time.Now().UTC(),
+			},
+		},
+	}
+	uc := &BidderUseCase{Bidders: repo}
+	updated, skipped, errs, err := uc.BulkUpdateAuctionRegistrations(
+		authCtx(tenantID, domain.RoleAdmin),
+		tenantID,
+		auctionID,
+		actorID,
+		[]uuid.UUID{pendingID, approvedID, uuid.New()},
+		"approve",
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if updated != 1 {
+		t.Fatalf("expected 1 updated, got %d", updated)
+	}
+	if skipped != 2 {
+		t.Fatalf("expected 2 skipped, got %d", skipped)
+	}
+	if len(errs) != 0 {
+		t.Fatalf("expected no errors, got %v", errs)
 	}
 }
 

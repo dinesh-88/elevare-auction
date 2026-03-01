@@ -215,6 +215,19 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 			return nil, ErrBidderSuspended
 		}
 	}
+	if uc.Users != nil && uc.Bidders != nil {
+		user, err := uc.Users.GetByID(ctx, in.TenantID, in.UserID)
+		if err != nil {
+			return nil, err
+		}
+		profile, err := uc.Bidders.EnsureTenantBidder(ctx, in.TenantID, in.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if !user.EmailVerified || !bidderProfileComplete(profile) || profile.BidderStatus != domain.BidderOnboardingApproved {
+			return nil, ErrBidderOnboardingRequired
+		}
+	}
 	var lot *domain.Lot
 	if uc.Auctions != nil || uc.Terms != nil {
 		var err error
@@ -245,45 +258,19 @@ func (uc *LotUseCase) PlaceBid(ctx context.Context, in port.PlaceLotBidTxInput) 
 		}
 	}
 	if uc.Auctions != nil && uc.Bidders != nil {
-		auction, err := uc.Auctions.GetByID(ctx, in.TenantID, lot.AuctionID)
+		approval, err := uc.Bidders.GetAuctionApproval(ctx, in.TenantID, lot.AuctionID, in.UserID)
 		if err != nil {
-			return nil, err
+			return nil, ErrRegistrationRequired
 		}
-		if auction.RequireBidderApproval {
-			approval, err := uc.Bidders.GetAuctionApproval(ctx, in.TenantID, lot.AuctionID, in.UserID)
-			if err != nil {
-				createdApproval, created, reqErr := uc.Bidders.RequestAuctionApproval(ctx, in.TenantID, lot.AuctionID, in.UserID, in.Now)
-				if reqErr != nil {
-					return nil, reqErr
-				}
-				if created && uc.Audit != nil {
-					auditCtx := middleware.AuditContextFromContext(ctx)
-					payload, _ := json.Marshal(map[string]any{"user_id": in.UserID, "status": createdApproval.Status})
-					_ = uc.Audit.Append(ctx, port.AuditEntry{
-						TenantID:    &in.TenantID,
-						ActorUserID: auditCtx.ActorUserID,
-						ActorRole:   auditCtx.ActorRole,
-						Action:      "BIDDER_APPROVAL_REQUESTED",
-						EntityType:  "AUCTION",
-						EntityID:    &lot.AuctionID,
-						RequestID:   auditCtx.RequestID,
-						IP:          auditCtx.IP,
-						UserAgent:   auditCtx.UserAgent,
-						Metadata:    payload,
-					})
-				}
-				return nil, ErrApprovalRequired
+		switch approval.Status {
+		case domain.ApprovalApproved:
+			if err := validateAuctionBidderApprovalControls(approval, in); err != nil {
+				return nil, err
 			}
-			switch approval.Status {
-			case domain.ApprovalApproved:
-				if err := validateAuctionBidderApprovalControls(approval, in); err != nil {
-					return nil, err
-				}
-			case domain.ApprovalPending:
-				return nil, ErrPendingApproval
-			default:
-				return nil, ErrNotApproved
-			}
+		case domain.ApprovalPending:
+			return nil, ErrPendingApproval
+		default:
+			return nil, ErrNotApproved
 		}
 	}
 	res, err := uc.Lots.PlaceBidTx(ctx, in)
