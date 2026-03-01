@@ -84,7 +84,7 @@ func main() {
 	hub := wsadapter.NewHub()
 
 	authUC := &usecase.AuthUseCase{Users: userRepo, TenantLookup: userRepo, Hasher: hasher, Tokens: jwtSvc}
-	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Tenants: tenantRepo, Broadcaster: hub, Audit: auditRepo}
+	auctionUC := &usecase.AuctionUseCase{Auctions: auctionRepo, Tenants: tenantRepo, Lots: lotRepo, Broadcaster: hub, Audit: auditRepo}
 	auctionTermsUC := &usecase.AuctionTermsUseCase{Terms: auctionTermsRepo, Auctions: auctionRepo, Audit: auditRepo}
 	notificationService := &usecase.NotificationService{
 		Notifications: notificationRepo,

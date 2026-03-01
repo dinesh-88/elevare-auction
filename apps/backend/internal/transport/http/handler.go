@@ -995,6 +995,106 @@ func (h *Handler) CreateAuction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, a)
 }
 
+func (h *Handler) GetAuctionWizardDraft(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	item, err := h.Auction.GetWizardDraft(r.Context(), tenant.ID)
+	if err != nil {
+		if errors.Is(err, usecase.ErrNotFound) {
+			writeErrorText(w, "auction not found", http.StatusNotFound)
+			return
+		}
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) CreateAuctionWizardDraft(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	item, err := h.Auction.CreateWizardDraft(r.Context(), tenant.ID)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) SaveAuctionWizard(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Currency                string               `json:"currency"`
+		Title                   string               `json:"title"`
+		Description             string               `json:"description"`
+		Metadata                json.RawMessage      `json:"metadata"`
+		StartTime               time.Time            `json:"start_time"`
+		EndTime                 time.Time            `json:"end_time"`
+		AllowManualStart        bool                 `json:"allow_manual_start"`
+		AllowManualPause        bool                 `json:"allow_manual_pause"`
+		AllowManualEnd          bool                 `json:"allow_manual_end"`
+		AutoExtendEnabled       bool                 `json:"auto_extend_enabled"`
+		AuctionMode             domain.AuctionMode   `json:"auction_mode"`
+		AutoProgressEnabled     bool                 `json:"auto_progress_enabled"`
+		LotDurationSeconds      int                  `json:"lot_duration_seconds"`
+		SnipingWindowSeconds    int                  `json:"sniping_window_seconds"`
+		SnipingExtensionSeconds int                  `json:"sniping_extension_seconds"`
+		BidVisibility           domain.BidVisibility `json:"bid_visibility"`
+		RequireBidderApproval   bool                 `json:"require_bidder_approval"`
+		WizardStep              int                  `json:"wizard_step"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErrorText(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Auction.SaveWizard(r.Context(), auctionID, usecase.SaveAuctionWizardInput{
+		CreateAuctionInput: usecase.CreateAuctionInput{
+			TenantID:                tenant.ID,
+			Currency:                req.Currency,
+			Title:                   req.Title,
+			Description:             req.Description,
+			Metadata:                req.Metadata,
+			StartTime:               req.StartTime,
+			EndTime:                 req.EndTime,
+			AllowManualStart:        req.AllowManualStart,
+			AllowManualPause:        req.AllowManualPause,
+			AllowManualEnd:          req.AllowManualEnd,
+			AutoExtendEnabled:       req.AutoExtendEnabled,
+			AuctionMode:             req.AuctionMode,
+			AutoProgressEnabled:     req.AutoProgressEnabled,
+			LotDurationSeconds:      req.LotDurationSeconds,
+			SnipingWindowSeconds:    req.SnipingWindowSeconds,
+			SnipingExtensionSeconds: req.SnipingExtensionSeconds,
+			BidVisibility:           req.BidVisibility,
+			RequireBidderApproval:   req.RequireBidderApproval,
+		},
+		WizardStep: req.WizardStep,
+	})
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) PublishAuctionWizard(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	auctionID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErrorText(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	item, err := h.Auction.PublishWizard(r.Context(), tenant.ID, auctionID)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (h *Handler) CreateLot(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	auctionID, err := uuid.Parse(chi.URLParam(r, "auctionId"))

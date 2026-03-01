@@ -78,6 +78,15 @@ const (
 	AuctionCancelled AuctionStatus = "CANCELLED"
 )
 
+type AuctionPublicationStatus string
+
+const (
+	AuctionPublicationDraft     AuctionPublicationStatus = "draft"
+	AuctionPublicationPublished AuctionPublicationStatus = "published"
+	AuctionPublicationClosed    AuctionPublicationStatus = "closed"
+	AuctionPublicationCancelled AuctionPublicationStatus = "cancelled"
+)
+
 type AuctionMode string
 
 const (
@@ -205,6 +214,9 @@ type Auction struct {
 	SnipingExtensionSeconds int
 	BidVisibility           BidVisibility
 	RequireBidderApproval   bool
+	WizardStep              int
+	AuctionStatus           AuctionPublicationStatus
+	PublishedAt             *time.Time
 	CreatedAt               time.Time
 }
 

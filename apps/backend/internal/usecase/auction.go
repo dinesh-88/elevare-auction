@@ -17,6 +17,7 @@ import (
 type AuctionUseCase struct {
 	Auctions    port.AuctionRepository
 	Tenants     port.TenantRepository
+	Lots        port.LotRepository
 	Broadcaster port.Broadcaster
 	Audit       port.AuditRepository
 }
@@ -40,6 +41,11 @@ type CreateAuctionInput struct {
 	SnipingExtensionSeconds int
 	BidVisibility           domain.BidVisibility
 	RequireBidderApproval   bool
+}
+
+type SaveAuctionWizardInput struct {
+	CreateAuctionInput
+	WizardStep int
 }
 
 func (uc *AuctionUseCase) ListPublic(ctx context.Context, tenantID uuid.UUID, now time.Time) ([]domain.Auction, error) {
@@ -112,12 +118,83 @@ func (uc *AuctionUseCase) Create(ctx context.Context, in CreateAuctionInput) (*d
 		SnipingExtensionSeconds: in.SnipingExtensionSeconds,
 		BidVisibility:           in.BidVisibility,
 		RequireBidderApproval:   in.RequireBidderApproval,
+		WizardStep:              5,
+		AuctionStatus:           domain.AuctionPublicationPublished,
+		PublishedAt:             auctionTimePtr(time.Now().UTC()),
 	}
 	if len(auction.Metadata) == 0 {
 		auction.Metadata = []byte(`{}`)
 	}
 	if auction.AuctionMode == "" {
 		auction.AuctionMode = domain.AuctionModeTimed
+	}
+	if err := uc.Auctions.Create(ctx, auction); err != nil {
+		return nil, err
+	}
+	return auction, nil
+}
+
+func (uc *AuctionUseCase) GetWizardDraft(ctx context.Context, tenantID uuid.UUID) (*domain.Auction, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionCreate); err != nil {
+		return nil, ErrForbidden
+	}
+	items, err := uc.Auctions.ListAdmin(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		if items[i].AuctionStatus == domain.AuctionPublicationDraft {
+			return &items[i], nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (uc *AuctionUseCase) CreateWizardDraft(ctx context.Context, tenantID uuid.UUID) (*domain.Auction, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionCreate); err != nil {
+		return nil, ErrForbidden
+	}
+	tenant, err := uc.Tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if tenant.OnboardingStatus != domain.OnboardingCompleted {
+		return nil, ErrOnboardingPending
+	}
+	now := time.Now().UTC()
+	currency := strings.ToUpper(strings.TrimSpace(tenant.DefaultCurrency))
+	if currency == "" {
+		currency = "USD"
+	}
+	auction := &domain.Auction{
+		ID:                      uuid.New(),
+		TenantID:                tenantID,
+		Currency:                currency,
+		Title:                   "",
+		Description:             "",
+		Metadata:                []byte(`{}`),
+		StartTime:               now.Add(10 * time.Minute),
+		EndTime:                 now.Add(70 * time.Minute),
+		Status:                  domain.AuctionDraft,
+		AllowManualStart:        true,
+		AllowManualPause:        true,
+		AllowManualEnd:          true,
+		AutoExtendEnabled:       true,
+		AuctionMode:             domain.AuctionModeTimed,
+		AutoProgressEnabled:     false,
+		LotDurationSeconds:      0,
+		SnipingWindowSeconds:    60,
+		SnipingExtensionSeconds: 120,
+		BidVisibility:           domain.BidVisibilityPublic,
+		RequireBidderApproval:   false,
+		WizardStep:              1,
+		AuctionStatus:           domain.AuctionPublicationDraft,
 	}
 	if err := uc.Auctions.Create(ctx, auction); err != nil {
 		return nil, err
@@ -148,6 +225,12 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 	}
 	if current.Status == domain.AuctionLive && currency != current.Currency {
 		return nil, errors.New("currency cannot be changed while auction is live")
+	}
+	if current.AuctionStatus == domain.AuctionPublicationPublished && currency != current.Currency {
+		return nil, errors.New("financial defaults cannot be changed after publish")
+	}
+	if current.CurrentPrice > current.StartingPrice && current.StartingPrice > 0 && currency != current.Currency {
+		return nil, errors.New("currency cannot be changed after first bid")
 	}
 	current.Currency = currency
 	current.Title = in.Title
@@ -194,6 +277,119 @@ func (uc *AuctionUseCase) Update(ctx context.Context, in CreateAuctionInput, auc
 			UserAgent:   auditCtx.UserAgent,
 			Metadata:    payload,
 		})
+	}
+	return current, nil
+}
+
+func (uc *AuctionUseCase) SaveWizard(ctx context.Context, auctionID uuid.UUID, in SaveAuctionWizardInput) (*domain.Auction, error) {
+	if in.WizardStep < 1 || in.WizardStep > 4 {
+		return nil, ErrValidation
+	}
+	if err := ensureTenantScope(ctx, in.TenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionCreate); err != nil {
+		return nil, ErrForbidden
+	}
+	tenant, err := uc.Tenants.GetByID(ctx, in.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if tenant.OnboardingStatus != domain.OnboardingCompleted {
+		return nil, ErrOnboardingPending
+	}
+	current, err := uc.Auctions.GetByID(ctx, in.TenantID, auctionID)
+	if err != nil {
+		return nil, err
+	}
+	if current.AuctionStatus != domain.AuctionPublicationDraft {
+		return nil, errors.New("wizard can only edit draft auctions")
+	}
+	if err := validateWizardStep(in); err != nil {
+		return nil, err
+	}
+	updated, err := uc.Update(ctx, in.CreateAuctionInput, auctionID)
+	if err != nil {
+		return nil, err
+	}
+	if updated.WizardStep < in.WizardStep {
+		updated.WizardStep = in.WizardStep
+	}
+	updated.AuctionStatus = domain.AuctionPublicationDraft
+	updated.PublishedAt = nil
+	if err := uc.Auctions.Update(ctx, updated); err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
+func (uc *AuctionUseCase) PublishWizard(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.Auction, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionAuctionCreate); err != nil {
+		return nil, ErrForbidden
+	}
+	tenant, err := uc.Tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if tenant.OnboardingStatus != domain.OnboardingCompleted {
+		return nil, ErrOnboardingPending
+	}
+	current, err := uc.Auctions.GetByID(ctx, tenantID, auctionID)
+	if err != nil {
+		return nil, err
+	}
+	if current.AuctionStatus != domain.AuctionPublicationDraft {
+		return nil, errors.New("auction is already published")
+	}
+	if err := validateWizardStep(SaveAuctionWizardInput{
+		CreateAuctionInput: CreateAuctionInput{
+			TenantID:                current.TenantID,
+			Currency:                current.Currency,
+			Title:                   current.Title,
+			Description:             current.Description,
+			Metadata:                current.Metadata,
+			StartTime:               current.StartTime,
+			EndTime:                 current.EndTime,
+			AllowManualStart:        current.AllowManualStart,
+			AllowManualPause:        current.AllowManualPause,
+			AllowManualEnd:          current.AllowManualEnd,
+			AutoExtendEnabled:       current.AutoExtendEnabled,
+			AuctionMode:             current.AuctionMode,
+			AutoProgressEnabled:     current.AutoProgressEnabled,
+			LotDurationSeconds:      current.LotDurationSeconds,
+			SnipingWindowSeconds:    current.SnipingWindowSeconds,
+			SnipingExtensionSeconds: current.SnipingExtensionSeconds,
+			BidVisibility:           current.BidVisibility,
+			RequireBidderApproval:   current.RequireBidderApproval,
+		},
+		WizardStep: 4,
+	}); err != nil {
+		return nil, err
+	}
+	if uc.Lots == nil {
+		return nil, errors.New("lot repository unavailable")
+	}
+	lots, err := uc.Lots.ListByAuction(ctx, tenantID, auctionID)
+	if err != nil {
+		return nil, err
+	}
+	if len(lots) == 0 {
+		return nil, errors.New("cannot publish without at least one lot")
+	}
+	current.WizardStep = 5
+	current.AuctionStatus = domain.AuctionPublicationPublished
+	now := time.Now().UTC()
+	current.PublishedAt = &now
+	if current.AllowManualStart {
+		current.Status = domain.AuctionDraft
+	} else {
+		current.Status = domain.AuctionScheduled
+	}
+	if err := uc.Auctions.Update(ctx, current); err != nil {
+		return nil, err
 	}
 	return current, nil
 }
@@ -325,3 +521,32 @@ func (uc *AuctionUseCase) End(ctx context.Context, tenantID, auctionID uuid.UUID
 func (uc *AuctionUseCase) SchedulerTick(ctx context.Context, now time.Time) error {
 	return uc.Auctions.RunSchedulerTick(ctx, now)
 }
+
+func validateWizardStep(in SaveAuctionWizardInput) error {
+	switch in.WizardStep {
+	case 1:
+		if strings.TrimSpace(in.Title) == "" {
+			return ErrValidation
+		}
+	case 2:
+		if in.StartTime.IsZero() || !in.EndTime.After(in.StartTime) {
+			return ErrValidation
+		}
+	case 3:
+		if len(strings.TrimSpace(in.Currency)) != 3 {
+			return ErrValidation
+		}
+	case 4:
+		if in.AuctionMode == domain.AuctionModeSequential && in.AutoProgressEnabled && in.LotDurationSeconds <= 0 {
+			return ErrValidation
+		}
+		if in.SnipingWindowSeconds < 0 || in.SnipingExtensionSeconds < 0 {
+			return ErrValidation
+		}
+	default:
+		return ErrValidation
+	}
+	return nil
+}
+
+func auctionTimePtr(v time.Time) *time.Time { return &v }

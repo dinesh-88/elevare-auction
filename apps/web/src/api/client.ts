@@ -74,6 +74,9 @@ export interface Auction {
   sniping_extension_seconds: number;
   bid_visibility: "PUBLIC" | "ANONYMOUS" | "SEALED";
   require_bidder_approval?: boolean;
+  wizard_step: number;
+  auction_status: "draft" | "published" | "closed" | "cancelled";
+  published_at?: string | null;
   created_at: string;
 }
 
@@ -615,6 +618,9 @@ export function normalizeAuction(raw: unknown): Auction {
     sniping_extension_seconds: Number(r.sniping_extension_seconds ?? r.SnipingExtensionSeconds ?? 0),
     bid_visibility: String(r.bid_visibility ?? r.BidVisibility ?? "PUBLIC") as Auction["bid_visibility"],
     require_bidder_approval: Boolean(r.require_bidder_approval ?? r.RequireBidderApproval ?? false),
+    wizard_step: Number(r.wizard_step ?? r.WizardStep ?? 1),
+    auction_status: String(r.auction_status ?? r.AuctionStatus ?? "draft") as Auction["auction_status"],
+    published_at: (r.published_at ?? r.PublishedAt ?? null) as string | null,
     created_at: String(r.created_at ?? r.CreatedAt ?? ""),
   };
 }
@@ -1256,6 +1262,11 @@ export const api = {
   requestToBid: (auctionId: string) => request<{ auction_id: string; user_id: string; status: "PENDING" | "APPROVED" | "REJECTED" }>(`/auctions/${auctionId}/request-to-bid`, { method: "POST" }),
   createAuction: async (payload: JsonRecord) =>
     normalizeAuction(await request<unknown>("/admin/auctions", { method: "POST", body: JSON.stringify(payload) })),
+  getAuctionWizardDraft: async () => normalizeAuction(await request<unknown>("/admin/auctions/wizard")),
+  createAuctionWizardDraft: async () => normalizeAuction(await request<unknown>("/admin/auctions/wizard", { method: "POST" })),
+  saveAuctionWizard: async (id: string, payload: JsonRecord) =>
+    normalizeAuction(await request<unknown>(`/admin/auctions/${id}/wizard`, { method: "PUT", body: JSON.stringify(payload) })),
+  publishAuctionWizard: async (id: string) => normalizeAuction(await request<unknown>(`/admin/auctions/${id}/publish`, { method: "POST" })),
   listAdminAuctions: async () => (await request<unknown[]>("/admin/auctions")).map(normalizeAuction),
   updateAuction: async (id: string, payload: JsonRecord) =>
     normalizeAuction(await request<unknown>(`/admin/auctions/${id}`, { method: "PATCH", body: JSON.stringify(payload) })),
