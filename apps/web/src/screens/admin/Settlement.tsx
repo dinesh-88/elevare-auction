@@ -5,7 +5,7 @@ import ElevareButton from "../../components/ui/ElevareButton";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { useAuth } from "../../hooks/useAuth";
 
-type PaymentStatus = "UNPAID" | "PAID" | "CANCELLED";
+type PaymentStatus = "unpaid" | "payment_pending" | "paid" | "refunded" | "partially_refunded";
 
 const PAGE_SIZE = 25;
 
@@ -81,6 +81,27 @@ export default function Settlement() {
     }
   };
 
+  const approveSettlement = async (invoiceId: string) => {
+    try {
+      await api.approveInvoiceSettlement(invoiceId);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to approve settlement");
+    }
+  };
+
+  const sendInvoice = async (invoiceId: string) => {
+    try {
+      const response = await api.sendInvoice(invoiceId);
+      if (response.checkout_url) {
+        window.open(response.checkout_url, "_blank", "noopener,noreferrer");
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send invoice");
+    }
+  };
+
   const cancelInvoice = async () => {
     if (!cancelModalInvoice) return;
     if (!cancelReason.trim()) {
@@ -129,6 +150,9 @@ export default function Settlement() {
           <Link className="btn-link-brand" to={`/admin/auctions/${auctionId}/lots`}>
             ← Back to Lots
           </Link>
+          <Link className="btn-link-brand" to="/admin/reconciliation">
+            Reconciliation
+          </Link>
           <ElevareButton onClick={exportCSV} disabled={!canSettle}>
             Export CSV
           </ElevareButton>
@@ -159,9 +183,11 @@ export default function Settlement() {
         <div className="flex flex-wrap items-center gap-2">
           <select value={status} onChange={(e) => setStatus(e.target.value as PaymentStatus | "ALL")}> 
             <option value="ALL">All Statuses</option>
-            <option value="UNPAID">Unpaid</option>
-            <option value="PAID">Paid</option>
-            <option value="CANCELLED">Cancelled</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="payment_pending">Pending</option>
+            <option value="paid">Paid</option>
+            <option value="refunded">Refunded</option>
+            <option value="partially_refunded">Partially Refunded</option>
           </select>
           <input
             placeholder="Search bidder email"
@@ -181,7 +207,8 @@ export default function Settlement() {
               <th>Bidder</th>
               <th>Lot</th>
               <th>Total Due</th>
-              <th>Status</th>
+              <th>Settlement</th>
+              <th>Payment</th>
               <th>Issued</th>
               <th>Paid</th>
               <th>Actions</th>
@@ -197,6 +224,7 @@ export default function Settlement() {
                 </td>
                 <td>{row.lot_summary}</td>
                 <td>{formatMoney(row.currency, row.total_due_minor)}</td>
+                <td><StatusBadge status={row.settlement_status} /></td>
                 <td><StatusBadge status={row.payment_status} /></td>
                 <td>{new Date(row.issued_at).toLocaleString()}</td>
                 <td>{row.paid_at ? new Date(row.paid_at).toLocaleString() : "-"}</td>
@@ -212,10 +240,25 @@ export default function Settlement() {
                   }}>
                     View Invoice
                   </ElevareButton>
-                  {canSettle && row.payment_status !== "PAID" && row.payment_status !== "CANCELLED" ? (
+                  {canSettle && row.settlement_status === "draft" ? (
+                    <ElevareButton variant="secondary" onClick={() => approveSettlement(row.id)}>
+                      Approve
+                    </ElevareButton>
+                  ) : null}
+                  {canSettle && row.settlement_status === "approved" ? (
+                    <ElevareButton onClick={() => sendInvoice(row.id)}>
+                      Send Invoice
+                    </ElevareButton>
+                  ) : null}
+                  {row.checkout_url ? (
+                    <ElevareButton variant="secondary" onClick={() => window.open(row.checkout_url ?? "", "_blank", "noopener,noreferrer")}>
+                      Checkout
+                    </ElevareButton>
+                  ) : null}
+                  {canSettle && row.payment_status !== "paid" && row.settlement_status !== "cancelled" ? (
                     <ElevareButton onClick={() => setPaidModalInvoice(row)}>Mark Paid</ElevareButton>
                   ) : null}
-                  {canSettle && row.payment_status === "UNPAID" ? (
+                  {canSettle && row.settlement_status !== "paid" && row.settlement_status !== "cancelled" ? (
                     <ElevareButton variant="secondary" onClick={() => setCancelModalInvoice(row)}>Cancel</ElevareButton>
                   ) : null}
                 </td>
@@ -223,7 +266,7 @@ export default function Settlement() {
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center text-sm text-neutral-500">No invoices found.</td>
+                <td colSpan={9} className="text-center text-sm text-neutral-500">No invoices found.</td>
               </tr>
             ) : null}
           </tbody>

@@ -11,6 +11,7 @@ import (
 
 	wsadapter "github.com/dinesh-88/elevare-auction/internal/adapter/broadcaster/ws"
 	emailadapter "github.com/dinesh-88/elevare-auction/internal/adapter/email"
+	paymentadapter "github.com/dinesh-88/elevare-auction/internal/adapter/payment"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/repo/postgres"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/security"
 	"github.com/dinesh-88/elevare-auction/internal/adapter/storage"
@@ -78,6 +79,10 @@ func main() {
 		},
 		Logger: log.Default(),
 	}
+	paymentGateway := &paymentadapter.StripeGateway{
+		SecretKey:     cfg.StripeSecretKey,
+		WebhookSecret: cfg.StripeWebhookSecret,
+	}
 
 	hasher := &security.Argon2Hasher{}
 	jwtSvc := &security.JWTService{Secret: []byte(cfg.JWTSecret), TTL: cfg.JWTTTL}
@@ -115,7 +120,13 @@ func main() {
 	}
 	feeUC := &usecase.FeeUseCase{Fees: feeRepo, Audit: auditRepo}
 	taxUC := &usecase.TaxUseCase{Taxes: taxRepo, Audit: auditRepo}
-	invoiceUC := &usecase.InvoiceUseCase{Invoices: invoiceRepo, Audit: auditRepo, Notifier: notificationService}
+	invoiceUC := &usecase.InvoiceUseCase{
+		Invoices:    invoiceRepo,
+		Audit:       auditRepo,
+		Notifier:    notificationService,
+		EmailOutbox: emailOutboxSvc,
+		Payments:    paymentGateway,
+	}
 	bidderUC := &usecase.BidderUseCase{Users: userRepo, Bidders: bidderRepo, Auctions: auctionRepo, Audit: auditRepo}
 	staffUC := &usecase.StaffUseCase{Staff: staffRepo, Users: userRepo, Hasher: hasher, Tokens: jwtSvc, EmailOutbox: emailOutboxSvc, Audit: auditRepo}
 	auditUC := &usecase.AuditUseCase{Audit: auditRepo}

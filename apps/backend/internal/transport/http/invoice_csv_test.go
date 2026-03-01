@@ -40,6 +40,18 @@ func (r *csvTestInvoiceRepo) GetAuctionSettlementSummary(ctx context.Context, te
 func (r *csvTestInvoiceRepo) ListAuctionInvoices(ctx context.Context, tenantID, auctionID uuid.UUID, filter port.ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error) {
 	return nil, 0, nil
 }
+func (r *csvTestInvoiceRepo) ListTenantInvoices(ctx context.Context, tenantID uuid.UUID, filter port.ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error) {
+	return nil, 0, nil
+}
+func (r *csvTestInvoiceRepo) ApproveSettlement(ctx context.Context, tenantID, invoiceID uuid.UUID, now time.Time) (*domain.Invoice, error) {
+	return &domain.Invoice{ID: invoiceID, TenantID: tenantID, SettlementStatus: domain.InvoiceSettlementApproved}, nil
+}
+func (r *csvTestInvoiceRepo) RecordInvoiceDispatch(ctx context.Context, tenantID, invoiceID uuid.UUID, session port.CheckoutSession, now time.Time) (*domain.Invoice, error) {
+	return &domain.Invoice{ID: invoiceID, TenantID: tenantID, SettlementStatus: domain.InvoiceSettlementInvoiceSent}, nil
+}
+func (r *csvTestInvoiceRepo) MarkPaidByWebhook(ctx context.Context, event port.PaymentWebhookEvent, now time.Time) (*domain.Invoice, bool, error) {
+	return &domain.Invoice{ID: event.InvoiceID, TenantID: event.TenantID, PaymentStatus: domain.InvoicePaymentPaid}, false, nil
+}
 func (r *csvTestInvoiceRepo) MarkPaid(ctx context.Context, tenantID, invoiceID uuid.UUID, paymentReference *string, now time.Time) (*domain.Invoice, error) {
 	return nil, nil
 }

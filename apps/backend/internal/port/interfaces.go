@@ -185,6 +185,10 @@ type InvoiceRepository interface {
 	UpdateStatus(ctx context.Context, tenantID, invoiceID uuid.UUID, status domain.InvoiceStatus) error
 	GetAuctionSettlementSummary(ctx context.Context, tenantID, auctionID uuid.UUID) (*domain.AuctionSettlementSummary, bool, bool, error)
 	ListAuctionInvoices(ctx context.Context, tenantID, auctionID uuid.UUID, filter ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error)
+	ListTenantInvoices(ctx context.Context, tenantID uuid.UUID, filter ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error)
+	ApproveSettlement(ctx context.Context, tenantID, invoiceID uuid.UUID, now time.Time) (*domain.Invoice, error)
+	RecordInvoiceDispatch(ctx context.Context, tenantID, invoiceID uuid.UUID, session CheckoutSession, now time.Time) (*domain.Invoice, error)
+	MarkPaidByWebhook(ctx context.Context, event PaymentWebhookEvent, now time.Time) (*domain.Invoice, bool, error)
 	MarkPaid(ctx context.Context, tenantID, invoiceID uuid.UUID, paymentReference *string, now time.Time) (*domain.Invoice, error)
 	Cancel(ctx context.Context, tenantID, invoiceID uuid.UUID, reason string, now time.Time) (*domain.Invoice, error)
 	StreamAuctionInvoices(ctx context.Context, tenantID, auctionID uuid.UUID, filter StreamAuctionInvoicesFilter, fn func(domain.SettlementInvoiceRow) error) error
@@ -317,4 +321,39 @@ type EmailMessage struct {
 
 type EmailSender interface {
 	Send(ctx context.Context, msg EmailMessage) error
+}
+
+type CheckoutSession struct {
+	ID              string
+	URL             string
+	PaymentIntentID string
+}
+
+type CreateCheckoutSessionInput struct {
+	InvoiceID     uuid.UUID
+	InvoiceNumber string
+	TenantID      uuid.UUID
+	AmountMinor   int64
+	Currency      string
+	SuccessURL    string
+	CancelURL     string
+	CustomerEmail string
+	Description   string
+}
+
+type PaymentWebhookEvent struct {
+	EventID           string
+	EventType         string
+	InvoiceID         uuid.UUID
+	TenantID          uuid.UUID
+	CheckoutSessionID string
+	PaymentIntentID   string
+	AmountMinor       int64
+	Currency          string
+	Payload           []byte
+}
+
+type PaymentGateway interface {
+	CreateCheckoutSession(ctx context.Context, in CreateCheckoutSessionInput) (CheckoutSession, error)
+	ParseWebhook(payload []byte, signatureHeader string) (*PaymentWebhookEvent, error)
 }

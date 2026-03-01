@@ -35,6 +35,8 @@ type Config struct {
 	BidSimMaxEvents             int
 	InternalEmailSecret         string
 	EmailProvider               string
+	StripeSecretKey             string
+	StripeWebhookSecret         string
 	EmailRLRecipient10M         int
 	EmailRLRecipient24H         int
 	EmailRLTenant1H             int
@@ -75,6 +77,8 @@ func LoadConfig() Config {
 		BidSimMaxEvents:             getEnvInt("BID_SIM_MAX_EVENTS_PER_MINUTE", 6),
 		InternalEmailSecret:         strings.TrimSpace(os.Getenv("INTERNAL_EMAIL_SECRET")),
 		EmailProvider:               getEnv("EMAIL_PROVIDER", "resend"),
+		StripeSecretKey:             strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
+		StripeWebhookSecret:         strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		EmailRLRecipient10M:         getEnvInt("EMAIL_RL_RECIPIENT_10M", 3),
 		EmailRLRecipient24H:         getEnvInt("EMAIL_RL_RECIPIENT_24H", 20),
 		EmailRLTenant1H:             getEnvInt("EMAIL_RL_TENANT_1H", 200),

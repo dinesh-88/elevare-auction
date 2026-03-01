@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,9 +15,11 @@ import (
 )
 
 type InvoiceUseCase struct {
-	Invoices port.InvoiceRepository
-	Audit    port.AuditRepository
-	Notifier *NotificationService
+	Invoices    port.InvoiceRepository
+	Audit       port.AuditRepository
+	Notifier    *NotificationService
+	EmailOutbox *EmailOutboxService
+	Payments    port.PaymentGateway
 }
 
 type InvoiceListFilter struct {
@@ -117,6 +120,21 @@ func (uc *InvoiceUseCase) ListAuctionInvoices(ctx context.Context, tenantID, auc
 	return rows, total, err
 }
 
+func (uc *InvoiceUseCase) ListReconciliation(ctx context.Context, tenantID uuid.UUID, filter InvoiceListFilter) ([]domain.SettlementInvoiceRow, int64, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, 0, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionFinancialView); err != nil {
+		return nil, 0, ErrForbidden
+	}
+	return uc.Invoices.ListTenantInvoices(ctx, tenantID, port.ListAuctionInvoicesFilter{
+		Status: filter.Status,
+		Search: filter.Search,
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	})
+}
+
 func (uc *InvoiceUseCase) StreamAuctionInvoices(ctx context.Context, tenantID, auctionID uuid.UUID, filter InvoiceStreamFilter, fn func(domain.SettlementInvoiceRow) error) error {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return err
@@ -163,6 +181,71 @@ func (uc *InvoiceUseCase) MarkPaid(ctx context.Context, tenantID, invoiceID uuid
 	return uc.Invoices.MarkPaid(ctx, tenantID, invoiceID, paymentReference, now)
 }
 
+func (uc *InvoiceUseCase) ApproveSettlement(ctx context.Context, tenantID, invoiceID uuid.UUID, now time.Time) (*domain.Invoice, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionSettlementApprove); err != nil {
+		return nil, ErrForbidden
+	}
+	return uc.Invoices.ApproveSettlement(ctx, tenantID, invoiceID, now)
+}
+
+func (uc *InvoiceUseCase) SendInvoice(ctx context.Context, tenant domain.Tenant, invoiceID uuid.UUID, successURL, cancelURL string, now time.Time) (*domain.Invoice, error) {
+	if err := ensureTenantScope(ctx, tenant.ID); err != nil {
+		return nil, err
+	}
+	if err := authz.Authorize(ctx, domain.PermissionInvoiceSend); err != nil {
+		return nil, ErrForbidden
+	}
+	if uc.Payments == nil {
+		return nil, ErrValidation
+	}
+	inv, err := uc.Invoices.GetByID(ctx, tenant.ID, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	if inv.SettlementStatus != domain.InvoiceSettlementApproved && inv.SettlementStatus != domain.InvoiceSettlementInvoiceSent {
+		return nil, ErrValidation
+	}
+	session, err := uc.Payments.CreateCheckoutSession(ctx, port.CreateCheckoutSessionInput{
+		InvoiceID:     inv.ID,
+		InvoiceNumber: inv.InvoiceNumber,
+		TenantID:      tenant.ID,
+		AmountMinor:   inv.TotalDueMinor,
+		Currency:      inv.Currency,
+		SuccessURL:    successURL,
+		CancelURL:     cancelURL,
+		CustomerEmail: inv.WinnerEmail,
+		Description:   strings.TrimSpace(tenant.Name) + " invoice " + inv.InvoiceNumber,
+	})
+	if err != nil {
+		return nil, err
+	}
+	inv, err = uc.Invoices.RecordInvoiceDispatch(ctx, tenant.ID, invoiceID, session, now)
+	if err != nil {
+		return nil, err
+	}
+	if uc.EmailOutbox != nil && strings.TrimSpace(inv.WinnerEmail) != "" {
+		_, err = uc.EmailOutbox.Queue(ctx, QueueEmailInput{
+			TenantID:   tenant.ID,
+			UserID:     &inv.WinnerUserID,
+			ToEmail:    inv.WinnerEmail,
+			Subject:    fmt.Sprintf("%s invoice %s", strings.TrimSpace(tenant.Name), inv.InvoiceNumber),
+			HTMLBody:   buildInvoiceEmailHTML(strings.TrimSpace(tenant.Name), inv, session.URL),
+			TextBody:   buildInvoiceEmailText(strings.TrimSpace(tenant.Name), inv, session.URL),
+			Type:       "invoice_payment_request",
+			EntityType: "INVOICE",
+			EntityID:   &inv.ID,
+			Critical:   true,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return inv, nil
+}
+
 func (uc *InvoiceUseCase) Cancel(ctx context.Context, tenantID, invoiceID uuid.UUID, reason string, now time.Time) (*domain.Invoice, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err
@@ -174,6 +257,20 @@ func (uc *InvoiceUseCase) Cancel(ctx context.Context, tenantID, invoiceID uuid.U
 		return nil, ErrValidation
 	}
 	return uc.Invoices.Cancel(ctx, tenantID, invoiceID, reason, now)
+}
+
+func (uc *InvoiceUseCase) HandlePaymentWebhook(ctx context.Context, payload []byte, signatureHeader string, now time.Time) (*domain.Invoice, bool, error) {
+	if uc.Payments == nil {
+		return nil, false, ErrValidation
+	}
+	event, err := uc.Payments.ParseWebhook(payload, signatureHeader)
+	if err != nil {
+		return nil, false, err
+	}
+	if event == nil {
+		return nil, false, nil
+	}
+	return uc.Invoices.MarkPaidByWebhook(ctx, *event, now)
 }
 
 func (uc *InvoiceUseCase) GetAuthorized(ctx context.Context, tenantID, invoiceID, userID uuid.UUID) (*domain.Invoice, error) {
@@ -226,4 +323,39 @@ func ParseInvoiceSnapshot(raw json.RawMessage) (domain.LotFinancialSnapshot, err
 	}
 	err := json.Unmarshal(raw, &snap)
 	return snap, err
+}
+
+func buildInvoiceEmailHTML(tenantName string, inv *domain.Invoice, checkoutURL string) string {
+	return fmt.Sprintf(
+		"<p>%s has issued invoice <strong>%s</strong> for %s %s.</p><p><a href=\"%s\">Complete payment</a></p>",
+		htmlEscape(tenantName),
+		htmlEscape(inv.InvoiceNumber),
+		htmlEscape(strings.ToUpper(inv.Currency)),
+		formatMinorMoney(inv.TotalDueMinor),
+		htmlEscape(checkoutURL),
+	)
+}
+
+func buildInvoiceEmailText(tenantName string, inv *domain.Invoice, checkoutURL string) string {
+	return fmt.Sprintf("%s issued invoice %s for %s %s.\nPay here: %s", tenantName, inv.InvoiceNumber, strings.ToUpper(inv.Currency), formatMinorMoney(inv.TotalDueMinor), checkoutURL)
+}
+
+func formatMinorMoney(amount int64) string {
+	sign := ""
+	if amount < 0 {
+		sign = "-"
+		amount = -amount
+	}
+	return fmt.Sprintf("%s%d.%02d", sign, amount/100, amount%100)
+}
+
+func htmlEscape(input string) string {
+	replacer := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		`"`, "&quot;",
+		"'", "&#39;",
+	)
+	return replacer.Replace(input)
 }

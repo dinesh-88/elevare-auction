@@ -497,38 +497,58 @@ const (
 type InvoicePaymentStatus string
 
 const (
-	InvoicePaymentUnpaid    InvoicePaymentStatus = "UNPAID"
-	InvoicePaymentPaid      InvoicePaymentStatus = "PAID"
-	InvoicePaymentCancelled InvoicePaymentStatus = "CANCELLED"
+	InvoicePaymentUnpaid            InvoicePaymentStatus = "unpaid"
+	InvoicePaymentPending           InvoicePaymentStatus = "payment_pending"
+	InvoicePaymentPaid              InvoicePaymentStatus = "paid"
+	InvoicePaymentRefunded          InvoicePaymentStatus = "refunded"
+	InvoicePaymentPartiallyRefunded InvoicePaymentStatus = "partially_refunded"
+)
+
+type InvoiceSettlementStatus string
+
+const (
+	InvoiceSettlementDraft       InvoiceSettlementStatus = "draft"
+	InvoiceSettlementApproved    InvoiceSettlementStatus = "approved"
+	InvoiceSettlementInvoiceSent InvoiceSettlementStatus = "invoice_sent"
+	InvoiceSettlementPaid        InvoiceSettlementStatus = "paid"
+	InvoiceSettlementCancelled   InvoiceSettlementStatus = "cancelled"
 )
 
 type Invoice struct {
-	ID            uuid.UUID
-	LotID         uuid.UUID
-	AuctionID     uuid.UUID
-	TenantID      uuid.UUID
-	WinnerUserID  uuid.UUID
-	InvoiceNumber string
-	IssuedAt      time.Time
-	DueDate       *time.Time
-	Currency      string
-	TotalAmount   int64
-	HammerMinor   int64
-	FeesMinor     int64
-	TaxMinor      int64
-	TotalDueMinor int64
-	PaymentStatus InvoicePaymentStatus
-	PaidAt        *time.Time
-	CancelledAt   *time.Time
-	PaymentRef    *string
-	CancelReason  *string
-	Snapshot      json.RawMessage
-	Status        InvoiceStatus
-	CreatedAt     time.Time
+	ID                      uuid.UUID
+	LotID                   uuid.UUID
+	AuctionID               uuid.UUID
+	TenantID                uuid.UUID
+	WinnerUserID            uuid.UUID
+	InvoiceNumber           string
+	IssuedAt                time.Time
+	DueDate                 *time.Time
+	Currency                string
+	TotalAmount             int64
+	HammerMinor             int64
+	FeesMinor               int64
+	TaxMinor                int64
+	TotalDueMinor           int64
+	SettlementStatus        InvoiceSettlementStatus
+	PaymentStatus           InvoicePaymentStatus
+	SettlementApprovedAt    *time.Time
+	InvoiceSentAt           *time.Time
+	PaidAt                  *time.Time
+	PaymentReceivedAt       *time.Time
+	CancelledAt             *time.Time
+	PaymentRef              *string
+	CancelReason            *string
+	StripeCheckoutSessionID *string
+	StripeCheckoutURL       *string
+	StripePaymentIntentID   *string
+	Snapshot                json.RawMessage
+	Status                  InvoiceStatus
+	CreatedAt               time.Time
 
 	LotNumber    string
 	LotTitle     string
 	AuctionTitle string
+	WinnerEmail  string
 }
 
 type AuctionSettlementSummary struct {
@@ -557,9 +577,12 @@ type SettlementInvoiceRow struct {
 	TaxMinor         int64
 	TotalDueMinor    int64
 	Currency         string
+	SettlementStatus InvoiceSettlementStatus
 	PaymentStatus    InvoicePaymentStatus
 	IssuedAt         time.Time
+	InvoiceSentAt    *time.Time
 	PaidAt           *time.Time
 	PaymentReference *string
 	CancelReason     *string
+	CheckoutURL      *string
 }

@@ -239,11 +239,16 @@ export interface Invoice {
   fees_total_minor?: number;
   tax_total_minor?: number;
   total_due_minor?: number;
-  payment_status?: "UNPAID" | "PAID" | "CANCELLED";
+  settlement_status?: "draft" | "approved" | "invoice_sent" | "paid" | "cancelled";
+  payment_status?: "unpaid" | "payment_pending" | "paid" | "refunded" | "partially_refunded";
+  settlement_approved_at?: string | null;
+  invoice_sent_at?: string | null;
   paid_at?: string | null;
+  payment_received_at?: string | null;
   cancelled_at?: string | null;
   payment_reference?: string | null;
   cancel_reason?: string | null;
+  stripe_checkout_url?: string | null;
   snapshot: {
     currency?: string;
     hammer_price: number;
@@ -288,11 +293,14 @@ export interface SettlementInvoiceRow {
   tax_minor: number;
   total_due_minor: number;
   currency: string;
-  payment_status: "UNPAID" | "PAID" | "CANCELLED";
+  settlement_status: "draft" | "approved" | "invoice_sent" | "paid" | "cancelled";
+  payment_status: "unpaid" | "payment_pending" | "paid" | "refunded" | "partially_refunded";
   issued_at: string;
+  invoice_sent_at?: string | null;
   paid_at?: string | null;
   payment_reference?: string | null;
   cancel_reason?: string | null;
+  checkout_url?: string | null;
 }
 
 function normalizeSettlementSummary(raw: unknown): AuctionSettlementSummary {
@@ -340,11 +348,14 @@ function normalizeSettlementInvoiceRow(raw: unknown): SettlementInvoiceRow {
     tax_minor: Number(r.tax_minor ?? r.TaxMinor ?? 0),
     total_due_minor: Number(r.total_due_minor ?? r.TotalDueMinor ?? 0),
     currency: String(r.currency ?? r.Currency ?? "USD"),
-    payment_status: String(r.payment_status ?? r.PaymentStatus ?? "UNPAID") as SettlementInvoiceRow["payment_status"],
+    settlement_status: String(r.settlement_status ?? r.SettlementStatus ?? "draft") as SettlementInvoiceRow["settlement_status"],
+    payment_status: String(r.payment_status ?? r.PaymentStatus ?? "unpaid") as SettlementInvoiceRow["payment_status"],
     issued_at: String(r.issued_at ?? r.IssuedAt ?? ""),
+    invoice_sent_at: (r.invoice_sent_at ?? r.InvoiceSentAt ?? null) as string | null,
     paid_at: (r.paid_at ?? r.PaidAt ?? null) as string | null,
     payment_reference: (r.payment_reference ?? r.PaymentReference ?? null) as string | null,
     cancel_reason: (r.cancel_reason ?? r.CancelReason ?? null) as string | null,
+    checkout_url: (r.checkout_url ?? r.CheckoutURL ?? null) as string | null,
   };
 }
 
@@ -1207,7 +1218,10 @@ export const api = {
   markAllMyNotificationsRead: () => request<{ status: string }>("/me/notifications/read-all", { method: "POST" }),
   getAuctionSettlementSummary: async (auctionId: string) =>
     normalizeSettlementSummary(await request<unknown>(`/admin/auctions/${auctionId}/settlement-summary`)),
-  listAuctionInvoices: (auctionId: string, params?: { status?: "UNPAID" | "PAID" | "CANCELLED"; search?: string; limit?: number; offset?: number }) => {
+  listAuctionInvoices: (
+    auctionId: string,
+    params?: { status?: "unpaid" | "payment_pending" | "paid" | "refunded" | "partially_refunded"; search?: string; limit?: number; offset?: number },
+  ) => {
     const search = new URLSearchParams();
     if (params?.status) search.set("status", params.status);
     if (params?.search) search.set("search", params.search);
@@ -1225,12 +1239,34 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ payment_reference: paymentReference || undefined }),
     }),
+  approveInvoiceSettlement: (invoiceId: string) => request<Invoice>(`/admin/invoices/${invoiceId}/approve`, { method: "POST" }),
+  sendInvoice: (invoiceId: string) =>
+    request<{ invoice: Invoice; checkout_url?: string | null; payment_state: string }>(`/admin/invoices/${invoiceId}/send`, { method: "POST" }),
   cancelInvoice: (invoiceId: string, reason: string) =>
     request<Invoice>(`/admin/invoices/${invoiceId}/cancel`, {
       method: "POST",
       body: JSON.stringify({ reason }),
     }),
-  downloadSettlementCSV: (auctionId: string, params?: { status?: "UNPAID" | "PAID" | "CANCELLED"; search?: string }) => {
+  listReconciliation: (params?: {
+    status?: "unpaid" | "payment_pending" | "paid" | "refunded" | "partially_refunded";
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    if (params?.search) search.set("search", params.search);
+    search.set("limit", String(params?.limit ?? 50));
+    search.set("offset", String(params?.offset ?? 0));
+    return request<{ items: unknown[]; total: number; limit: number; offset: number }>(`/admin/reconciliation?${search.toString()}`).then((res) => ({
+      ...res,
+      items: (res.items ?? []).map(normalizeSettlementInvoiceRow),
+    }));
+  },
+  downloadSettlementCSV: (
+    auctionId: string,
+    params?: { status?: "unpaid" | "payment_pending" | "paid" | "refunded" | "partially_refunded"; search?: string },
+  ) => {
     const search = new URLSearchParams();
     if (params?.status) search.set("status", params.status);
     if (params?.search) search.set("search", params.search);

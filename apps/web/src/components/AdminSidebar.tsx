@@ -6,6 +6,7 @@ const links = [
   { to: "/admin/auctions", label: "Auctions" },
   { to: "/admin/staff", label: "Staff" },
   { to: "/admin/financial-rules", label: "Financial Rules" },
+  { to: "/admin/reconciliation", label: "Reconciliation" },
   { to: "/admin/site", label: "Site Content" },
   { to: "/admin/settings", label: "Settings" },
   { to: "/admin/create-auction", label: "Create Auction" },

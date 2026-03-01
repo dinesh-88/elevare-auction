@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -97,6 +98,50 @@ func (h *Handler) UpdateInvoiceStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": string(req.Status)})
+}
+
+func (h *Handler) ApproveInvoiceSettlement(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	invoiceID, err := uuid.Parse(chi.URLParam(r, "invoiceId"))
+	if err != nil {
+		writeErrorText(w, "invalid invoice id", http.StatusBadRequest)
+		return
+	}
+	inv, err := h.Invoice.ApproveSettlement(r.Context(), tenant.ID, invoiceID, time.Now().UTC())
+	if err != nil {
+		status := http.StatusBadRequest
+		if err == usecase.ErrForbidden {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, inv)
+}
+
+func (h *Handler) SendInvoice(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	invoiceID, err := uuid.Parse(chi.URLParam(r, "invoiceId"))
+	if err != nil {
+		writeErrorText(w, "invalid invoice id", http.StatusBadRequest)
+		return
+	}
+	successURL := h.tenantBaseURL(tenant) + "/account/invoices/" + invoiceID.String() + "?payment=success"
+	cancelURL := h.tenantBaseURL(tenant) + "/account/invoices/" + invoiceID.String() + "?payment=cancelled"
+	inv, err := h.Invoice.SendInvoice(r.Context(), *tenant, invoiceID, successURL, cancelURL, time.Now().UTC())
+	if err != nil {
+		status := http.StatusBadRequest
+		if err == usecase.ErrForbidden {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"invoice":       inv,
+		"checkout_url":  inv.StripeCheckoutURL,
+		"payment_state": inv.PaymentStatus,
+	})
 }
 
 func (h *Handler) MarkInvoicePaid(w http.ResponseWriter, r *http.Request) {
@@ -198,6 +243,30 @@ func (h *Handler) ListAuctionInvoices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, total, err := h.Invoice.ListAuctionInvoices(r.Context(), tenant.ID, auctionID, filter)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err == usecase.ErrForbidden {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":  rows,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+func (h *Handler) ListReconciliation(w http.ResponseWriter, r *http.Request) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	filter, err := parseInvoiceListFilter(r)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	rows, total, err := h.Invoice.ListReconciliation(r.Context(), tenant.ID, filter)
 	if err != nil {
 		status := http.StatusBadRequest
 		if err == usecase.ErrForbidden {
@@ -340,13 +409,57 @@ func parseInvoicePaymentStatus(raw string) (*domain.InvoicePaymentStatus, error)
 	if raw == "" {
 		return nil, nil
 	}
-	status := domain.InvoicePaymentStatus(raw)
+	status := domain.InvoicePaymentStatus(strings.ToLower(raw))
 	switch status {
-	case domain.InvoicePaymentUnpaid, domain.InvoicePaymentPaid, domain.InvoicePaymentCancelled:
+	case domain.InvoicePaymentUnpaid, domain.InvoicePaymentPending, domain.InvoicePaymentPaid, domain.InvoicePaymentRefunded, domain.InvoicePaymentPartiallyRefunded:
 		return &status, nil
 	default:
 		return nil, fmt.Errorf("invalid payment status")
 	}
+}
+
+func (h *Handler) StripeWebhook(w http.ResponseWriter, r *http.Request) {
+	payload, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		writeErrorText(w, "invalid webhook payload", http.StatusBadRequest)
+		return
+	}
+	inv, duplicate, err := h.Invoice.HandlePaymentWebhook(r.Context(), payload, r.Header.Get("Stripe-Signature"), time.Now().UTC())
+	if err != nil {
+		writeErrorText(w, "webhook rejected", http.StatusBadRequest)
+		return
+	}
+	if duplicate {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "duplicate"})
+		return
+	}
+	if inv == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ignored"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "processed", "invoice_id": inv.ID})
+}
+
+func (h *Handler) tenantBaseURL(tenant *domain.Tenant) string {
+	scheme := strings.TrimSpace(h.TenantAppScheme)
+	if scheme == "" {
+		scheme = "https"
+	}
+	portSuffix := ""
+	if p := strings.TrimSpace(h.TenantAppPort); p != "" {
+		portSuffix = ":" + p
+	}
+	host := ""
+	if tenant != nil && tenant.CustomDomain != nil && strings.TrimSpace(*tenant.CustomDomain) != "" {
+		host = strings.TrimSpace(*tenant.CustomDomain)
+	} else if tenant != nil {
+		baseDomain := strings.TrimSpace(h.TenantAppBaseDomain)
+		if baseDomain == "" {
+			baseDomain = "elevareauctions.com"
+		}
+		host = fmt.Sprintf("%s.%s", strings.TrimSpace(tenant.Subdomain), baseDomain)
+	}
+	return fmt.Sprintf("%s://%s%s", scheme, host, portSuffix)
 }
 
 func buildInvoicePDF(tenantName string, inv *domain.Invoice) ([]byte, error) {

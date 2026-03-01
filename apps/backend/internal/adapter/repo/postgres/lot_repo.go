@@ -1366,12 +1366,12 @@ INSERT INTO invoices (
   id, lot_id, auction_id, tenant_id, winner_user_id,
   invoice_number, issued_at, due_date, currency,
   total_amount, hammer_price_minor, fees_total_minor, tax_total_minor, total_due_minor,
-  payment_status, snapshot, status, created_at
+  settlement_status, payment_status, snapshot, status, created_at
 ) VALUES (
   $1,$2,$3,$4,$5,
   $6,$7,$8,$9,
   $10,$11,$12,$13,$14,
-  'UNPAID',$15,'ISSUED',now()
+  'draft','unpaid',$15,'ISSUED',now()
 )`
 	_, err := tx.Exec(ctx, q,
 		uuid.New(), lotID, auctionID, tenantID, winnerUserID,
