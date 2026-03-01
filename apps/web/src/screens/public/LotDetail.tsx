@@ -10,6 +10,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useAuctionSocket } from "../../hooks/useAuctionSocket";
 import { useLotSocket } from "../../hooks/useLotSocket";
 import StatusBadge from "../../components/ui/StatusBadge";
+import { trackBidMetric } from "../../utils/bidMetrics";
 import { currencySymbol } from "../../utils/currency";
 
 const LazyBidHistory = lazy(() => import("../../components/BidHistory"));
@@ -55,6 +56,11 @@ export default function LotDetail({
   const [termsAccepted, setTermsAccepted] = useState(true);
   const [lastPlacedBidAmount, setLastPlacedBidAmount] = useState<number | null>(null);
   const [outbidNotice, setOutbidNotice] = useState<string | null>(null);
+  const [outbidFlash, setOutbidFlash] = useState(false);
+  const [bidValuePulse, setBidValuePulse] = useState(false);
+  const [successfulBidCount, setSuccessfulBidCount] = useState(0);
+  const [trackedView, setTrackedView] = useState(false);
+  const [lastOutbidTriggerPrice, setLastOutbidTriggerPrice] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState({
     description: true,
     details: false,
@@ -243,6 +249,51 @@ export default function LotDetail({
     window.setTimeout(() => setBidMessage(null), timeout);
   };
 
+  const getSecondsRemaining = (endTime?: string | null) => {
+    if (!endTime) return 0;
+    return Math.max(0, Math.floor((new Date(endTime).getTime() - Date.now()) / 1000));
+  };
+
+  const markBidValuePulse = () => {
+    setBidValuePulse(true);
+    window.setTimeout(() => setBidValuePulse(false), 1400);
+  };
+
+  const recordSuccessfulBid = (amount: number, source: "quick" | "max") => {
+    const secondsRemaining = getSecondsRemaining(lot?.ended_at);
+    if (successfulBidCount === 0) {
+      trackBidMetric({
+        name: "watcher_to_bid_conversion",
+        lotId: routeLotID,
+        auctionId: lot?.auction_id,
+        amount,
+        secondsRemaining,
+        source,
+      });
+    } else {
+      trackBidMetric({
+        name: "rebid",
+        lotId: routeLotID,
+        auctionId: lot?.auction_id,
+        amount,
+        secondsRemaining,
+        source,
+      });
+    }
+    if (secondsRemaining <= 60) {
+      trackBidMetric({
+        name: "last_minute_bid",
+        lotId: routeLotID,
+        auctionId: lot?.auction_id,
+        amount,
+        secondsRemaining,
+        source,
+      });
+    }
+    setSuccessfulBidCount((prev) => prev + 1);
+    markBidValuePulse();
+  };
+
   const placeQuickBid = async (nextAmount: number) => {
     if (!routeLotID) return;
     try {
@@ -250,7 +301,9 @@ export default function LotDetail({
       applyBidResponse(res);
       setLastPlacedBidAmount(nextAmount);
       setOutbidNotice(null);
-      flashBidMessage("Bid placed successfully");
+      setOutbidFlash(false);
+      recordSuccessfulBid(nextAmount, "quick");
+      flashBidMessage("Bid placed. You are in the lead.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to place bid";
       if (message.toLowerCase().includes("approval")) {
@@ -270,7 +323,9 @@ export default function LotDetail({
       applyBidResponse(res);
       setLastPlacedBidAmount(maxBidMinor);
       setOutbidNotice(null);
-      flashBidMessage("Bid placed successfully");
+      setOutbidFlash(false);
+      recordSuccessfulBid(maxBidMinor, "max");
+      flashBidMessage("Max bid set. We will keep you competitive.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to place bid";
       if (message.toLowerCase().includes("approval")) {
@@ -323,14 +378,39 @@ export default function LotDetail({
   };
 
   useEffect(() => {
+    if (trackedView || !routeLotID || !lot) return;
+    trackBidMetric({
+      name: "lot_viewed",
+      lotId: routeLotID,
+      auctionId: lot.auction_id,
+      secondsRemaining: getSecondsRemaining(lot.ended_at),
+      source: "lot_detail",
+    });
+    setTrackedView(true);
+  }, [trackedView, routeLotID, lot]);
+
+  useEffect(() => {
     if (!lot || lastPlacedBidAmount === null) return;
     const nextMinimum = lot.current_price + (lot.increment_minor ?? lot.min_increment);
-    if (lot.current_price > lastPlacedBidAmount) {
-      setOutbidNotice(`Another bidder moved ahead. The next minimum is ${currencySymbol(auctionCurrency)}${nextMinimum.toLocaleString()}.`);
+    if (lot.current_price > lastPlacedBidAmount && lot.current_price !== lastOutbidTriggerPrice) {
+      setOutbidNotice(`You have been outbid. Act now to place ${currencySymbol(auctionCurrency)}${nextMinimum.toLocaleString()} and regain the lead.`);
+      setOutbidFlash(true);
+      setLastOutbidTriggerPrice(lot.current_price);
+      trackBidMetric({
+        name: "outbid_seen",
+        lotId: routeLotID,
+        auctionId: lot.auction_id,
+        amount: lot.current_price,
+        secondsRemaining: getSecondsRemaining(lot.ended_at),
+        source: "lot_socket",
+      });
+      window.setTimeout(() => setOutbidFlash(false), 1600);
       return;
     }
-    setOutbidNotice(null);
-  }, [lot, lastPlacedBidAmount, auctionCurrency]);
+    if (lot.current_price <= lastPlacedBidAmount) {
+      setOutbidNotice(null);
+    }
+  }, [lot, lastPlacedBidAmount, auctionCurrency, lastOutbidTriggerPrice, routeLotID]);
 
   if (error) return <p className="error">{error}</p>;
   if (!lot) return <p className="text-sm text-neutral-500">Loading lot...</p>;
@@ -372,8 +452,17 @@ export default function LotDetail({
   const isWinner = Boolean(user && financials?.winner_user && user.id === financials.winner_user);
   const symbol = currencySymbol(auctionCurrency);
   const minimumNextBid = lot.current_price + (lot.increment_minor ?? lot.min_increment);
+  const incrementStep = lot.increment_minor ?? lot.min_increment;
   const isLiveForBidding = lot.status === "LIVE" && auctionStatus === "LIVE";
   const showBidControls = isAuthenticated && !isAdmin && isLiveForBidding;
+  const isLeading = lastPlacedBidAmount !== null && lot.current_price <= lastPlacedBidAmount && !outbidNotice;
+  const bidSectionTone = outbidFlash ? "outbid" : isLeading ? "leading" : "neutral";
+  const bidPanelClassName =
+    bidSectionTone === "outbid"
+      ? "border-red-300 bg-red-50 ring-2 ring-red-200"
+      : bidSectionTone === "leading"
+        ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200"
+        : "border-neutral-200 bg-white";
   const userBidStatus =
     !isAuthenticated
       ? { label: "Sign In to Bid", className: "bg-neutral-100 text-neutral-700" }
@@ -387,7 +476,7 @@ export default function LotDetail({
               ? { label: "Approval Pending", className: "bg-amber-100 text-amber-900" }
               : outbidNotice
                 ? { label: "Outbid", className: "bg-rose-100 text-rose-800" }
-                : lastPlacedBidAmount !== null && lot.current_price <= lastPlacedBidAmount
+                : isLeading
                   ? { label: "Leading", className: "bg-emerald-100 text-emerald-800" }
                   : isLiveForBidding
                     ? { label: "Ready to Bid", className: "bg-sky-100 text-sky-800" }
@@ -426,11 +515,15 @@ export default function LotDetail({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <div className={`rounded-3xl border p-5 shadow-sm transition-colors ${bidPanelClassName}`}>
               <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-1">
                 <div>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Current Bid</p>
-                  <div className="bid-amount text-[34px] font-heading font-bold leading-none text-brand-primary sm:text-[40px]">
+                  <div
+                    className={`bid-amount text-[34px] font-heading font-bold leading-none text-brand-primary transition-transform duration-300 sm:text-[40px] ${
+                      bidValuePulse ? "scale-[1.04] animate-[pulse_0.9s_ease-in-out_2]" : ""
+                    }`}
+                  >
                     {symbol}
                     {lot.current_price.toLocaleString()}
                   </div>
@@ -438,7 +531,7 @@ export default function LotDetail({
                 {isLiveForBidding && lot.ended_at ? (
                   <div>
                     <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Time Remaining</p>
-                    <div className="text-xl font-semibold text-neutral-900"><Countdown endTime={lot.ended_at} /></div>
+                    <div className="text-xl font-semibold text-neutral-900"><Countdown endTime={lot.ended_at} emphasizeUrgency /></div>
                   </div>
                 ) : null}
               </div>
@@ -460,7 +553,7 @@ export default function LotDetail({
               ) : null}
             </div>
 
-            <div className={`hidden rounded-3xl border bg-white p-5 shadow-sm md:block ${outbidNotice ? "border-amber-300 ring-2 ring-amber-200" : "border-neutral-200"}`}>
+            <div className={`hidden rounded-3xl border p-5 shadow-sm md:block ${bidPanelClassName}`}>
               {showBidControls ? (
                 <>
                   {termsAccepted ? (
@@ -468,10 +561,21 @@ export default function LotDetail({
                       <BidInput
                         minimumNextBid={minimumNextBid}
                         currency={symbol}
+                        incrementStep={incrementStep}
                         onQuickBid={placeQuickBid}
                         onMaxBid={placeMaxBid}
-                        highlight={Boolean(outbidNotice)}
+                        statusTone={bidSectionTone}
                         outbidNotice={outbidNotice}
+                        onQuickIncrementSelect={(amount) =>
+                          trackBidMetric({
+                            name: "quick_increment_selected",
+                            lotId: routeLotID,
+                            auctionId: lot.auction_id,
+                            amount,
+                            secondsRemaining: getSecondsRemaining(lot.ended_at),
+                            source: "desktop",
+                          })
+                        }
                       />
                       {requestToBidStatus !== "APPROVED" ? (
                         <div className="mt-3">
@@ -670,11 +774,22 @@ export default function LotDetail({
             <BidInput
               minimumNextBid={minimumNextBid}
               currency={symbol}
+              incrementStep={incrementStep}
               onQuickBid={placeQuickBid}
               onMaxBid={placeMaxBid}
               mobileSticky
-              highlight={Boolean(outbidNotice)}
+              statusTone={bidSectionTone}
               outbidNotice={outbidNotice}
+              onQuickIncrementSelect={(amount) =>
+                trackBidMetric({
+                  name: "quick_increment_selected",
+                  lotId: routeLotID,
+                  auctionId: lot.auction_id,
+                  amount,
+                  secondsRemaining: getSecondsRemaining(lot.ended_at),
+                  source: "mobile",
+                })
+              }
             />
           ) : (
             <div className="rounded-t-3xl border border-neutral-900 bg-neutral-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 text-white shadow-[0_-10px_40px_rgba(0,0,0,0.35)]">

@@ -4,19 +4,23 @@ import ElevareButton from "./ui/ElevareButton";
 export default function BidInput({
   minimumNextBid,
   currency,
+  incrementStep,
   onQuickBid,
   onMaxBid,
   mobileSticky = false,
-  highlight = false,
+  statusTone = "neutral",
   outbidNotice = null,
+  onQuickIncrementSelect,
 }: {
   minimumNextBid: number;
   currency: string;
+  incrementStep: number;
   onQuickBid: (amountMinor: number) => void | Promise<void>;
   onMaxBid: (maxBidMinor: number) => void | Promise<void>;
   mobileSticky?: boolean;
-  highlight?: boolean;
+  statusTone?: "neutral" | "leading" | "outbid";
   outbidNotice?: string | null;
+  onQuickIncrementSelect?: (amountMinor: number) => void;
 }) {
   const [maxBid, setMaxBid] = useState(String(minimumNextBid));
   const [submittingQuick, setSubmittingQuick] = useState(false);
@@ -25,6 +29,8 @@ export default function BidInput({
   const [openMax, setOpenMax] = useState(false);
   const [confirmState, setConfirmState] = useState<{ type: "quick" | "max"; amount: number } | null>(null);
   const [successAmount, setSuccessAmount] = useState<number | null>(null);
+
+  const quickActionAmounts = [minimumNextBid, minimumNextBid + incrementStep, minimumNextBid + incrementStep * 2];
 
   useEffect(() => {
     setMaxBid(String(minimumNextBid));
@@ -99,9 +105,30 @@ export default function BidInput({
     await submitMaxBid(current.amount);
   };
 
+  const selectQuickAmount = (amount: number) => {
+    setMaxBid(String(amount));
+    setSubmitError(null);
+    onQuickIncrementSelect?.(amount);
+    if (mobileSticky) {
+      setConfirmState({ type: "quick", amount });
+    }
+  };
+
   const sectionClassName = mobileSticky
-    ? `space-y-3 rounded-t-3xl border border-neutral-900 bg-neutral-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 text-white shadow-[0_-10px_40px_rgba(0,0,0,0.35)] ${highlight ? "ring-4 ring-amber-300/60" : ""}`
-    : `space-y-3 rounded-2xl border p-4 ${highlight ? "border-amber-300 bg-amber-50 ring-2 ring-amber-200" : "border-neutral-200 bg-white"}`;
+    ? `space-y-3 rounded-t-3xl border px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 text-white shadow-[0_-10px_40px_rgba(0,0,0,0.35)] ${
+        statusTone === "outbid"
+          ? "border-red-900 bg-red-950 ring-4 ring-red-300/50"
+          : statusTone === "leading"
+            ? "border-emerald-900 bg-emerald-950 ring-4 ring-emerald-300/35"
+            : "border-neutral-900 bg-neutral-950"
+      }`
+    : `space-y-3 rounded-2xl border p-4 ${
+        statusTone === "outbid"
+          ? "border-red-300 bg-red-50 ring-2 ring-red-200"
+          : statusTone === "leading"
+            ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200"
+            : "border-neutral-200 bg-white"
+      }`;
   const inputClassName = mobileSticky
     ? "w-full rounded-xl border border-white/20 bg-white/10 py-3 pl-12 pr-4 text-white placeholder:text-white/45 focus:outline-none focus:ring-2 focus:ring-white/30"
     : "w-full rounded-lg border border-neutral-200 py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-brand-primary/20";
@@ -161,6 +188,26 @@ export default function BidInput({
             {submittingQuick ? "Submitting..." : `Quick Bid ${currency}${minimumNextBid.toLocaleString()}`}
           </ElevareButton>
         )}
+
+        <div className="space-y-2">
+          <p className={`text-xs font-medium ${mobileSticky ? "text-white/65" : "text-neutral-500"}`}>Quick bid actions</p>
+          <div className="flex flex-wrap gap-2">
+            {quickActionAmounts.map((amount, index) => (
+              <button
+                key={`${amount}-${index}`}
+                type="button"
+                className={`min-h-10 rounded-full px-3 text-xs font-semibold transition-colors ${
+                  mobileSticky
+                    ? "bg-white/10 text-white hover:bg-white/15"
+                    : "bg-neutral-100 text-neutral-900 hover:bg-neutral-200"
+                }`}
+                onClick={() => selectQuickAmount(amount)}
+              >
+                {index === 0 ? "Next" : `+${index}`} {currency}{amount.toLocaleString()}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <button
           type="button"
