@@ -67,6 +67,7 @@ var adminTenantPermissions = []Permission{
 	PermissionVATManage,
 	PermissionFinancialView,
 	PermissionSettlementApprove,
+	PermissionInvoiceSend,
 	PermissionBidderApprove,
 	PermissionAuditView,
 	PermissionCMSManage,

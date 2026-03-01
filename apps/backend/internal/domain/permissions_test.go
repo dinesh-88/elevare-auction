@@ -31,6 +31,9 @@ func TestRolePermissions_AdminCanManageStaffInvites(t *testing.T) {
 	if !HasPermission(RoleAdmin, PermissionStaffManage) {
 		t.Fatal("expected admin to have staff.manage")
 	}
+	if !HasPermission(RoleAdmin, PermissionInvoiceSend) {
+		t.Fatal("expected admin to have invoice.send")
+	}
 }
 
 func TestRolePermissions_AccountingCanApproveSettlementButCannotPublishAuction(t *testing.T) {

@@ -55,7 +55,7 @@ export default function Profile() {
   }
 
   return (
-    <section className="page-shell max-w-3xl space-y-6">
+    <section className="page-shell mx-auto w-full max-w-3xl space-y-6">
       <header className="section-head">
         <div>
           <h1 className="section-title">{t("title")}</h1>
@@ -64,7 +64,7 @@ export default function Profile() {
       </header>
 
       <div className="panel space-y-6">
-        <div className="grid gap-x-6 gap-y-4 sm:grid-cols-[160px_minmax(0,1fr)] sm:items-center">
+        <div className="grid gap-x-6 gap-y-4 md:grid-cols-[180px_minmax(0,1fr)] md:items-center">
           <label className="text-sm font-medium text-neutral-700">{t("email")}</label>
           <input value={user.email} readOnly disabled className="min-w-0" />
 
@@ -77,7 +77,7 @@ export default function Profile() {
             ))}
           </select>
 
-          <div className="sm:col-start-2 flex justify-start">
+          <div className="border-t border-neutral-200 pt-2 md:col-start-2 md:border-t-0 md:pt-1">
             <button type="button" className="btn-brand" disabled={saving || locale === user.locale} onClick={() => void save()}>
               {saving ? t("saving") : t("save")}
             </button>
