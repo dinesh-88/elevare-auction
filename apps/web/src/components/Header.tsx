@@ -114,7 +114,7 @@ export default function Header({
       </div>
 
       <div
-        className={`fixed inset-0 top-[73px] z-30 bg-neutral-950/30 transition-opacity duration-200 md:hidden ${
+        className={`fixed inset-0 top-[72px] z-30 bg-neutral-950/30 transition-opacity duration-200 md:hidden ${
           mobileMenuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={closeMenu}
@@ -123,7 +123,7 @@ export default function Header({
 
       <div
         id="mobile-site-menu"
-        className={`fixed inset-x-0 top-[73px] z-40 max-h-[calc(100vh-73px)] overflow-y-auto border-b border-neutral-200 bg-white px-4 pb-6 pt-4 shadow-xl transition-transform duration-200 md:hidden ${
+        className={`absolute inset-x-0 top-full z-50 max-h-[calc(100vh-72px)] overflow-y-auto border-b border-neutral-200 bg-white px-4 pb-6 pt-4 shadow-xl transition-transform duration-200 md:hidden ${
           mobileMenuOpen ? "translate-y-0" : "-translate-y-[110%]"
         }`}
       >
