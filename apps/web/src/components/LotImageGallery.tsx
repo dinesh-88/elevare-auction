@@ -25,7 +25,14 @@ export default function LotImageGallery({
   return (
     <div className={`space-y-4 ${compact ? "max-w-md" : ""}`}>
       <div className={`overflow-hidden rounded-lg bg-neutral-50 ${compact ? "aspect-[4/3]" : "aspect-square"}`}>
-        <img src={images[selectedIndex]} alt={alt} className="h-full w-full object-cover" />
+        <img
+          src={images[selectedIndex]}
+          alt={alt}
+          loading="eager"
+          decoding="async"
+          fetchPriority="high"
+          className="h-full w-full object-cover"
+        />
       </div>
 
       {images.length > 1 ? (
@@ -37,7 +44,7 @@ export default function LotImageGallery({
               onClick={() => setSelectedIndex(index)}
               className={`aspect-square overflow-hidden rounded-md border-2 transition-all ${index === selectedIndex ? "border-neutral-400 ring-1 ring-neutral-300/70" : "border-transparent hover:border-neutral-200"}`}
             >
-              <img src={image} alt={`${alt} - view ${index + 1}`} className="h-full w-full object-cover" />
+              <img src={image} alt={`${alt} - view ${index + 1}`} loading="lazy" decoding="async" className="h-full w-full object-cover" />
             </button>
           ))}
         </div>

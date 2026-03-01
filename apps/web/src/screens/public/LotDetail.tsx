@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Countdown from "../../components/Countdown";
-import BidHistory from "../../components/BidHistory";
 import BidInput from "../../components/BidInput";
 import LotImageGallery from "../../components/LotImageGallery";
 import { api, type Lot, type LotFinancials } from "../../api/client";
@@ -12,6 +11,8 @@ import { useAuctionSocket } from "../../hooks/useAuctionSocket";
 import { useLotSocket } from "../../hooks/useLotSocket";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { currencySymbol } from "../../utils/currency";
+
+const LazyBidHistory = lazy(() => import("../../components/BidHistory"));
 
 interface LotBidHistory {
   bid_id: string;
@@ -52,6 +53,15 @@ export default function LotDetail({
   const [requestToBidStatus, setRequestToBidStatus] = useState<"PENDING" | "APPROVED" | "REJECTED" | null>(null);
   const [extendedBadge, setExtendedBadge] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(true);
+  const [lastPlacedBidAmount, setLastPlacedBidAmount] = useState<number | null>(null);
+  const [outbidNotice, setOutbidNotice] = useState<string | null>(null);
+  const [openSections, setOpenSections] = useState({
+    description: true,
+    details: false,
+    condition: false,
+    provenance: false,
+    history: false,
+  });
 
   const applyBidResponse = (raw: unknown) => {
     const record = (raw ?? {}) as Record<string, unknown>;
@@ -107,7 +117,7 @@ export default function LotDetail({
   }, [routeLotID]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   useEffect(() => {
@@ -228,13 +238,19 @@ export default function LotDetail({
     Boolean(lot?.auction_id),
   );
 
+  const flashBidMessage = (message: string, timeout = 2500) => {
+    setBidMessage(message);
+    window.setTimeout(() => setBidMessage(null), timeout);
+  };
+
   const placeQuickBid = async (nextAmount: number) => {
     if (!routeLotID) return;
     try {
       const res = await api.placeLotBid(routeLotID, { bid_amount_minor: nextAmount, max_bid_minor: null });
       applyBidResponse(res);
-      setBidMessage("Bid placed successfully");
-      window.setTimeout(() => setBidMessage(null), 2500);
+      setLastPlacedBidAmount(nextAmount);
+      setOutbidNotice(null);
+      flashBidMessage("Bid placed successfully");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to place bid";
       if (message.toLowerCase().includes("approval")) {
@@ -252,8 +268,9 @@ export default function LotDetail({
     try {
       const res = await api.placeLotBid(routeLotID, { bid_amount_minor: null, max_bid_minor: maxBidMinor });
       applyBidResponse(res);
-      setBidMessage("Bid placed successfully");
-      window.setTimeout(() => setBidMessage(null), 2500);
+      setLastPlacedBidAmount(maxBidMinor);
+      setOutbidNotice(null);
+      flashBidMessage("Bid placed successfully");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to place bid";
       if (message.toLowerCase().includes("approval")) {
@@ -271,8 +288,7 @@ export default function LotDetail({
     try {
       const res = await api.requestToBid(lot.auction_id);
       setRequestToBidStatus(res.status);
-      setBidMessage(res.status === "APPROVED" ? "You are approved to bid." : "Bid request submitted.");
-      window.setTimeout(() => setBidMessage(null), 3000);
+      flashBidMessage(res.status === "APPROVED" ? "You are approved to bid." : "Bid request submitted.", 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to request approval");
     }
@@ -306,6 +322,16 @@ export default function LotDetail({
     }
   };
 
+  useEffect(() => {
+    if (!lot || lastPlacedBidAmount === null) return;
+    const nextMinimum = lot.current_price + (lot.increment_minor ?? lot.min_increment);
+    if (lot.current_price > lastPlacedBidAmount) {
+      setOutbidNotice(`Another bidder moved ahead. The next minimum is ${currencySymbol(auctionCurrency)}${nextMinimum.toLocaleString()}.`);
+      return;
+    }
+    setOutbidNotice(null);
+  }, [lot, lastPlacedBidAmount, auctionCurrency]);
+
   if (error) return <p className="error">{error}</p>;
   if (!lot) return <p className="text-sm text-neutral-500">Loading lot...</p>;
 
@@ -337,18 +363,42 @@ export default function LotDetail({
     { label: "Medium", value: typeof meta.medium === "string" ? meta.medium : "" },
     { label: "Dimensions", value: typeof meta.dimensions === "string" ? meta.dimensions : "" },
     { label: "Date", value: typeof meta.date === "string" ? meta.date : "" },
-    { label: "Provenance", value: typeof meta.provenance === "string" ? meta.provenance : "" },
   ].filter((d) => d.value !== "");
   const details = dynamicDetails.length > 0 ? dynamicDetails : fallbackDetails;
   const conditionReport = typeof meta.condition_report === "string" ? meta.condition_report : "Condition report will be added soon.";
+  const provenance = typeof meta.provenance === "string" && meta.provenance.trim() ? meta.provenance : "Provenance details will be added soon.";
   const isEnded = lot.status === "ENDED";
   const hammerPrice = lot.hammer_price ?? null;
   const isWinner = Boolean(user && financials?.winner_user && user.id === financials.winner_user);
   const symbol = currencySymbol(auctionCurrency);
   const minimumNextBid = lot.current_price + (lot.increment_minor ?? lot.min_increment);
+  const isLiveForBidding = lot.status === "LIVE" && auctionStatus === "LIVE";
+  const showBidControls = isAuthenticated && !isAdmin && isLiveForBidding;
+  const userBidStatus =
+    !isAuthenticated
+      ? { label: "Sign In to Bid", className: "bg-neutral-100 text-neutral-700" }
+      : isAdmin
+        ? { label: "Organizer View", className: "bg-neutral-100 text-neutral-700" }
+        : isEnded
+          ? { label: isWinner ? "Won Lot" : "Auction Closed", className: isWinner ? "bg-emerald-100 text-emerald-800" : "bg-neutral-100 text-neutral-700" }
+          : !termsAccepted
+            ? { label: "Terms Required", className: "bg-amber-100 text-amber-900" }
+            : requestToBidStatus === "PENDING"
+              ? { label: "Approval Pending", className: "bg-amber-100 text-amber-900" }
+              : outbidNotice
+                ? { label: "Outbid", className: "bg-rose-100 text-rose-800" }
+                : lastPlacedBidAmount !== null && lot.current_price <= lastPlacedBidAmount
+                  ? { label: "Leading", className: "bg-emerald-100 text-emerald-800" }
+                  : isLiveForBidding
+                    ? { label: "Ready to Bid", className: "bg-sky-100 text-sky-800" }
+                    : { label: "Watching", className: "bg-neutral-100 text-neutral-700" };
+
+  const toggleSection = (key: keyof typeof openSections) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   return (
-    <section className="mx-auto max-w-[1440px] space-y-10 px-4 py-6 md:space-y-12 md:px-8 md:py-12">
+    <section className="mx-auto max-w-[1440px] space-y-8 px-4 py-6 pb-32 md:space-y-12 md:px-8 md:py-12 md:pb-12">
       <header className="mb-2">
         <Link to={lot ? `/auction/${lot.auction_id}` : "/auctions"} className="btn-link-brand">
           ← Back to Auction
@@ -361,21 +411,45 @@ export default function LotDetail({
         </div>
 
         <aside className="lg:col-span-3">
-          <div className="space-y-6 lg:sticky lg:top-8">
-            <div>
-              <div className="mb-2 text-sm text-neutral-500">Lot {lot.lot_number}</div>
-              <h1 className="font-heading text-xl sm:text-2xl md:text-3xl">{lot.title}</h1>
-              <div className="mt-2"><StatusBadge status={lot.status} /></div>
+          <div className="space-y-5 lg:sticky lg:top-8">
+            <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="mb-2 text-sm text-neutral-500">Lot {lot.lot_number}</div>
+                  <h1 className="font-heading text-2xl leading-tight sm:text-3xl">{lot.title}</h1>
+                </div>
+                <StatusBadge status={lot.status} />
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${userBidStatus.className}`}>{userBidStatus.label}</span>
+                {extendedBadge ? <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">Extended</span> : null}
+              </div>
             </div>
 
-            <div className="border-t border-neutral-200 pt-6">
-              <p className="mb-1 text-sm text-neutral-500">Current Bid</p>
-              <div className="bid-amount text-[30px] font-heading font-bold leading-none text-brand-primary sm:text-[32px] md:text-[40px]">
-                {symbol}
-                {lot.current_price.toLocaleString()}
+            <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+              <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-1">
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Current Bid</p>
+                  <div className="bid-amount text-[34px] font-heading font-bold leading-none text-brand-primary sm:text-[40px]">
+                    {symbol}
+                    {lot.current_price.toLocaleString()}
+                  </div>
+                </div>
+                {isLiveForBidding && lot.ended_at ? (
+                  <div>
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Time Remaining</p>
+                    <div className="text-xl font-semibold text-neutral-900"><Countdown endTime={lot.ended_at} /></div>
+                  </div>
+                ) : null}
               </div>
+              {outbidNotice ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+                  {outbidNotice}
+                </div>
+              ) : null}
+              {bidMessage ? <p className="mt-3 text-sm text-green-700">{bidMessage}</p> : null}
               {isEnded && hammerPrice !== null ? (
-                <div className="mt-3 space-y-1 text-sm">
+                <div className="mt-4 space-y-1 border-t border-neutral-200 pt-4 text-sm">
                   <p className="font-medium text-neutral-900">
                     Winning Bid (Hammer): {symbol}
                     {hammerPrice.toLocaleString()}
@@ -386,23 +460,19 @@ export default function LotDetail({
               ) : null}
             </div>
 
-            {lot.status === "LIVE" && auctionStatus === "LIVE" && lot.ended_at ? (
-              <div className="border-t border-neutral-200 pt-6">
-                <p className="mb-1 text-sm text-neutral-500">Ends In</p>
-                <div className="text-xl"><Countdown endTime={lot.ended_at} /></div>
-                {extendedBadge ? <p className="mt-2 text-sm font-medium text-amber-600">Auction Extended</p> : null}
-              </div>
-            ) : null}
-
-            <div className="border-t border-neutral-200 pt-6">
-              {isAuthenticated && !isAdmin && lot.status === "LIVE" && auctionStatus === "LIVE" ? (
+            <div className={`hidden rounded-3xl border bg-white p-5 shadow-sm md:block ${outbidNotice ? "border-amber-300 ring-2 ring-amber-200" : "border-neutral-200"}`}>
+              {showBidControls ? (
                 <>
                   {termsAccepted ? (
                     <>
-                      <p className="mb-1 text-sm text-neutral-500">
-                        Minimum Next Bid: {symbol}{minimumNextBid.toLocaleString()}
-                      </p>
-                      <BidInput minimumNextBid={minimumNextBid} currency={symbol} onQuickBid={placeQuickBid} onMaxBid={placeMaxBid} />
+                      <BidInput
+                        minimumNextBid={minimumNextBid}
+                        currency={symbol}
+                        onQuickBid={placeQuickBid}
+                        onMaxBid={placeMaxBid}
+                        highlight={Boolean(outbidNotice)}
+                        outbidNotice={outbidNotice}
+                      />
                       {requestToBidStatus !== "APPROVED" ? (
                         <div className="mt-3">
                           <button type="button" className="btn-secondary" onClick={requestToBid}>
@@ -429,47 +499,57 @@ export default function LotDetail({
               ) : (
                 <p className="text-sm">Sign in to place a bid.</p>
               )}
-              {bidMessage ? <p className="mt-2 text-sm text-green-700">{bidMessage}</p> : null}
             </div>
 
-            <div className="border-t border-neutral-200 pt-6">
-              <BidHistory bids={formattedHistory} currency={symbol} />
+            <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+              <AccordionSection title="Bid History" subtitle={`${formattedHistory.length} bids`} isOpen={openSections.history} onToggle={() => toggleSection("history")}>
+                <Suspense fallback={<p className="text-sm text-neutral-500">Loading bid history...</p>}>
+                  <LazyBidHistory bids={formattedHistory} currency={symbol} />
+                </Suspense>
+              </AccordionSection>
             </div>
           </div>
         </aside>
       </div>
 
-      <div className="max-w-4xl space-y-8 md:space-y-12">
-        <div>
-          <h2 className="mb-4 font-heading text-2xl">Description</h2>
-          <p className="leading-relaxed text-neutral-700">{lot.description}</p>
+      <div className="max-w-4xl space-y-4 md:space-y-5">
+        <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <AccordionSection title="Description" isOpen={openSections.description} onToggle={() => toggleSection("description")}>
+            <p className="leading-relaxed text-neutral-700">{lot.description}</p>
+          </AccordionSection>
         </div>
 
-        <div className="rounded-lg bg-neutral-50 p-4 md:p-6">
-          <h3 className="mb-3 text-base font-medium md:text-lg">Details</h3>
-          {details.length > 0 ? (
-            <dl className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {details.map((detail, idx) => (
-                <div key={`${detail.label}-${idx}`}>
-                  <dt className="text-sm text-neutral-500">{detail.label}</dt>
-                  <dd className="text-neutral-900">{detail.value}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="text-neutral-700">Details will be added soon.</p>
-          )}
+        <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <AccordionSection title="Details" isOpen={openSections.details} onToggle={() => toggleSection("details")}>
+            {details.length > 0 ? (
+              <dl className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {details.map((detail, idx) => (
+                  <div key={`${detail.label}-${idx}`}>
+                    <dt className="text-sm text-neutral-500">{detail.label}</dt>
+                    <dd className="text-neutral-900">{detail.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="text-neutral-700">Details will be added soon.</p>
+            )}
+          </AccordionSection>
         </div>
 
-        <div>
-          <h2 className="mb-4 font-heading text-2xl">Condition Report</h2>
-          <div className="rounded-lg bg-neutral-50 p-4 md:p-6">
+        <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <AccordionSection title="Condition" isOpen={openSections.condition} onToggle={() => toggleSection("condition")}>
             <p className="leading-relaxed text-neutral-700">{conditionReport}</p>
-          </div>
+          </AccordionSection>
+        </div>
+
+        <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <AccordionSection title="Provenance" isOpen={openSections.provenance} onToggle={() => toggleSection("provenance")}>
+            <p className="leading-relaxed text-neutral-700">{provenance}</p>
+          </AccordionSection>
         </div>
 
         {isEnded && canViewFinancials && financials ? (
-          <div>
+          <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
             <h2 className="mb-4 font-heading text-2xl">{isAdmin ? "Settlement Breakdown" : isWinner ? "Your Settlement Breakdown" : "Financial Breakdown"}</h2>
             <div className="rounded-lg bg-neutral-50 p-4 md:p-6">
               {financials.hammer_price === null || financials.hammer_price === undefined ? (
@@ -527,42 +607,48 @@ export default function LotDetail({
         ) : null}
 
         {relatedLots.length > 0 ? (
-          <div>
+          <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
             <h2 className="mb-4 font-heading text-2xl">Other Lots in This Auction</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {relatedLots.map((l) => {
-                const lotImages = l.metadata?.images?.length
-                  ? l.metadata.images
-                  : l.metadata?.image
-                    ? [l.metadata.image]
+              {relatedLots.map((relatedLot) => {
+                const lotImages = relatedLot.metadata?.images?.length
+                  ? relatedLot.metadata.images
+                  : relatedLot.metadata?.image
+                    ? [relatedLot.metadata.image]
                     : [];
                 const image = lotImages[0];
 
                 return (
                   <Link
-                    key={l.id}
-                    to={`/lots/${l.id}`}
-                    className="group block overflow-hidden rounded-lg border border-neutral-200 bg-white outline-none transition-shadow hover:shadow-md focus-visible:border-neutral-400 focus-visible:ring-2 focus-visible:ring-neutral-300/70"
+                    key={relatedLot.id}
+                    to={`/lots/${relatedLot.id}`}
+                    className="group block overflow-hidden rounded-2xl border border-neutral-200 bg-white outline-none transition-shadow hover:shadow-md focus-visible:border-neutral-400 focus-visible:ring-2 focus-visible:ring-neutral-300/70"
                   >
                     <div className="aspect-[4/3] overflow-hidden bg-neutral-100">
                       {image ? (
-                        <img src={image} alt={l.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                        <img
+                          src={image}
+                          alt={relatedLot.title}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
                       ) : (
                         <div className="grid h-full place-content-center text-sm text-neutral-500">Image coming soon</div>
                       )}
                     </div>
 
                     <div className="space-y-3 p-5 md:p-6">
-                      <div className="text-sm text-neutral-500">Lot {l.lot_number}</div>
-                      <h3 className="font-heading text-lg font-medium text-neutral-900 md:text-xl">{l.title}</h3>
-                      <div className="inline-flex"><StatusBadge status={l.status} /></div>
+                      <div className="text-sm text-neutral-500">Lot {relatedLot.lot_number}</div>
+                      <h3 className="font-heading text-lg font-medium text-neutral-900 md:text-xl">{relatedLot.title}</h3>
+                      <div className="inline-flex"><StatusBadge status={relatedLot.status} /></div>
                       <div className="bid-amount text-xl font-heading text-brand-primary md:text-2xl">
                         {symbol}
-                        {l.current_price.toLocaleString()}
+                        {relatedLot.current_price.toLocaleString()}
                       </div>
-                      {l.ended_at ? (
+                      {relatedLot.ended_at ? (
                         <div className="text-sm text-neutral-500">
-                          Ends in <Countdown endTime={l.ended_at} />
+                          Ends in <Countdown endTime={relatedLot.ended_at} />
                         </div>
                       ) : null}
                       <div className="flex items-center gap-2 pt-1 text-brand-primary">
@@ -577,6 +663,56 @@ export default function LotDetail({
           </div>
         ) : null}
       </div>
+
+      {showBidControls ? (
+        <div className="fixed inset-x-0 bottom-0 z-[60] md:hidden">
+          {termsAccepted ? (
+            <BidInput
+              minimumNextBid={minimumNextBid}
+              currency={symbol}
+              onQuickBid={placeQuickBid}
+              onMaxBid={placeMaxBid}
+              mobileSticky
+              highlight={Boolean(outbidNotice)}
+              outbidNotice={outbidNotice}
+            />
+          ) : (
+            <div className="rounded-t-3xl border border-neutral-900 bg-neutral-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 text-white shadow-[0_-10px_40px_rgba(0,0,0,0.35)]">
+              <p className="text-sm text-white/80">Review the current auction terms before you place a bid.</p>
+              <button type="button" className="mt-3 min-h-12 w-full rounded-xl bg-amber-300 px-4 font-semibold text-neutral-950" onClick={redirectToTerms}>
+                Review Terms
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function AccordionSection({
+  title,
+  subtitle,
+  isOpen,
+  onToggle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <button type="button" className="flex w-full items-center justify-between gap-4 text-left" onClick={onToggle} aria-expanded={isOpen}>
+        <div>
+          <h2 className="font-heading text-xl text-neutral-900">{title}</h2>
+          {subtitle ? <p className="mt-1 text-sm text-neutral-500">{subtitle}</p> : null}
+        </div>
+        <span className="text-lg text-neutral-500">{isOpen ? "−" : "+"}</span>
+      </button>
+      {isOpen ? <div className="mt-4">{children}</div> : null}
+    </div>
   );
 }

@@ -68,6 +68,7 @@ export default function BidderDashboard({ invoicesOnly = false }: Props) {
         .sort((a, b) => new Date(b.paid_at ?? b.issued_at).getTime() - new Date(a.paid_at ?? a.issued_at).getTime()),
     [settlements],
   );
+  const primaryInvoice = visibleInvoices[0] ?? null;
 
   if (authLoading) {
     return <section className="mx-auto max-w-[1440px] px-4 py-10 md:px-8 md:py-12"><p className="text-sm text-neutral-500">Loading your dashboard...</p></section>;
@@ -170,24 +171,51 @@ export default function BidderDashboard({ invoicesOnly = false }: Props) {
             </select>
           </div>
         </div>
+        {invoicesOnly && primaryInvoice ? (
+          <div className="mb-5 rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Next Invoice</p>
+            <h3 className="mt-2 font-heading text-2xl text-neutral-900">{primaryInvoice.lot_summary}</h3>
+            <div className="mt-4 text-4xl font-semibold tracking-tight text-brand-900">
+              {formatMoney(primaryInvoice.currency, primaryInvoice.total_due_minor)}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <StatusBadge status={primaryInvoice.payment_status} />
+              <StatusBadge status={primaryInvoice.settlement_status} />
+            </div>
+            {primaryInvoice.settlement_status === "invoice_sent" &&
+            (primaryInvoice.payment_status === "unpaid" || primaryInvoice.payment_status === "payment_pending") &&
+            primaryInvoice.checkout_url ? (
+              <ElevareButton className="mt-5 min-h-12 w-full" onClick={() => window.open(primaryInvoice.checkout_url ?? "", "_blank", "noopener,noreferrer")}>
+                Pay Now
+              </ElevareButton>
+            ) : null}
+          </div>
+        ) : null}
         {visibleInvoices.length === 0 ? <p className="text-sm text-neutral-500">No invoices match this filter.</p> : null}
         <div className="space-y-3">
           {visibleInvoices.map((item) => (
-            <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 p-4">
-              <div>
-                <div className="font-medium text-neutral-900">{item.invoice_number}</div>
-                <div className="text-sm text-neutral-500">{item.lot_summary}</div>
-                <div className="text-sm text-neutral-500">
-                  {item.currency} {(item.total_due_minor / 100).toFixed(2)}
+            <div key={item.id} className="rounded-2xl border border-neutral-200 bg-white p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm text-neutral-500">{item.invoice_number}</div>
+                  <div className="mt-1 font-medium text-neutral-900">{item.lot_summary}</div>
+                  <div className="mt-3 text-3xl font-semibold tracking-tight text-brand-900">
+                    {formatMoney(item.currency, item.total_due_minor)}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <StatusBadge status={item.payment_status} />
-                {item.settlement_status === "invoice_sent" && (item.payment_status === "unpaid" || item.payment_status === "payment_pending") && item.checkout_url ? (
-                  <ElevareButton onClick={() => window.open(item.checkout_url ?? "", "_blank", "noopener,noreferrer")}>
-                    Pay Now
-                  </ElevareButton>
-                ) : null}
+                <div className="flex flex-col items-stretch gap-3 sm:items-end">
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge status={item.payment_status} />
+                    <StatusBadge status={item.settlement_status} />
+                  </div>
+                  {item.settlement_status === "invoice_sent" &&
+                  (item.payment_status === "unpaid" || item.payment_status === "payment_pending") &&
+                  item.checkout_url ? (
+                    <ElevareButton className="min-h-12 w-full sm:w-auto" onClick={() => window.open(item.checkout_url ?? "", "_blank", "noopener,noreferrer")}>
+                      Pay Now
+                    </ElevareButton>
+                  ) : null}
+                </div>
               </div>
             </div>
           ))}
@@ -218,4 +246,17 @@ export default function BidderDashboard({ invoicesOnly = false }: Props) {
       </section>
     </section>
   );
+}
+
+function formatMoney(currency = "USD", minor = 0): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(minor / 100);
+  } catch {
+    return `${currency} ${(minor / 100).toFixed(2)}`;
+  }
 }

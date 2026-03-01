@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { resolveWsBase } from "./wsBase";
 
 interface AuctionStatusEvent {
@@ -23,23 +23,53 @@ export function useAuctionSocket(
   enabled = true,
   onBidEvent?: (event: AuctionBidEvent) => void,
 ) {
+  const statusHandlerRef = useRef(onStatusEvent);
+  const bidHandlerRef = useRef(onBidEvent);
+
+  useEffect(() => {
+    statusHandlerRef.current = onStatusEvent;
+    bidHandlerRef.current = onBidEvent;
+  }, [onStatusEvent, onBidEvent]);
+
   useEffect(() => {
     if (!auctionId || !enabled) return;
 
     const base = resolveWsBase();
+    let ws: WebSocket | null = null;
+    let cancelled = false;
+    let idleId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    const ws = new WebSocket(`${base}/auctions/${auctionId}/ws`);
+    const connect = () => {
+      if (cancelled) return;
+      ws = new WebSocket(`${base}/auctions/${auctionId}/ws`);
 
-    ws.onmessage = (evt) => {
-      try {
-        const data = JSON.parse(evt.data) as { type?: string } & AuctionStatusEvent & AuctionBidEvent;
-        if (data.type === "auction_status_changed") onStatusEvent(data);
-        if (data.type === "bid.created" && onBidEvent) onBidEvent(data);
-      } catch {
-        // ignore invalid socket payloads
-      }
+      ws.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data) as { type?: string } & AuctionStatusEvent & AuctionBidEvent;
+          if (data.type === "auction_status_changed") statusHandlerRef.current(data);
+          if (data.type === "bid.created" && bidHandlerRef.current) bidHandlerRef.current(data);
+        } catch {
+          // ignore invalid socket payloads
+        }
+      };
     };
 
-    return () => ws.close();
-  }, [auctionId, enabled, onBidEvent, onStatusEvent]);
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(connect, { timeout: 1200 });
+    } else {
+      timeoutId = globalThis.setTimeout(connect, 0);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleId !== null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      ws?.close();
+    };
+  }, [auctionId, enabled]);
 }
