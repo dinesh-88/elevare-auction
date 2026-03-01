@@ -325,7 +325,7 @@ func (r *InvoiceRepo) ListAuctionInvoices(ctx context.Context, tenantID, auction
 
 	args = append(args, limit, offset)
 	listSQL := `
-SELECT i.id, i.invoice_number,
+SELECT i.id, i.lot_id, i.invoice_number,
        split_part(u.email, '@', 1) AS bidder_name,
        u.email AS bidder_email,
        l.title AS lot_summary,
@@ -360,6 +360,7 @@ LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
 		var row domain.SettlementInvoiceRow
 		if err := rows.Scan(
 			&row.ID,
+			&row.LotID,
 			&row.InvoiceNumber,
 			&row.BidderName,
 			&row.BidderEmail,
@@ -415,7 +416,7 @@ func (r *InvoiceRepo) ListTenantInvoices(ctx context.Context, tenantID uuid.UUID
 
 	args = append(args, limit, offset)
 	listSQL := `
-SELECT i.id, i.invoice_number,
+SELECT i.id, i.lot_id, i.invoice_number,
        split_part(u.email, '@', 1) AS bidder_name,
        u.email AS bidder_email,
        l.title AS lot_summary,
@@ -450,6 +451,7 @@ LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
 		var row domain.SettlementInvoiceRow
 		if err := rows.Scan(
 			&row.ID,
+			&row.LotID,
 			&row.InvoiceNumber,
 			&row.BidderName,
 			&row.BidderEmail,
@@ -505,7 +507,7 @@ func (r *InvoiceRepo) ListWinnerInvoices(ctx context.Context, tenantID, userID u
 
 	args = append(args, limit, offset)
 	listSQL := `
-SELECT i.id, i.invoice_number,
+SELECT i.id, i.lot_id, i.invoice_number,
        split_part(u.email, '@', 1) AS bidder_name,
        u.email AS bidder_email,
        l.title AS lot_summary,
@@ -540,6 +542,7 @@ LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
 		var row domain.SettlementInvoiceRow
 		if err := rows.Scan(
 			&row.ID,
+			&row.LotID,
 			&row.InvoiceNumber,
 			&row.BidderName,
 			&row.BidderEmail,
@@ -874,7 +877,7 @@ func (r *InvoiceRepo) StreamAuctionInvoices(ctx context.Context, tenantID, aucti
 	}
 
 	q := `
-SELECT i.id, i.invoice_number,
+SELECT i.id, i.lot_id, i.invoice_number,
        split_part(u.email, '@', 1) AS bidder_name,
        u.email AS bidder_email,
        l.title AS lot_summary,
@@ -906,6 +909,7 @@ ORDER BY i.issued_at DESC, i.id DESC`
 		var row domain.SettlementInvoiceRow
 		if err := rows.Scan(
 			&row.ID,
+			&row.LotID,
 			&row.InvoiceNumber,
 			&row.BidderName,
 			&row.BidderEmail,

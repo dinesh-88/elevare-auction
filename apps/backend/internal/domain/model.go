@@ -579,6 +579,7 @@ type AuctionSettlementSummary struct {
 
 type SettlementInvoiceRow struct {
 	ID               uuid.UUID
+	LotID            uuid.UUID
 	InvoiceNumber    string
 	BidderName       string
 	BidderEmail      string

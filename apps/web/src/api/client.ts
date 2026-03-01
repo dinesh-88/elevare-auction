@@ -284,6 +284,7 @@ export interface AuctionSettlementSummary {
 
 export interface SettlementInvoiceRow {
   id: string;
+  lot_id: string;
   invoice_number: string;
   bidder_name: string;
   bidder_email: string;
@@ -350,6 +351,7 @@ function normalizeSettlementInvoiceRow(raw: unknown): SettlementInvoiceRow {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
     id: String(r.id ?? r.ID ?? ""),
+    lot_id: String(r.lot_id ?? r.LotID ?? ""),
     invoice_number: String(r.invoice_number ?? r.InvoiceNumber ?? ""),
     bidder_name: String(r.bidder_name ?? r.BidderName ?? ""),
     bidder_email: String(r.bidder_email ?? r.BidderEmail ?? ""),
