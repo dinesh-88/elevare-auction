@@ -315,6 +315,17 @@ type AuctionBidderAdminRow struct {
 	DecidedAt          *time.Time                 `json:"decided_at,omitempty"`
 }
 
+type BidderAuctionParticipation struct {
+	AuctionID      uuid.UUID      `json:"auction_id"`
+	Title          string         `json:"title"`
+	Status         AuctionStatus  `json:"status"`
+	ApprovalStatus ApprovalStatus `json:"approval_status"`
+	StartTime      time.Time      `json:"start_time"`
+	EndTime        time.Time      `json:"end_time"`
+	RequestedAt    time.Time      `json:"requested_at"`
+	ApprovedAt     *time.Time     `json:"approved_at,omitempty"`
+}
+
 type AuctionBidderRiskLevel string
 
 const (

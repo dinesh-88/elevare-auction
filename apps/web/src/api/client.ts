@@ -303,6 +303,17 @@ export interface SettlementInvoiceRow {
   checkout_url?: string | null;
 }
 
+export interface BidderAuctionParticipation {
+  auction_id: string;
+  title: string;
+  status: "DRAFT" | "SCHEDULED" | "LIVE" | "PAUSED" | "ENDED" | "CANCELLED";
+  approval_status: "PENDING" | "APPROVED" | "REJECTED";
+  start_time: string;
+  end_time: string;
+  requested_at: string;
+  approved_at?: string | null;
+}
+
 function normalizeSettlementSummary(raw: unknown): AuctionSettlementSummary {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
@@ -356,6 +367,20 @@ function normalizeSettlementInvoiceRow(raw: unknown): SettlementInvoiceRow {
     payment_reference: (r.payment_reference ?? r.PaymentReference ?? null) as string | null,
     cancel_reason: (r.cancel_reason ?? r.CancelReason ?? null) as string | null,
     checkout_url: (r.checkout_url ?? r.CheckoutURL ?? null) as string | null,
+  };
+}
+
+function normalizeBidderAuctionParticipation(raw: unknown): BidderAuctionParticipation {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    auction_id: String(r.auction_id ?? r.AuctionID ?? ""),
+    title: String(r.title ?? r.Title ?? ""),
+    status: String(r.status ?? r.Status ?? "SCHEDULED") as BidderAuctionParticipation["status"],
+    approval_status: String(r.approval_status ?? r.ApprovalStatus ?? "PENDING") as BidderAuctionParticipation["approval_status"],
+    start_time: String(r.start_time ?? r.StartTime ?? ""),
+    end_time: String(r.end_time ?? r.EndTime ?? ""),
+    requested_at: String(r.requested_at ?? r.RequestedAt ?? ""),
+    approved_at: (r.approved_at ?? r.ApprovedAt ?? null) as string | null,
   };
 }
 
@@ -1279,6 +1304,25 @@ export const api = {
   downloadInvoicePDF: (invoiceId: string) => requestBinary(`/invoices/${invoiceId}/pdf`),
   listLotBids: async (lotId: string) => (await request<unknown[]>(`/lots/${lotId}/bids`)).map(normalizeLotBid),
   listMyWinningLots: async () => (await request<unknown[]>("/me/winnings")).map(normalizeLot),
+  listMySettlements: (
+    tenant: string,
+    params?: { status?: "unpaid" | "payment_pending" | "paid" | "refunded" | "partially_refunded"; search?: string; limit?: number; offset?: number },
+  ) => {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    if (params?.search) search.set("search", params.search);
+    search.set("limit", String(params?.limit ?? 50));
+    search.set("offset", String(params?.offset ?? 0));
+    return request<{ items: unknown[]; total: number; limit: number; offset: number }>(
+      `/me/${encodeURIComponent(tenant)}/settlements?${search.toString()}`,
+    ).then((res) => ({
+      ...res,
+      items: (res.items ?? []).map(normalizeSettlementInvoiceRow),
+    }));
+  },
+  listMyActiveAuctions: async (tenant: string) =>
+    (await request<unknown[]>(`/me/${encodeURIComponent(tenant)}/active-auctions`)).map(normalizeBidderAuctionParticipation),
+  listMyWatchlist: async (tenant: string) => request<unknown[]>(`/me/${encodeURIComponent(tenant)}/watchlist`),
   updateMe: (payload: { locale: User["locale"] }) => request<{ user: User }>("/me", { method: "PATCH", body: JSON.stringify(payload) }),
   register: (payload: { email: string; password: string }) =>
     request<JsonRecord>("/auth/register", { method: "POST", body: JSON.stringify(payload) }),

@@ -136,6 +136,9 @@ func (f *fakeBidderApprovalRepo) UpdateTenantBidder(ctx context.Context, tenantI
 	f.profiles[userID] = *p
 	return p, nil
 }
+func (f *fakeBidderApprovalRepo) ListUserAuctionParticipations(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.BidderAuctionParticipation, error) {
+	return nil, nil
+}
 func (f *fakeBidderApprovalRepo) RequestAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, now time.Time) (*domain.AuctionBidderApproval, bool, error) {
 	f.requestCalls++
 	if f.approvals == nil {

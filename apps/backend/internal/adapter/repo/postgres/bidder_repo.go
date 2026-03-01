@@ -101,6 +101,40 @@ RETURNING id, tenant_id, user_id, phone, company_name, address_line1, address_li
 	return scanTenantBidder(r.DB.QueryRow(ctx, q, tenantID, userID, current.Phone, current.CompanyName, current.AddressLine1, current.AddressLine2, current.City, current.PostalCode, current.Country, current.Status, current.RiskLevel, current.InternalNotes))
 }
 
+func (r *BidderRepo) ListUserAuctionParticipations(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.BidderAuctionParticipation, error) {
+	const q = `
+SELECT a.id, a.title, a.status, aba.status, a.start_time, a.end_time, aba.created_at, aba.approved_at
+FROM auction_bidder_approvals aba
+JOIN auctions a ON a.id = aba.auction_id AND a.tenant_id = aba.tenant_id
+WHERE aba.tenant_id = $1
+  AND aba.user_id = $2
+ORDER BY a.end_time DESC, a.created_at DESC`
+	rows, err := r.DB.Query(ctx, q, tenantID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]domain.BidderAuctionParticipation, 0)
+	for rows.Next() {
+		var row domain.BidderAuctionParticipation
+		if err := rows.Scan(
+			&row.AuctionID,
+			&row.Title,
+			&row.Status,
+			&row.ApprovalStatus,
+			&row.StartTime,
+			&row.EndTime,
+			&row.RequestedAt,
+			&row.ApprovedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
 func (r *BidderRepo) RequestAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, now time.Time) (*domain.AuctionBidderApproval, bool, error) {
 	const q = `
 INSERT INTO auction_bidder_approvals (

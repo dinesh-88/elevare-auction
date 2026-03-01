@@ -135,6 +135,18 @@ func (uc *InvoiceUseCase) ListReconciliation(ctx context.Context, tenantID uuid.
 	})
 }
 
+func (uc *InvoiceUseCase) ListWinnerSettlements(ctx context.Context, tenantID, userID uuid.UUID, filter InvoiceListFilter) ([]domain.SettlementInvoiceRow, int64, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, 0, err
+	}
+	return uc.Invoices.ListWinnerInvoices(ctx, tenantID, userID, port.ListAuctionInvoicesFilter{
+		Status: filter.Status,
+		Search: filter.Search,
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	})
+}
+
 func (uc *InvoiceUseCase) StreamAuctionInvoices(ctx context.Context, tenantID, auctionID uuid.UUID, filter InvoiceStreamFilter, fn func(domain.SettlementInvoiceRow) error) error {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return err

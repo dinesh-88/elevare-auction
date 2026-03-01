@@ -475,6 +475,96 @@ LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
 	return out, total, rows.Err()
 }
 
+func (r *InvoiceRepo) ListWinnerInvoices(ctx context.Context, tenantID, userID uuid.UUID, filter port.ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error) {
+	limit := filter.Limit
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	search := strings.TrimSpace(filter.Search)
+
+	where := "WHERE i.tenant_id = $1 AND i.winner_user_id = $2"
+	args := []any{tenantID, userID}
+	if filter.Status != nil {
+		args = append(args, *filter.Status)
+		where += fmt.Sprintf(" AND i.payment_status = $%d", len(args))
+	}
+	if search != "" {
+		args = append(args, "%"+search+"%")
+		where += fmt.Sprintf(" AND (i.invoice_number ILIKE $%d OR l.title ILIKE $%d)", len(args), len(args))
+	}
+
+	countSQL := `SELECT COUNT(*)::bigint FROM invoices i JOIN lots l ON l.id = i.lot_id ` + where
+	var total int64
+	if err := r.DB.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	args = append(args, limit, offset)
+	listSQL := `
+SELECT i.id, i.invoice_number,
+       split_part(u.email, '@', 1) AS bidder_name,
+       u.email AS bidder_email,
+       l.title AS lot_summary,
+       i.hammer_price_minor,
+       i.fees_total_minor,
+       i.tax_total_minor,
+       i.total_due_minor,
+       i.currency,
+       i.settlement_status,
+       i.payment_status,
+       i.issued_at,
+       i.invoice_sent_at,
+       i.paid_at,
+       i.payment_reference,
+       i.cancel_reason,
+       i.stripe_checkout_url
+FROM invoices i
+JOIN users u ON u.id = i.winner_user_id AND u.tenant_id = i.tenant_id
+JOIN lots l ON l.id = i.lot_id
+` + where + fmt.Sprintf(`
+ORDER BY COALESCE(i.paid_at, i.issued_at) DESC, i.id DESC
+LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
+
+	rows, err := r.DB.Query(ctx, listSQL, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	out := make([]domain.SettlementInvoiceRow, 0, limit)
+	for rows.Next() {
+		var row domain.SettlementInvoiceRow
+		if err := rows.Scan(
+			&row.ID,
+			&row.InvoiceNumber,
+			&row.BidderName,
+			&row.BidderEmail,
+			&row.LotSummary,
+			&row.HammerMinor,
+			&row.FeesMinor,
+			&row.TaxMinor,
+			&row.TotalDueMinor,
+			&row.Currency,
+			&row.SettlementStatus,
+			&row.PaymentStatus,
+			&row.IssuedAt,
+			&row.InvoiceSentAt,
+			&row.PaidAt,
+			&row.PaymentReference,
+			&row.CancelReason,
+			&row.CheckoutURL,
+		); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, row)
+	}
+	return out, total, rows.Err()
+}
+
 func (r *InvoiceRepo) MarkPaid(ctx context.Context, tenantID, invoiceID uuid.UUID, paymentReference *string, now time.Time) (*domain.Invoice, error) {
 	if paymentReference != nil {
 		trimmed := strings.TrimSpace(*paymentReference)

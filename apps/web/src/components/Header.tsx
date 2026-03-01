@@ -46,6 +46,11 @@ export default function Header({
             {t("auctions")}
           </Link>
           {isAuthenticated && !isAdmin ? (
+            <Link to="/dashboard" className="text-neutral-900 no-underline hover:text-neutral-500">
+              Dashboard
+            </Link>
+          ) : null}
+          {isAuthenticated && !isAdmin ? (
             <Link to="/my-winnings" className="text-neutral-900 no-underline hover:text-neutral-500">
               {t("myWinnings")}
             </Link>
@@ -96,6 +101,11 @@ export default function Header({
               <Link to="/auctions" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
                 {t("auctions")}
               </Link>
+              {isAuthenticated && !isAdmin ? (
+                <Link to="/dashboard" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
+                  Dashboard
+                </Link>
+              ) : null}
               {isAuthenticated && !isAdmin ? (
                 <Link to="/my-winnings" className="py-1 text-neutral-900 no-underline" onClick={closeMenu}>
                   {t("myWinnings")}

@@ -679,6 +679,92 @@ func (h *Handler) ListMyWinningLots(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (h *Handler) ListMySettlements(w http.ResponseWriter, r *http.Request) {
+	tenant, claims, err := h.resolveSelfServiceTenant(r)
+	if err != nil {
+		status := http.StatusUnauthorized
+		if err.Error() == "forbidden" {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	filter, err := parseInvoiceListFilter(r)
+	if err != nil {
+		writeErrorText(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	rows, total, err := h.Invoice.ListWinnerSettlements(r.Context(), tenant.ID, claims.UserID, filter)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err == usecase.ErrForbidden {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":  rows,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
+}
+
+func (h *Handler) ListMyActiveAuctions(w http.ResponseWriter, r *http.Request) {
+	tenant, claims, err := h.resolveSelfServiceTenant(r)
+	if err != nil {
+		status := http.StatusUnauthorized
+		if err.Error() == "forbidden" {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	rows, err := h.Bidder.ListMyAuctionParticipations(r.Context(), tenant.ID, claims.UserID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err == usecase.ErrForbidden {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
+func (h *Handler) ListMyWatchlist(w http.ResponseWriter, r *http.Request) {
+	_, _, err := h.resolveSelfServiceTenant(r)
+	if err != nil {
+		status := http.StatusUnauthorized
+		if err.Error() == "forbidden" {
+			status = http.StatusForbidden
+		}
+		writeErrorText(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, http.StatusOK, []any{})
+}
+
+func (h *Handler) resolveSelfServiceTenant(r *http.Request) (*domain.Tenant, *port.TokenClaims, error) {
+	tenant, _ := middleware.TenantFromContext(r.Context())
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok || tenant == nil {
+		return nil, nil, usecase.ErrUnauthorized
+	}
+	alias := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "tenant")))
+	if alias == "" || alias == "current" {
+		return tenant, claims, nil
+	}
+	if strings.EqualFold(alias, tenant.Subdomain) {
+		return tenant, claims, nil
+	}
+	if tenant.CustomDomain != nil && strings.EqualFold(alias, strings.TrimSpace(*tenant.CustomDomain)) {
+		return tenant, claims, nil
+	}
+	return nil, nil, usecase.ErrForbidden
+}
+
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := middleware.TenantFromContext(r.Context())
 	var req struct {

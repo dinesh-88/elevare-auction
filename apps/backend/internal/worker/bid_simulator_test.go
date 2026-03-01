@@ -216,6 +216,9 @@ func (f *fakeBidSimBidderRepo) GetTenantBidder(ctx context.Context, tenantID, us
 func (f *fakeBidSimBidderRepo) UpdateTenantBidder(ctx context.Context, tenantID, userID uuid.UUID, in port.UpdateTenantBidderInput) (*domain.TenantBidderProfile, error) {
 	return nil, errors.New("unused")
 }
+func (f *fakeBidSimBidderRepo) ListUserAuctionParticipations(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.BidderAuctionParticipation, error) {
+	return nil, errors.New("unused")
+}
 func (f *fakeBidSimBidderRepo) RequestAuctionApproval(ctx context.Context, tenantID, auctionID, userID uuid.UUID, now time.Time) (*domain.AuctionBidderApproval, bool, error) {
 	return nil, false, errors.New("unused")
 }

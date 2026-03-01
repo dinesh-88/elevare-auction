@@ -45,6 +45,9 @@ func (f *fakeInvoiceSettlementRepo) ListAuctionInvoices(ctx context.Context, ten
 func (f *fakeInvoiceSettlementRepo) ListTenantInvoices(ctx context.Context, tenantID uuid.UUID, filter port.ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error) {
 	return nil, 0, nil
 }
+func (f *fakeInvoiceSettlementRepo) ListWinnerInvoices(ctx context.Context, tenantID, userID uuid.UUID, filter port.ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error) {
+	return nil, 0, nil
+}
 func (f *fakeInvoiceSettlementRepo) ApproveSettlement(ctx context.Context, tenantID, invoiceID uuid.UUID, now time.Time) (*domain.Invoice, error) {
 	return &domain.Invoice{ID: invoiceID, TenantID: tenantID, SettlementStatus: domain.InvoiceSettlementApproved}, nil
 }

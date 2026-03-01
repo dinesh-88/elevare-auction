@@ -108,6 +108,16 @@ func (uc *BidderUseCase) RequestToBid(ctx context.Context, tenantID, auctionID, 
 	return approval, nil
 }
 
+func (uc *BidderUseCase) ListMyAuctionParticipations(ctx context.Context, tenantID, userID uuid.UUID) ([]domain.BidderAuctionParticipation, error) {
+	if err := ensureTenantScope(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	if uc.Bidders == nil {
+		return nil, ErrValidation
+	}
+	return uc.Bidders.ListUserAuctionParticipations(ctx, tenantID, userID)
+}
+
 func (uc *BidderUseCase) ListAuctionBidders(ctx context.Context, tenantID, auctionID uuid.UUID, filter port.ListAuctionBiddersFilter) ([]domain.AuctionBidderAdminRow, error) {
 	if err := ensureTenantScope(ctx, tenantID); err != nil {
 		return nil, err

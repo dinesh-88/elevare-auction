@@ -43,6 +43,9 @@ func (r *csvTestInvoiceRepo) ListAuctionInvoices(ctx context.Context, tenantID, 
 func (r *csvTestInvoiceRepo) ListTenantInvoices(ctx context.Context, tenantID uuid.UUID, filter port.ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error) {
 	return nil, 0, nil
 }
+func (r *csvTestInvoiceRepo) ListWinnerInvoices(ctx context.Context, tenantID, userID uuid.UUID, filter port.ListAuctionInvoicesFilter) ([]domain.SettlementInvoiceRow, int64, error) {
+	return nil, 0, nil
+}
 func (r *csvTestInvoiceRepo) ApproveSettlement(ctx context.Context, tenantID, invoiceID uuid.UUID, now time.Time) (*domain.Invoice, error) {
 	return &domain.Invoice{ID: invoiceID, TenantID: tenantID, SettlementStatus: domain.InvoiceSettlementApproved}, nil
 }
