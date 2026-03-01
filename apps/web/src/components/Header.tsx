@@ -123,9 +123,10 @@ export default function Header({
 
       <div
         id="mobile-site-menu"
-        className={`absolute inset-x-0 top-full z-50 max-h-[calc(100vh-72px)] overflow-y-auto border-b border-neutral-200 bg-white px-4 pb-6 pt-4 shadow-xl transition-transform duration-200 md:hidden ${
-          mobileMenuOpen ? "translate-y-0" : "-translate-y-[110%]"
+        className={`absolute inset-x-0 top-full z-50 max-h-[calc(100vh-72px)] overflow-y-auto border-b border-neutral-200 bg-white px-4 pb-6 pt-4 shadow-xl transition-all duration-200 md:hidden ${
+          mobileMenuOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0 pointer-events-none"
         }`}
+        aria-hidden={!mobileMenuOpen}
       >
         <nav className="mx-auto flex w-[min(1440px,96vw)] flex-col gap-2">
           <Link to="/auctions" className={mobileLinkClassName} onClick={closeMenu}>
