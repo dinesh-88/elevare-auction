@@ -4,7 +4,7 @@ Elevare is a multi-tenant online auction platform. An auction house signs up, ge
 
 **Who it's for:** small and mid-sized auction houses that want a hosted bidding site without building their own.
 
-**Status:** personal side project and experiment. It has no real customers or users; all data comes from the seed script and the built-in demo bid simulator.
+**Status:** personal side project and experiment. A public demo is deployed at [elevareauctions.com](https://elevareauctions.com), but it has no real customers or users: the production database holds only my own account, seeded demo users and a seeded demo auction house. All development uses data from the seed script and the built-in demo bid simulator.
 
 ## Features
 
