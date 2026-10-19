@@ -1,4 +1,27 @@
-# Elevare Auction Monorepo
+# Elevare Auction
+
+Elevare is a multi-tenant online auction platform. An auction house signs up, gets its own branded site on a subdomain, and runs timed auctions where bidders place live bids that update in real time over WebSockets.
+
+**Who it's for:** small and mid-sized auction houses that want a hosted bidding site without building their own.
+
+**Status:** personal side project and experiment. It has no real customers or users; all data comes from the seed script and the built-in demo bid simulator.
+
+## Features
+
+- Self-serve tenant signup with platform-admin approval
+- Auctions and lots with images, live bidding, and proxy (max) bids
+- Real-time bid updates over WebSockets, plus a demo bid simulator
+- Bidder registration and onboarding approval
+- Buyer's premium/fee rules, tax calculation, and invoices (with CSV export)
+- Staff roles and permissions, audit log
+- Transactional email (outbid, lot won, invoice ready, verification) in EN/DE/FR, with an outbox, retries, and rate limits
+- Local disk or S3/Cloudflare R2 file storage
+
+## Tech Stack
+
+- **Backend:** Go, Chi, PostgreSQL (pgx), JWT + Argon2id auth, WebSockets, background worker
+- **Frontend:** Next.js 15 (App Router), React 19, TypeScript
+- **Infra:** Docker Compose for local development, Render for deployment, Resend for email
 
 ## Structure
 
